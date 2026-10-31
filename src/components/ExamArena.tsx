@@ -17,6 +17,11 @@ import {
   Infinity as InfinityIcon,
   BookOpen,
   ArrowRight,
+  Mic,
+  MicOff,
+  Award,
+  AlertCircle,
+  Check,
 } from "lucide-react";
 import {
   Course,
@@ -26,8 +31,9 @@ import {
   ClozeExercise,
   TranslationExercise,
   TranslationEvaluation,
+  PronunciationEvaluation,
 } from "@/types/course";
-import { speakSmart, stopAllSpeech } from "@/lib/tts";
+import { speakSmart, stopAllSpeech, detectTextLang } from "@/lib/tts";
 import AudioSpeakButton from "./AudioSpeakButton";
 import ExamGeneratingLoader from "./loadings/ExamGeneratingLoader";
 import { getAppSettings } from "@/lib/storage";
@@ -38,7 +44,12 @@ interface ExamArenaProps {
   courseFlashcards: FlashcardSRS[];
 }
 
-type ReviewMode = "timed_chapter_exam" | "vocab_quiz" | "matching" | "typing";
+type ReviewMode =
+  | "timed_chapter_exam"
+  | "vocab_quiz"
+  | "matching"
+  | "typing"
+  | "pronunciation_arena";
 
 interface TimedExamQuestion {
   id: string;
@@ -151,6 +162,178 @@ export default function ExamArena({
       stopAllSpeech();
     };
   }, [mode, examStepIndex, selectedChapterId]);
+
+  // ============================================================================
+  // MODE 5: AI PRONUNCIATION / SPEAKING ARENA
+  // ============================================================================
+  const [speakingIdx, setSpeakingIdx] = useState(0);
+  const [speakingScope, setSpeakingScope] = useState<"all" | "vocab" | "sentences">("all");
+  const [isSpeakingRecording, setIsSpeakingRecording] = useState(false);
+  const [speakingTranscript, setSpeakingTranscript] = useState("");
+  const [isEvaluatingSpeech, setIsEvaluatingSpeech] = useState(false);
+  const [speechEvaluation, setSpeechEvaluation] = useState<PronunciationEvaluation | null>(null);
+  const [speechScores, setSpeechScores] = useState<Record<string, number>>({});
+  const [speakingError, setSpeakingError] = useState<string | null>(null);
+  const speechRecognitionRef = React.useRef<any>(null);
+
+  // Build speaking practice list (Vocab + Sentences from this chapter)
+  const speakingItems = useMemo(() => {
+    const list: {
+      id: string;
+      type: "vocab" | "sentence";
+      targetText: string;
+      phonetic?: string;
+      meaning: string;
+      hint?: string;
+    }[] = [];
+
+    // 1. Vocabulary
+    if (speakingScope === "all" || speakingScope === "vocab") {
+      activeCards.forEach((c) => {
+        list.push({
+          id: `sp-v-${c.id}`,
+          type: "vocab",
+          targetText: c.word,
+          phonetic: c.ipa,
+          meaning: c.vietnameseMeaning,
+          hint: c.quoteFromBook ? `Ví dụ: ${c.quoteFromBook}` : undefined,
+        });
+      });
+    }
+
+    // 2. Sentences from grammar and translation
+    if (speakingScope === "all" || speakingScope === "sentences") {
+      targetChapter.lesson?.grammarPoints?.forEach((gp) => {
+        if (gp.quoteFromBook) {
+          list.push({
+            id: `sp-g-${gp.id}`,
+            type: "sentence",
+            targetText: gp.quoteFromBook,
+            meaning: gp.quoteTranslation,
+            hint: `Ngữ pháp: ${gp.title}`,
+          });
+        }
+      });
+
+      targetChapter.lesson?.translationExercises?.forEach((tr) => {
+        if (tr.originalSentence) {
+          list.push({
+            id: `sp-t-${tr.id}`,
+            type: "sentence",
+            targetText: tr.originalSentence,
+            meaning: tr.referenceTranslation,
+            hint: tr.contextHint,
+          });
+        }
+      });
+    }
+
+    return list;
+  }, [activeCards, targetChapter.lesson, speakingScope]);
+
+  const currentSpeakingItem = speakingItems[speakingIdx] || speakingItems[0];
+
+  const startSpeakingRecording = () => {
+    stopAllSpeech();
+    setSpeakingError(null);
+    setSpeechEvaluation(null);
+    setSpeakingTranscript("");
+
+    const SpeechRecognition =
+      typeof window !== "undefined"
+        ? (window as any).SpeechRecognition ||
+          (window as any).webkitSpeechRecognition
+        : null;
+
+    if (!SpeechRecognition) {
+      setSpeakingError("Trình duyệt chưa hỗ trợ Web Speech API. Bạn có thể tự gõ văn bản bạn vừa đọc để AI chấm điểm.");
+      setIsSpeakingRecording(true);
+      return;
+    }
+
+    try {
+      const recognition = new SpeechRecognition();
+      recognition.continuous = true;
+      recognition.interimResults = true;
+      if (currentSpeakingItem) {
+        recognition.lang = detectTextLang(currentSpeakingItem.targetText);
+      }
+
+      recognition.onstart = () => setIsSpeakingRecording(true);
+      recognition.onresult = (event: any) => {
+        let transcript = "";
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+          transcript += event.results[i][0].transcript;
+        }
+        if (transcript.trim()) setSpeakingTranscript(transcript.trim());
+      };
+      recognition.onerror = (event: any) => {
+        if (event.error !== "no-speech") {
+          setSpeakingError(`Lỗi mic: ${event.error}`);
+        }
+      };
+      recognition.onend = () => setIsSpeakingRecording(false);
+
+      speechRecognitionRef.current = recognition;
+      recognition.start();
+    } catch {
+      setSpeakingError("Không thể kích hoạt Microphone. Vui lòng cho phép quyền truy cập Micro.");
+      setIsSpeakingRecording(false);
+    }
+  };
+
+  const stopSpeakingRecording = () => {
+    if (speechRecognitionRef.current) {
+      try {
+        speechRecognitionRef.current.stop();
+      } catch {
+        // ignore
+      }
+      speechRecognitionRef.current = null;
+    }
+    setIsSpeakingRecording(false);
+  };
+
+  const handleEvaluateSpeaking = async () => {
+    stopSpeakingRecording();
+    if (!speakingTranscript.trim() || !currentSpeakingItem) {
+      setSpeakingError("Vui lòng đọc vào Micro trước khi chấm điểm.");
+      return;
+    }
+
+    setIsEvaluatingSpeech(true);
+    setSpeakingError(null);
+    const s = getAppSettings();
+
+    try {
+      const res = await fetch("/api/agent/evaluate-pronunciation", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          expectedText: currentSpeakingItem.targetText,
+          spokenText: speakingTranscript,
+          language: detectTextLang(currentSpeakingItem.targetText),
+          pinyinOrIpa: currentSpeakingItem.phonetic,
+          apiKey: s.geminiApiKey,
+          model: s.geminiModel,
+        }),
+      });
+
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || "Lỗi khi chấm điểm");
+      setSpeechEvaluation(data.evaluation);
+      if (data.evaluation?.overallScore) {
+        setSpeechScores((prev) => ({
+          ...prev,
+          [currentSpeakingItem.id]: data.evaluation.overallScore,
+        }));
+      }
+    } catch (err: unknown) {
+      setSpeakingError(err instanceof Error ? err.message : "Lỗi kết nối AI");
+    } finally {
+      setIsEvaluatingSpeech(false);
+    }
+  };
 
   // Build automatic exam questions for the selected chapter
   const examQuestions: TimedExamQuestion[] = useMemo(() => {
@@ -650,6 +833,24 @@ export default function ExamArena({
           >
             <Keyboard className="h-4 w-4" />
             4. Nghe / Nhìn Nghĩa Gõ Từ
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setMode("pronunciation_arena");
+              stopAllSpeech();
+              setSpeakingIdx(0);
+              setSpeechEvaluation(null);
+              setSpeakingTranscript("");
+            }}
+            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition cursor-pointer ${
+              mode === "pronunciation_arena"
+                ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/25"
+                : "bg-slate-950 text-slate-400 hover:text-white"
+            }`}
+          >
+            <Mic className="h-4 w-4" />
+            5. Luyện Đọc & Chấm Âm AI ({speakingItems.length})
           </button>
         </div>
       </div>
@@ -1409,6 +1610,439 @@ export default function ExamArena({
                 &ldquo;{currentTypingCard.quoteFromBook}&rdquo; →{" "}
                 {currentTypingCard.quoteTranslation}
               </p>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ===================================================================== */}
+      {/* MODE 5: AI PRONUNCIATION & SPEAKING ARENA                             */}
+      {/* ===================================================================== */}
+      {mode === "pronunciation_arena" && (
+        <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 space-y-6">
+          {/* Header & Sub-filter */}
+          <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+            <div>
+              <div className="flex items-center gap-2">
+                <span className="flex h-7 w-7 items-center justify-center rounded-lg bg-emerald-500/20 text-emerald-400">
+                  <Mic className="h-4 w-4" />
+                </span>
+                <h3 className="text-base font-bold text-white">
+                  Phòng Luyện Đọc Phát Âm & Chấm Điểm AI
+                </h3>
+              </div>
+              <p className="mt-1 text-xs text-slate-400">
+                Luyện đọc to từng từ vựng hoặc câu mẫu trong bài. AI sẽ phân tích âm thanh, tính độ chính xác (%) và chỉ rõ từng từ sai kèm cách sửa khẩu hình.
+              </p>
+            </div>
+
+            {/* Scope Filter Tabs */}
+            <div className="flex items-center rounded-xl border border-slate-800 bg-slate-950 p-1 text-xs">
+              <button
+                type="button"
+                onClick={() => {
+                  setSpeakingScope("all");
+                  setSpeakingIdx(0);
+                  setSpeechEvaluation(null);
+                  setSpeakingTranscript("");
+                }}
+                className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+                  speakingScope === "all"
+                    ? "bg-emerald-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Tất cả ({speakingItems.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpeakingScope("vocab");
+                  setSpeakingIdx(0);
+                  setSpeechEvaluation(null);
+                  setSpeakingTranscript("");
+                }}
+                className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+                  speakingScope === "vocab"
+                    ? "bg-emerald-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Từ vựng ({activeCards.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setSpeakingScope("sentences");
+                  setSpeakingIdx(0);
+                  setSpeechEvaluation(null);
+                  setSpeakingTranscript("");
+                }}
+                className={`rounded-lg px-3 py-1.5 font-semibold transition ${
+                  speakingScope === "sentences"
+                    ? "bg-emerald-600 text-white shadow"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Câu trong sách
+              </button>
+            </div>
+          </div>
+
+          {speakingItems.length === 0 ? (
+            <div className="py-12 text-center space-y-3">
+              <AlertCircle className="mx-auto h-10 w-10 text-slate-600" />
+              <p className="text-sm text-slate-400">
+                Chưa có mục luyện đọc nào trong phạm vi này của chương. Hãy chọn phạm vi &ldquo;Tất cả&rdquo; hoặc chọn chương khác.
+              </p>
+            </div>
+          ) : (
+            <div className="space-y-6">
+              {/* Progress and Score Bar */}
+              <div className="flex flex-wrap items-center justify-between gap-3 text-xs">
+                <div className="flex items-center gap-2">
+                  <span className="rounded-lg bg-slate-800 px-2.5 py-1 font-bold text-slate-200">
+                    Mục {speakingIdx + 1} / {speakingItems.length}
+                  </span>
+                  <span
+                    className={`rounded-lg px-2.5 py-1 font-semibold uppercase tracking-wider text-[11px] ${
+                      currentSpeakingItem.type === "vocab"
+                        ? "bg-indigo-950/80 text-indigo-300 border border-indigo-500/30"
+                        : "bg-amber-950/80 text-amber-300 border border-amber-500/30"
+                    }`}
+                  >
+                    {currentSpeakingItem.type === "vocab" ? "Từ vựng cốt lõi" : "Câu thực tế trong bài"}
+                  </span>
+                </div>
+
+                <div className="flex items-center gap-2">
+                  {Object.keys(speechScores).length > 0 && (
+                    <span className="flex items-center gap-1.5 rounded-lg border border-emerald-500/30 bg-emerald-950/40 px-2.5 py-1 text-emerald-300 font-semibold">
+                      <Award className="h-3.5 w-3.5" />
+                      Đã chấm {Object.keys(speechScores).length} mục • TB:{" "}
+                      {Math.round(
+                        Object.values(speechScores).reduce((a, b) => a + b, 0) /
+                          Object.values(speechScores).length
+                      )}
+                      %
+                    </span>
+                  )}
+
+                  <div className="flex items-center gap-1">
+                    <button
+                      type="button"
+                      disabled={speakingIdx === 0}
+                      onClick={() => {
+                        stopSpeakingRecording();
+                        setSpeakingIdx((i) => Math.max(0, i - 1));
+                        setSpeechEvaluation(null);
+                        setSpeakingTranscript("");
+                        setSpeakingError(null);
+                      }}
+                      className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      ← Mục trước
+                    </button>
+                    <button
+                      type="button"
+                      disabled={speakingIdx >= speakingItems.length - 1}
+                      onClick={() => {
+                        stopSpeakingRecording();
+                        setSpeakingIdx((i) => Math.min(speakingItems.length - 1, i + 1));
+                        setSpeechEvaluation(null);
+                        setSpeakingTranscript("");
+                        setSpeakingError(null);
+                      }}
+                      className="rounded-lg border border-slate-800 bg-slate-950 px-3 py-1.5 font-semibold text-slate-300 hover:bg-slate-800 disabled:opacity-40"
+                    >
+                      Mục tiếp →
+                    </button>
+                  </div>
+                </div>
+              </div>
+
+              {/* Central Target Display Card */}
+              <div className="relative overflow-hidden rounded-2xl border border-slate-800 bg-gradient-to-br from-slate-950 via-slate-900 to-slate-950 p-6 md:p-8 text-center space-y-4">
+                <div className="text-xs uppercase tracking-widest text-slate-400 font-semibold">
+                  Mẫu câu / Từ vựng cần luyện đọc:
+                </div>
+
+                {/* Target text with native audio preview */}
+                <div className="space-y-2">
+                  <h2 className="text-2xl md:text-4xl font-extrabold text-white tracking-wide">
+                    {currentSpeakingItem.targetText}
+                  </h2>
+                  {currentSpeakingItem.phonetic && (
+                    <p className="font-mono text-sm md:text-base font-semibold text-emerald-400">
+                      {currentSpeakingItem.phonetic}
+                    </p>
+                  )}
+                  <p className="text-sm font-medium text-slate-300">
+                    {currentSpeakingItem.meaning}
+                  </p>
+                  {currentSpeakingItem.hint && (
+                    <p className="text-xs italic text-slate-400">
+                      {currentSpeakingItem.hint}
+                    </p>
+                  )}
+                </div>
+
+                {/* Audio Sample button */}
+                <div className="pt-2 flex justify-center">
+                  <AudioSpeakButton
+                    text={currentSpeakingItem.targetText}
+                    label="Nghe AI phát âm mẫu chuẩn"
+                    className="inline-flex items-center gap-2 rounded-xl bg-indigo-600/20 border border-indigo-500/30 px-4 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-600 hover:text-white transition"
+                  />
+                </div>
+              </div>
+
+              {/* Voice Recording & Real-time Transcript Area */}
+              <div className="rounded-2xl border border-slate-800 bg-slate-950 p-6 space-y-4">
+                <div className="flex flex-col sm:flex-row items-center justify-between gap-4">
+                  {/* Record Button */}
+                  <div className="flex items-center gap-3">
+                    {!isSpeakingRecording ? (
+                      <button
+                        type="button"
+                        onClick={startSpeakingRecording}
+                        className="group relative flex items-center gap-2.5 rounded-2xl bg-gradient-to-r from-emerald-600 to-teal-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-emerald-600/30 hover:from-emerald-500 hover:to-teal-500 transition active:scale-95"
+                      >
+                        <Mic className="h-5 w-5 animate-pulse" />
+                        <span>Bấm vào đây & Bắt đầu đọc</span>
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        onClick={stopSpeakingRecording}
+                        className="flex items-center gap-2.5 rounded-2xl bg-rose-600 px-5 py-3 text-sm font-bold text-white shadow-lg shadow-rose-600/30 hover:bg-rose-500 transition animate-pulse active:scale-95"
+                      >
+                        <MicOff className="h-5 w-5" />
+                        <span>Đang nghe bạn đọc... (Bấm để Dừng)</span>
+                      </button>
+                    )}
+
+                    {isSpeakingRecording && (
+                      <div className="flex items-center gap-1.5 text-xs text-rose-400">
+                        <span className="flex h-2.5 w-2.5 rounded-full bg-rose-500 animate-ping" />
+                        <span>Đang ghi âm</span>
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Submit to AI button */}
+                  <button
+                    type="button"
+                    disabled={isEvaluatingSpeech || !speakingTranscript.trim()}
+                    onClick={handleEvaluateSpeaking}
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 text-xs font-bold text-white shadow-md hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 transition"
+                  >
+                    {isEvaluatingSpeech ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>AI đang phân tích khẩu âm & ngữ điệu...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        <span>AI Chấm Điểm Phát Âm</span>
+                      </>
+                    )}
+                  </button>
+                </div>
+
+                {/* Real-time transcript feedback */}
+                <div className="space-y-1.5">
+                  <div className="flex items-center justify-between text-xs text-slate-400">
+                    <span>Âm thanh ghi nhận được từ micro của bạn:</span>
+                    {speakingTranscript && (
+                      <button
+                        type="button"
+                        onClick={() => setSpeakingTranscript("")}
+                        className="text-slate-500 hover:text-slate-300"
+                      >
+                        Xóa bản ghi
+                      </button>
+                    )}
+                  </div>
+                  <textarea
+                    rows={2}
+                    value={speakingTranscript}
+                    onChange={(e) => setSpeakingTranscript(e.target.value)}
+                    placeholder="Bấm nút micro ở trên và đọc to rõ ràng. Lời đọc của bạn sẽ hiển thị tự động tại đây..."
+                    className="w-full rounded-xl border border-slate-800 bg-slate-900/90 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                  />
+                </div>
+
+                {speakingError && (
+                  <div className="flex items-center gap-2 rounded-xl border border-rose-500/30 bg-rose-950/40 p-3 text-xs text-rose-300">
+                    <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+                    <span>{speakingError}</span>
+                  </div>
+                )}
+              </div>
+
+              {/* AI Evaluation Result Card */}
+              {speechEvaluation && (
+                <div className="rounded-2xl border border-slate-700 bg-slate-950 p-6 space-y-6 shadow-xl animate-in fade-in slide-in-from-bottom-2 duration-300">
+                  {/* Top Score Banner */}
+                  <div className="flex flex-wrap items-center justify-between gap-4 border-b border-slate-800 pb-4">
+                    <div className="flex items-center gap-4">
+                      {/* Score Badge */}
+                      <div
+                        className={`flex h-16 w-16 shrink-0 flex-col items-center justify-center rounded-2xl border font-black ${
+                          speechEvaluation.overallScore >= 85
+                            ? "border-emerald-500/50 bg-emerald-950/50 text-emerald-400 shadow-lg shadow-emerald-500/20"
+                            : speechEvaluation.overallScore >= 70
+                            ? "border-amber-500/50 bg-amber-950/50 text-amber-400"
+                            : "border-rose-500/50 bg-rose-950/50 text-rose-400"
+                        }`}
+                      >
+                        <span className="text-xl leading-none">
+                          {speechEvaluation.overallScore}
+                        </span>
+                        <span className="text-[10px] font-medium">%</span>
+                      </div>
+
+                      <div>
+                        <div className="flex items-center gap-2">
+                          <h4 className="text-base font-bold text-white">
+                            Kết Quả Đánh Giá Phát Âm
+                          </h4>
+                          <span
+                            className={`rounded-full px-2.5 py-0.5 text-xs font-bold ${
+                              speechEvaluation.overallScore >= 85
+                                ? "bg-emerald-500/20 text-emerald-400"
+                                : speechEvaluation.overallScore >= 70
+                                ? "bg-amber-500/20 text-amber-400"
+                                : "bg-rose-500/20 text-rose-400"
+                            }`}
+                          >
+                            {speechEvaluation.accuracyGrade}
+                          </span>
+                        </div>
+                        <p className="mt-1 text-xs text-slate-400">
+                          {speechEvaluation.generalFeedback}
+                        </p>
+                      </div>
+                    </div>
+
+                    {/* Quick Metric Bars */}
+                    <div className="flex items-center gap-4 text-xs">
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-center">
+                        <div className="text-[11px] text-slate-400">Độ lưu loát</div>
+                        <div className="mt-0.5 text-sm font-bold text-indigo-300">
+                          {speechEvaluation.fluencyScore}/100
+                        </div>
+                      </div>
+                      <div className="rounded-xl border border-slate-800 bg-slate-900/60 px-3.5 py-2 text-center">
+                        <div className="text-[11px] text-slate-400">Độ hoàn chỉnh</div>
+                        <div className="mt-0.5 text-sm font-bold text-emerald-300">
+                          {speechEvaluation.completenessScore}/100
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Word-by-word Breakdown */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Correctly Pronounced Words */}
+                    <div className="rounded-xl border border-emerald-500/20 bg-emerald-950/20 p-4 space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                        <Check className="h-4 w-4" />
+                        <span>Từ đã phát âm chuẩn xác ({speechEvaluation.correctWords.length}):</span>
+                      </div>
+                      {speechEvaluation.correctWords.length > 0 ? (
+                        <div className="flex flex-wrap gap-1.5">
+                          {speechEvaluation.correctWords.map((w, idx) => (
+                            <span
+                              key={idx}
+                              className="rounded-lg border border-emerald-500/30 bg-emerald-900/40 px-2.5 py-1 text-xs font-semibold text-emerald-200"
+                            >
+                              {w}
+                            </span>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs italic text-slate-400">
+                          Chưa ghi nhận từ nào phát âm đúng.
+                        </p>
+                      )}
+                    </div>
+
+                    {/* Needs Work / Mispronounced Words */}
+                    <div className="rounded-xl border border-rose-500/20 bg-rose-950/20 p-4 space-y-2.5">
+                      <div className="flex items-center gap-1.5 text-xs font-bold text-rose-400">
+                        <AlertCircle className="h-4 w-4" />
+                        <span>Từ cần cải thiện ({speechEvaluation.mispronouncedWords.length}):</span>
+                      </div>
+                      {speechEvaluation.mispronouncedWords.length > 0 ? (
+                        <div className="space-y-2">
+                          {speechEvaluation.mispronouncedWords.map((item, idx) => (
+                            <div
+                              key={idx}
+                              className="rounded-lg border border-rose-500/30 bg-rose-900/30 p-2.5 text-xs space-y-1"
+                            >
+                              <div className="flex items-center justify-between">
+                                <span className="font-bold text-rose-200 text-sm">
+                                  {item.word}
+                                </span>
+                                {item.expectedPhonetic && (
+                                  <span className="font-mono text-[11px] text-amber-300">
+                                    Phiên âm chuẩn: {item.expectedPhonetic}
+                                  </span>
+                                )}
+                              </div>
+                              <p className="text-slate-300">
+                                <strong className="text-rose-300">Lỗi:</strong> {item.issue}
+                              </p>
+                              <p className="text-emerald-300">
+                                <strong className="text-emerald-400">Cách sửa:</strong> {item.tip}
+                              </p>
+                            </div>
+                          ))}
+                        </div>
+                      ) : (
+                        <p className="text-xs text-emerald-300 font-semibold">
+                          🎉 Tuyệt vời! Không có từ nào bị phát âm sai!
+                        </p>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Actions & Progression */}
+                  <div className="flex flex-wrap items-center justify-between gap-3 pt-2 border-t border-slate-800">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setSpeechEvaluation(null);
+                        setSpeakingTranscript("");
+                        startSpeakingRecording();
+                      }}
+                      className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 px-4 py-2 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                    >
+                      <RotateCcw className="h-3.5 w-3.5" />
+                      Luyện đọc lại câu này
+                    </button>
+
+                    <button
+                      type="button"
+                      disabled={speakingIdx >= speakingItems.length - 1}
+                      onClick={() => {
+                        stopSpeakingRecording();
+                        setSpeakingIdx((i) => Math.min(speakingItems.length - 1, i + 1));
+                        setSpeechEvaluation(null);
+                        setSpeakingTranscript("");
+                        setSpeakingError(null);
+                      }}
+                      className="flex items-center gap-2 rounded-xl bg-emerald-600 px-5 py-2 text-xs font-bold text-white hover:bg-emerald-500 disabled:opacity-40 transition"
+                    >
+                      <span>Mục tiếp theo</span>
+                      <ArrowRight className="h-3.5 w-3.5" />
+                    </button>
+                  </div>
+                </div>
+              )}
             </div>
           )}
         </div>
