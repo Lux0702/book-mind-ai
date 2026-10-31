@@ -29,7 +29,10 @@ import {
   TranslationEvaluation,
 } from "@/types/course";
 import { getAppSettings, saveCourse } from "@/lib/storage";
-import { renderPdfPagesToImagesBase64 } from "@/lib/pdfParser";
+import {
+  renderPdfPagesToImagesBase64,
+  convertUploadedFilesToImagesBase64,
+} from "@/lib/pdfParser";
 import { speakSmart } from "@/lib/tts";
 import FlashcardArena from "./FlashcardArena";
 import ExamArena from "./ExamArena";
@@ -638,37 +641,36 @@ export default function ChapterWorkspace({
                 )}
               </button>
 
-              {currentChapter.startPage && currentChapter.endPage && (
-                <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-5 py-3 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-900/50">
-                  <span>
-                    📷 Quét ảnh trang {currentChapter.startPage}–{currentChapter.endPage} bằng Gemini Vision (Nếu PDF Scan)
-                  </span>
-                  <input
-                    type="file"
-                    accept=".pdf"
-                    className="hidden"
-                    onChange={async (e) => {
-                      const f = e.target.files?.[0];
-                      if (!f || !currentChapter.startPage || !currentChapter.endPage) return;
-                      setIsGeneratingLesson(true);
-                      try {
-                        const imgs = await renderPdfPagesToImagesBase64(
-                          f,
-                          currentChapter.startPage,
-                          currentChapter.endPage,
-                          8
-                        );
-                        await handleGenerateChapterLesson(currentChapter, imgs);
-                      } catch (err: unknown) {
-                        setGenError(
-                          err instanceof Error ? err.message : "Lỗi quét ảnh PDF"
-                        );
-                        setIsGeneratingLesson(false);
-                      }
-                    }}
-                  />
-                </label>
-              )}
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-5 py-3 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-900/50">
+                <span>
+                  📷 Soạn từ Ảnh / PDF bằng Gemini Vision (Hỗ trợ nhiều trang)
+                </span>
+                <input
+                  type="file"
+                  accept=".pdf,image/png,image/jpeg,image/webp"
+                  multiple
+                  className="hidden"
+                  onChange={async (e) => {
+                    const files = e.target.files;
+                    if (!files || files.length === 0) return;
+                    setIsGeneratingLesson(true);
+                    try {
+                      const imgs = await convertUploadedFilesToImagesBase64(
+                        files,
+                        currentChapter.startPage,
+                        currentChapter.endPage,
+                        20
+                      );
+                      await handleGenerateChapterLesson(currentChapter, imgs);
+                    } catch (err: unknown) {
+                      setGenError(
+                        err instanceof Error ? err.message : "Lỗi quét ảnh / PDF"
+                      );
+                      setIsGeneratingLesson(false);
+                    }
+                  }}
+                />
+              </label>
             </div>
           </div>
         ) : (
@@ -1020,40 +1022,34 @@ export default function ChapterWorkspace({
                         )}
                       </button>
 
-                      {currentChapter.startPage && currentChapter.endPage && (
-                        <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-3.5 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-900/50">
-                          <span>📷 Quét từ ảnh PDF</span>
-                          <input
-                            type="file"
-                            accept=".pdf"
-                            className="hidden"
-                            onChange={async (e) => {
-                              const f = e.target.files?.[0];
-                              if (
-                                !f ||
-                                !currentChapter.startPage ||
-                                !currentChapter.endPage
-                              )
-                                return;
-                              setIsExtractingFullVocab(true);
-                              try {
-                                const imgs = await renderPdfPagesToImagesBase64(
-                                  f,
-                                  currentChapter.startPage,
-                                  currentChapter.endPage,
-                                  10
-                                );
-                                await handleExtractFullVocab(
-                                  currentChapter,
-                                  imgs
-                                );
-                              } catch {
-                                setIsExtractingFullVocab(false);
-                              }
-                            }}
-                          />
-                        </label>
-                      )}
+                      <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-3.5 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-900/50">
+                        <span>📷 Quét từ Ảnh / PDF (Tất cả trang)</span>
+                        <input
+                          type="file"
+                          accept=".pdf,image/png,image/jpeg,image/webp"
+                          multiple
+                          className="hidden"
+                          onChange={async (e) => {
+                            const files = e.target.files;
+                            if (!files || files.length === 0) return;
+                            setIsExtractingFullVocab(true);
+                            try {
+                              const imgs = await convertUploadedFilesToImagesBase64(
+                                files,
+                                currentChapter.startPage,
+                                currentChapter.endPage,
+                                20
+                              );
+                              await handleExtractFullVocab(
+                                currentChapter,
+                                imgs
+                              );
+                            } catch {
+                              setIsExtractingFullVocab(false);
+                            }
+                          }}
+                        />
+                      </label>
                     </div>
                   </div>
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">

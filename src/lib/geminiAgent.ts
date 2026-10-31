@@ -354,7 +354,16 @@ YÊU CẦU BẮT BUỘC:
 1. overview: Tóm tắt và diễn giải đầy đủ nội dung/luận điểm của chương sách, nêu các chủ đề chính và mục tiêu học tập.
 2. contentAnalysis: Chia nội dung chương thành các phần trọng tâm theo mạch sách (ví dụ Dialogue 1, Dialogue 2, Bài đọc...). Mỗi phần trích dẫn đoạn văn gốc (originalExcerpt), dịch sang tiếng Việt chuẩn xác (vietnameseTranslation), và giải thích sâu ý nghĩa nội dung, bối cảnh (deepExplanation & stylisticOrContextNotes).
 3. grammarPoints: Trích xuất ĐẦY ĐỦ tất cả các cấu trúc ngữ pháp xuất hiện trong chương (ví dụ cách dùng 嗎, 呢, 很, 不, 姓/叫, 要, 哪...). Giải thích công thức, cách dùng và cho thêm ví dụ.
-4. vocabulary: BẮT BUỘC LẤY ĐẦY ĐỦ 100% TẤT CẢ TỪ VỰNG (Vocabulary), DANH TỪ RIÊNG (Names) và CỤM TỪ (Phrases) có liệt kê trong bài học (ví dụ bài học có 35-45 từ thì phải xuất ra đủ cả 35-45 từ đó, TUYỆT ĐỐI KHÔNG chỉ lấy 10 từ!). Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại (N, V, Vs, Vst, Adv, Ptc, Det, Vaux...), nghĩa tiếng Việt, câu ví dụ ngắn, 1-2 collocations.
+4. vocabulary: BẮT BUỘC LẤY ĐẦY ĐỦ 100% TẤT CẢ TỪ VỰNG XUẤT HIỆN TRONG BÀI (THƯỜNG CÓ TỪ 35 ĐẾN 50+ MỤC TỪ).
+ĐẶC BIỆT LƯU Ý: Giáo trình ngoại ngữ (như sách Tiếng Trung Đương Đại / HSK) có nhiều phần đối thoại (Dialogue I, Dialogue II...) và mỗi phần đều có các bảng từ vựng độc lập được đánh số:
+- Bảng "People in the dialogue" (Tên các nhân vật: VD 陳月美, 李明華, 王開文...)
+- Bảng "Vocabulary" của Dialogue I (Từ mới: VD 你, 來, 是, 小姐, 嗎, 接, 我們, 我, 這, 先生, 好, 姓, 叫, 你們...)
+- Bảng "Names" của Dialogue I (Địa danh, tên riêng: VD 臺灣...)
+- Bảng "Phrases" của Dialogue I (Mẫu câu giao tiếp: VD 歡迎, 請問, 是的, 謝謝, 不客氣, 你好...)
+- Bảng "Vocabulary" của Dialogue II (Đánh số lại: VD 請, 喝, 茶, 很, 好喝, 什麼, 人, 喜歡, 呢, 他, 不, 哪, 要, 咖啡...)
+- Bảng "Names" của Dialogue II (VD 烏龍茶, 日本, 美國...)
+- Bảng "Phrases" của Dialogue II (VD 對不起, 哪國...)
+BẠN PHẢI QUÉT HẾT TẤT CẢ CÁC BẢNG TRÊN CỦA CẢ DIALOGUE 1 VÀ DIALOGUE 2 ĐỂ LẤY ĐỦ TOÀN BỘ 35-50+ TỪ NÀY! TUYỆT ĐỐI KHÔNG CẮT BỚT CHỈ LẤY 10 TỪ! Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ, 1-2 collocations.
 5. clozeExercises: Tạo 6 đến 8 câu bài tập điền từ/ngữ pháp vào chỗ trống (dùng đúng ký hiệu "_____" tại vị trí từ bị khuyết).
 6. quizExercises: Tạo 8 đến 10 câu hỏi trắc nghiệm (4 lựa chọn) CHỈ KIỂM TRA TỪ VỰNG (nghĩa từ, cách dùng từ, phiên âm) VÀ NGỮ PHÁP (trật tự từ, chọn cấu trúc đúng, điền trợ từ). TUYỆT ĐỐI KHÔNG đặt câu hỏi về tình tiết câu chuyện/hội thoại (như nhân vật tên gì hay làm nghề gì).
 7. translationExercises: Chọn 4 đến 6 câu tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.`;
@@ -690,18 +699,28 @@ export async function extractAllChapterVocabWithAI(params: {
   const ai = getClient(params.apiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
-  const prompt = `Bạn là Chuyên gia Từ điển & Ngôn ngữ học.
-Hãy quét toàn bộ văn bản (và hình ảnh trang sách nếu có) của "${params.chapterTitle}" thuộc sách "${params.courseTitle}" và trích xuất ĐẦY ĐỦ 100% TẤT CẢ các mục từ vựng:
-- Toàn bộ các mục trong bảng Vocabulary (生詞 / Từ mới)
-- Toàn bộ các mục trong bảng People / Names / Proper Nouns (專有名詞 / Danh từ riêng)
-- Toàn bộ các mục trong bảng Phrases / Idioms (慣用語 / Cụm từ)
+  const prompt = `Bạn là Chuyên gia Từ điển & Ngôn ngữ học kiêm Giảng viên cao cấp.
+Nhiệm vụ của bạn là quét toàn bộ văn bản và TẤT CẢ HÌNH ẢNH TRANG SÁCH được cung cấp của bài học "${params.chapterTitle}" thuộc sách "${params.courseTitle}".
+BẮT BUỘC TRÍCH XUẤT ĐẦY ĐỦ 100% TẤT CẢ CÁC MỤC TỪ VỰNG XUẤT HIỆN TRONG TOÀN BỘ BÀI HỌC (THƯỜNG CÓ TỪ 35 ĐẾN 50+ MỤC TỪ).
 
-KHÔNG ĐƯỢC BỎ SÓT BẤT KỲ TỪ NÀO (nếu trong bài có 40-50 từ đánh số từ 1 đến hết thì phải lấy đủ tất cả!).
+ĐẶC BIỆT LƯU Ý VỀ CẤU TRÚC GIÁO TRÌNH TIẾNG NGOẠI NGỮ (ĐẶC BIỆT TIẾNG TRUNG NHƯ ĐƯƠNG ĐẠI / HSK):
+Mỗi bài học thường có nhiều phần đối thoại (Dialogue I, Dialogue II...) và mỗi phần đều có các bảng từ vựng độc lập được đánh số:
+1. Bảng "People in the dialogue" (Tên các nhân vật: VD 1. 陳月美 Chén Yuèměi, 2. 李明華 Lǐ Mínghuá, 3. 王開文 Wáng Kāiwén...)
+2. Bảng "Vocabulary" của Dialogue I (Từ mới đánh số từ 4..17...: VD 4. 你 nǐ, 5. 來 lái, 6. 是 shì, 7. 小姐 xiǎojiě, 8. 嗎 ma, 9. 接 jiē, 10. 我們 wǒmen, 11. 我 wǒ, 12. 這 zhè, 13. 先生 xiānshēng, 14. 好 hǎo, 15. 姓 xìng, 16. 叫 jiào, 17. 你們 nǐmen...)
+3. Bảng "Names" của Dialogue I (Địa danh, tên riêng: VD 18. 臺灣 Táiwān...)
+4. Bảng "Phrases" của Dialogue I (Cụm từ, mẫu câu: VD 19. 歡迎 huānyíng, 20. 請問 qǐngwèn, 21. 是的 shìde, 22. 謝謝 xièxie, 23. 不客氣 búkèqì, 24. 你好 nǐ hǎo...)
+5. Bảng "Vocabulary" của Dialogue II (Đánh số lại từ 1..14...: VD 1. 請 qǐng, 2. 喝 hē, 3. 茶 chá, 4. 很 hěn, 5. 好喝 hǎohē, 6. 什麼 shénme, 7. 人 rén, 8. 喜歡 xǐhuān, 9. 呢 ne, 10. 他 tā, 11. 不 bù, 12. 哪 nǎ, 13. 要 yào, 14. 咖啡 kāfēi...)
+6. Bảng "Names" của Dialogue II (VD 15. 烏龍茶 Wūlóng chá, 16. 日本 Rìběn, 17. 美國 Měiguó...)
+7. Bảng "Phrases" của Dialogue II (VD 18. 對不起 duìbùqǐ, 19. 哪國 nǎ guó...)
+
+BẠN PHẢI QUÉT TOÀN BỘ CÁC TRANG ẢNH VÀ VĂN BẢN ĐỂ LẤY ĐỦ TẤT CẢ CÁC MỤC TRÊN (TỔNG CỘNG 35-50+ TỪ).
+TUYỆT ĐỐI KHÔNG ĐƯỢC CẮT BỚT CHỈ LẤY 10 TỪ!
+
 Với mỗi từ, cung cấp:
-- word: Từ gốc (VD: 請, 喝, 烏龍茶, 陳月美, 對不起...)
+- word: Chữ Hán gốc (phồn thể/giản thể theo sách, VD: 請, 喝, 烏龍茶, 陳月美, 對不起, 臺灣...)
 - ipa: Phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh)
-- partOfSpeech: Từ loại (N, V, Vs, Vst, Adv, Ptc, Det, Vaux, Phrase, Proper Noun...)
-- cefrLevel: A1, A2, B1, B2, C1, hoặc C2
+- partOfSpeech: Từ loại chuẩn theo sách (N, V, Vs, Vst, Adv, Ptc, Det, Vaux, Phrase, Name...)
+- cefrLevel: Cấp độ tương đương (A1, A2, B1, B2, C1, hoặc C2)
 - vietnameseMeaning: Nghĩa tiếng Việt đầy đủ, chính xác
 - explanationInContext: Giải thích ngắn gọn cách dùng từ trong câu (1-2 câu)
 - quoteFromBook: Câu ví dụ có chứa từ đó

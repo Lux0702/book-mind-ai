@@ -14,28 +14,47 @@ import {
   CheckCircle2,
   Database,
   FileText,
+  Flame,
+  LogIn,
+  LogOut,
+  User as UserIcon,
 } from "lucide-react";
-import { Course, FlashcardSRS } from "@/types/course";
+import { User } from "@supabase/supabase-js";
+import { Course, FlashcardSRS, StudyStreak } from "@/types/course";
 import {
   getAllCourses,
   getCourseFlashcards,
   saveCourse,
   deleteCourse,
   getAppSettings,
+  getCurrentUser,
+  signInWithGoogle,
+  signOutUser,
+  getStudyStreak,
+  getSupabaseClient,
 } from "@/lib/storage";
 import CreateCourseModal from "@/components/CreateCourseModal";
 import SettingsModal from "@/components/SettingsModal";
 import ChapterWorkspace from "@/components/ChapterWorkspace";
 import FlashcardArena from "@/components/FlashcardArena";
 import ExamArena from "@/components/ExamArena";
+import AttendanceDashboard from "@/components/AttendanceDashboard";
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [flashcards, setFlashcards] = useState<FlashcardSRS[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
-  const [viewMode, setViewMode] = useState<"dashboard" | "srs_global">(
-    "dashboard"
-  );
+  const [viewMode, setViewMode] = useState<
+    "dashboard" | "srs_global" | "attendance"
+  >("dashboard");
+  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [streakData, setStreakData] = useState<StudyStreak>({
+    currentStreak: 0,
+    longestStreak: 0,
+    lastActiveDate: "",
+    activeDates: [],
+  });
+  const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [reviewCourseId, setReviewCourseId] = useState<string>("");
   const [reviewChapterId, setReviewChapterId] = useState<string>("");
   const [reviewSubTab, setReviewSubTab] = useState<"exam" | "flashcards">(
@@ -48,12 +67,15 @@ export default function HomePage() {
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
-    const [loadedCourses, loadedCards] = await Promise.all([
+    const [loadedCourses, loadedCards, user] = await Promise.all([
       getAllCourses(),
       getCourseFlashcards(),
+      getCurrentUser(),
     ]);
     setCourses(loadedCourses);
     setFlashcards(loadedCards);
+    setCurrentUser(user);
+    setStreakData(getStudyStreak());
 
     const s = getAppSettings();
     setHasApiKey(Boolean(s.geminiApiKey?.trim()));
@@ -63,7 +85,36 @@ export default function HomePage() {
 
   useEffect(() => {
     refreshData();
+
+    // Listen to Supabase auth events
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      const {
+        data: { subscription },
+      } = supabase.auth.onAuthStateChange((_event, session) => {
+        setCurrentUser(session?.user || null);
+        refreshData();
+      });
+      return () => subscription.unsubscribe();
+    }
   }, [refreshData]);
+
+  const handleGoogleLogin = async () => {
+    setIsLoggingIn(true);
+    const { error } = await signInWithGoogle();
+    if (error) {
+      alert(`Đăng nhập Google thất bại: ${error.message}`);
+    }
+    setIsLoggingIn(false);
+  };
+
+  const handleGoogleLogout = async () => {
+    if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
+      await signOutUser();
+      setCurrentUser(null);
+      await refreshData();
+    }
+  };
 
   const activeCourse = courses.find((c) => c.id === activeCourseId) || null;
 
@@ -148,10 +199,68 @@ export default function HomePage() {
                   </span>
                 )}
               </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setActiveCourseId(null);
+                  setViewMode("attendance");
+                }}
+                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${
+                  !activeCourseId && viewMode === "attendance"
+                    ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 shadow"
+                    : "text-slate-400 hover:bg-slate-900 hover:text-amber-300"
+                }`}
+              >
+                <Flame className="h-4 w-4 text-amber-400 animate-pulse" />
+                <span>Điểm danh & Nhật ký ({streakData.currentStreak} ngày)</span>
+              </button>
             </nav>
           </div>
 
           <div className="flex items-center gap-2.5">
+            {/* Google Authentication Status */}
+            {currentUser ? (
+              <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/90 py-1 pl-1.5 pr-2.5 text-xs">
+                {currentUser.user_metadata?.avatar_url ? (
+                  <img
+                    src={currentUser.user_metadata.avatar_url}
+                    alt={currentUser.user_metadata?.full_name || "User"}
+                    className="h-7 w-7 rounded-lg object-cover ring-1 ring-amber-400"
+                  />
+                ) : (
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold">
+                    {currentUser.email?.slice(0, 1).toUpperCase() || "U"}
+                  </div>
+                )}
+                <div className="hidden max-w-[120px] truncate sm:block">
+                  <span className="block truncate font-bold text-slate-200">
+                    {currentUser.user_metadata?.full_name ||
+                      currentUser.email?.split("@")[0]}
+                  </span>
+                </div>
+                <button
+                  type="button"
+                  onClick={handleGoogleLogout}
+                  className="ml-1 rounded-lg p-1 text-slate-400 hover:bg-rose-950/60 hover:text-rose-400"
+                  title="Đăng xuất"
+                >
+                  <LogOut className="h-3.5 w-3.5" />
+                </button>
+              </div>
+            ) : (
+              <button
+                type="button"
+                disabled={isLoggingIn}
+                onClick={handleGoogleLogin}
+                className="flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-3.5 py-2 text-xs font-bold text-indigo-200 shadow transition hover:bg-indigo-900/50"
+                title="Đăng nhập tài khoản Google để lưu trữ khóa học riêng biệt"
+              >
+                <LogIn className="h-3.5 w-3.5 text-indigo-400" />
+                <span className="hidden sm:inline">Đăng nhập Google</span>
+                <span className="sm:hidden">Đăng nhập</span>
+              </button>
+            )}
+
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
@@ -320,6 +429,18 @@ export default function HomePage() {
             </div>
           );
         })()
+      ) : viewMode === "attendance" ? (
+        <AttendanceDashboard
+          courses={courses}
+          flashcards={flashcards}
+          onOpenCourse={(courseId) => {
+            setActiveCourseId(courseId);
+            setViewMode("dashboard");
+          }}
+          onOpenSrs={() => {
+            setViewMode("srs_global");
+          }}
+        />
       ) : (
         /* DASHBOARD: All Courses Grid */
         <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6">

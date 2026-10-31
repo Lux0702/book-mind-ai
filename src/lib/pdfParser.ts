@@ -311,7 +311,7 @@ export async function renderPdfPagesToImagesBase64(
   file: File,
   startPage: number,
   endPage: number,
-  maxPagesToRender = 8
+  maxPagesToRender = 20
 ): Promise<string[]> {
   const pdfjsLib = await import("pdfjs-dist");
   pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
@@ -344,6 +344,46 @@ export async function renderPdfPagesToImagesBase64(
   }
 
   await pdf.destroy();
+  return images;
+}
+
+/**
+ * Converts user uploaded files (PDF pages or multiple PNG/JPEG/WEBP photos) into Base64 strings.
+ */
+export async function convertUploadedFilesToImagesBase64(
+  files: FileList | File[],
+  startPage?: number,
+  endPage?: number,
+  maxPages = 20
+): Promise<string[]> {
+  const images: string[] = [];
+  const fileArray = Array.from(files);
+
+  for (const f of fileArray) {
+    if (f.type.startsWith("image/") || /\.(png|jpe?g|webp|gif|bmp)$/i.test(f.name)) {
+      // Direct image file
+      const base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const res = reader.result as string;
+          const clean = res.replace(/^data:image\/[a-zA-Z0-9+.-]+;base64,/, "");
+          resolve(clean);
+        };
+        reader.onerror = reject;
+        reader.readAsDataURL(f);
+      });
+      images.push(base64);
+    } else if (f.type === "application/pdf" || f.name.toLowerCase().endsWith(".pdf")) {
+      const pdfImages = await renderPdfPagesToImagesBase64(
+        f,
+        startPage || 1,
+        endPage || 9999,
+        maxPages
+      );
+      images.push(...pdfImages);
+    }
+  }
+
   return images;
 }
 

@@ -119,6 +119,7 @@ export interface ChapterUnit {
 
 export interface FlashcardSRS {
   id: string;
+  userId?: string;
   courseId: string;
   chapterId: string;
   word: string;
@@ -140,6 +141,7 @@ export interface FlashcardSRS {
 
 export interface Course {
   id: string;
+  userId?: string;
   title: string;
   author: string;
   description: string;
@@ -152,6 +154,22 @@ export interface Course {
   chapters: ChapterUnit[];
   createdAt: string;
   updatedAt: string;
+}
+
+export interface StudyStreak {
+  currentStreak: number;
+  longestStreak: number;
+  lastActiveDate: string; // YYYY-MM-DD
+  activeDates: string[]; // List of YYYY-MM-DD dates with learning activities
+}
+
+export interface LearningActivity {
+  id: string;
+  userId?: string;
+  type: "vocab_review" | "exam_completed" | "lesson_generated" | "translation_practice" | "check_in";
+  title: string;
+  details: string;
+  timestamp: string;
 }
 
 export interface AppSettings {

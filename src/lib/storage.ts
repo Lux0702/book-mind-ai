@@ -1,6 +1,12 @@
 import Dexie, { type EntityTable } from "dexie";
-import { createClient, SupabaseClient } from "@supabase/supabase-js";
-import { AppSettings, Course, FlashcardSRS } from "@/types/course";
+import { createClient, SupabaseClient, User } from "@supabase/supabase-js";
+import {
+  AppSettings,
+  Course,
+  FlashcardSRS,
+  StudyStreak,
+  LearningActivity,
+} from "@/types/course";
 import { SAMPLE_COURSE, SAMPLE_FLASHCARDS } from "./sampleData";
 
 class BookLearningDatabase extends Dexie {
@@ -21,6 +27,8 @@ export const db =
 
 const SETTINGS_KEY = "book_agent_settings_v1";
 const SEEDED_KEY = "book_agent_seeded_v1";
+const STREAK_KEY = "book_agent_streak_v1";
+const ACTIVITIES_KEY = "book_agent_activities_v1";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: "",
@@ -46,15 +54,225 @@ export function saveAppSettings(settings: AppSettings): void {
   localStorage.setItem(SETTINGS_KEY, JSON.stringify(settings));
 }
 
-function getSupabaseClient(): SupabaseClient | null {
+let cachedSupabaseClient: SupabaseClient | null = null;
+let cachedClientUrl = "";
+let cachedClientKey = "";
+
+export function getSupabaseClient(): SupabaseClient | null {
   const settings = getAppSettings();
   if (!settings.supabaseUrl || !settings.supabaseAnonKey) return null;
+  if (
+    cachedSupabaseClient &&
+    cachedClientUrl === settings.supabaseUrl &&
+    cachedClientKey === settings.supabaseAnonKey
+  ) {
+    return cachedSupabaseClient;
+  }
   try {
-    return createClient(settings.supabaseUrl, settings.supabaseAnonKey);
+    cachedSupabaseClient = createClient(
+      settings.supabaseUrl,
+      settings.supabaseAnonKey,
+      {
+        auth: {
+          persistSession: true,
+          autoRefreshToken: true,
+        },
+      }
+    );
+    cachedClientUrl = settings.supabaseUrl;
+    cachedClientKey = settings.supabaseAnonKey;
+    return cachedSupabaseClient;
   } catch {
     return null;
   }
 }
+
+export async function getCurrentUser(): Promise<User | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  try {
+    const { data } = await supabase.auth.getUser();
+    return data.user || null;
+  } catch {
+    return null;
+  }
+}
+
+export async function signInWithGoogle(): Promise<{ error: Error | null }> {
+  const supabase = getSupabaseClient();
+  if (!supabase) {
+    return {
+      error: new Error(
+        "Chưa cấu hình Supabase URL hoặc Anon Key trong Cài đặt."
+      ),
+    };
+  }
+  try {
+    const redirectUrl =
+      typeof window !== "undefined"
+        ? window.location.origin
+        : "https://book-mind-2vmdrg1ur-lux0702s-projects.vercel.app";
+
+    const { error } = await supabase.auth.signInWithOAuth({
+      provider: "google",
+      options: {
+        redirectTo: redirectUrl,
+        queryParams: {
+          access_type: "offline",
+          prompt: "consent",
+        },
+      },
+    });
+    return { error: error ? new Error(error.message) : null };
+  } catch (err: unknown) {
+    return {
+      error: err instanceof Error ? err : new Error("Lỗi khi kết nối Google Auth"),
+    };
+  }
+}
+
+export async function signOutUser(): Promise<void> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    await supabase.auth.signOut();
+  }
+}
+
+// -------------------------------------------------------------
+// STREAK & LEARNING ACTIVITY TRACKING
+// -------------------------------------------------------------
+
+function getTodayString(): string {
+  const now = new Date();
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+function getYesterdayString(): string {
+  const now = new Date();
+  now.setDate(now.getDate() - 1);
+  const year = now.getFullYear();
+  const month = String(now.getMonth() + 1).padStart(2, "0");
+  const day = String(now.getDate()).padStart(2, "0");
+  return `${year}-${month}-${day}`;
+}
+
+export function getStudyStreak(): StudyStreak {
+  if (typeof window === "undefined") {
+    return { currentStreak: 0, longestStreak: 0, lastActiveDate: "", activeDates: [] };
+  }
+  const raw = localStorage.getItem(STREAK_KEY);
+  if (!raw) {
+    return { currentStreak: 0, longestStreak: 0, lastActiveDate: "", activeDates: [] };
+  }
+  try {
+    const data: StudyStreak = JSON.parse(raw);
+    const today = getTodayString();
+    const yesterday = getYesterdayString();
+
+    // If last active was before yesterday, streak is reset to 0 unless renewed today
+    if (
+      data.lastActiveDate &&
+      data.lastActiveDate !== today &&
+      data.lastActiveDate !== yesterday
+    ) {
+      return {
+        ...data,
+        currentStreak: 0,
+      };
+    }
+    return data;
+  } catch {
+    return { currentStreak: 0, longestStreak: 0, lastActiveDate: "", activeDates: [] };
+  }
+}
+
+export async function recordLearningActivity(activity: {
+  type: LearningActivity["type"];
+  title: string;
+  details: string;
+}): Promise<StudyStreak> {
+  const today = getTodayString();
+  const yesterday = getYesterdayString();
+  const currentStreakData = getStudyStreak();
+
+  let newCurrent = currentStreakData.currentStreak;
+  if (!currentStreakData.lastActiveDate) {
+    newCurrent = 1;
+  } else if (currentStreakData.lastActiveDate === today) {
+    // Already counted today
+    newCurrent = Math.max(1, newCurrent);
+  } else if (currentStreakData.lastActiveDate === yesterday) {
+    newCurrent += 1;
+  } else {
+    // Streak broken, start fresh
+    newCurrent = 1;
+  }
+
+  const newLongest = Math.max(currentStreakData.longestStreak, newCurrent);
+  const updatedDates = Array.from(
+    new Set([...currentStreakData.activeDates, today])
+  );
+
+  const updatedStreak: StudyStreak = {
+    currentStreak: newCurrent,
+    longestStreak: newLongest,
+    lastActiveDate: today,
+    activeDates: updatedDates,
+  };
+
+  if (typeof window !== "undefined") {
+    localStorage.setItem(STREAK_KEY, JSON.stringify(updatedStreak));
+
+    // Save activity log
+    const user = await getCurrentUser();
+    const newLog: LearningActivity = {
+      id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+      userId: user?.id,
+      type: activity.type,
+      title: activity.title,
+      details: activity.details,
+      timestamp: new Date().toISOString(),
+    };
+
+    const existingLogs = getLearningActivities();
+    const updatedLogs = [newLog, ...existingLogs].slice(0, 80); // keep last 80 events
+    localStorage.setItem(ACTIVITIES_KEY, JSON.stringify(updatedLogs));
+
+    // Sync progress to Supabase if user is logged in
+    const supabase = getSupabaseClient();
+    if (supabase && user) {
+      try {
+        await supabase.from("user_progress").upsert({
+          user_id: user.id,
+          streak_data: updatedStreak,
+          activity_logs: updatedLogs,
+          updated_at: new Date().toISOString(),
+        });
+      } catch {
+        // Table not ready or network offline
+      }
+    }
+  }
+
+  return updatedStreak;
+}
+
+export function getLearningActivities(): LearningActivity[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const raw = localStorage.getItem(ACTIVITIES_KEY);
+    return raw ? JSON.parse(raw) : [];
+  } catch {
+    return [];
+  }
+}
+
+// -------------------------------------------------------------
+// COURSE & FLASHCARD STORAGE (WITH USER ISOLATION)
+// -------------------------------------------------------------
 
 export async function ensureSeeded(): Promise<void> {
   if (!db || typeof window === "undefined") return;
@@ -71,15 +289,24 @@ export async function getAllCourses(): Promise<Course[]> {
   if (!db) return [];
   await ensureSeeded();
 
-  // If Supabase is configured, try pulling remote updates first
+  // If Supabase is configured, try pulling remote updates
   const supabase = getSupabaseClient();
   const settings = getAppSettings();
+  const user = await getCurrentUser();
+
   if (supabase && settings.autoSyncCloud) {
     try {
-      const { data, error } = await supabase
+      let query = supabase
         .from("courses")
-        .select("id, data, updated_at")
+        .select("id, user_id, data, updated_at")
         .order("updated_at", { ascending: false });
+
+      // If user is logged in, prioritize their isolated courses
+      if (user) {
+        query = query.eq("user_id", user.id);
+      }
+
+      const { data, error } = await query;
       if (!error && data && data.length > 0) {
         for (const row of data) {
           if (row.data) {
@@ -88,11 +315,19 @@ export async function getAllCourses(): Promise<Course[]> {
         }
       }
     } catch {
-      // Offline or table not created yet — fallback seamlessly to IndexedDB
+      // Offline fallback to IndexedDB
     }
   }
 
   const list = await db.courses.toArray();
+  // If user is logged in, filter courses belonging to user or created locally
+  if (user) {
+    const userCourses = list.filter((c) => !c.userId || c.userId === user.id);
+    return userCourses.sort(
+      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+  }
+
   return list.sort(
     (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
   );
@@ -106,8 +341,12 @@ export async function getCourseById(id: string): Promise<Course | undefined> {
 
 export async function saveCourse(course: Course): Promise<void> {
   if (!db) return;
+  const user = await getCurrentUser();
+  const userId = user?.id || course.userId;
+
   const updated: Course = {
     ...course,
+    userId,
     updatedAt: new Date().toISOString(),
   };
   await db.courses.put(updated);
@@ -121,6 +360,7 @@ export async function saveCourse(course: Course): Promise<void> {
         if (!existing) {
           await db.flashcards.put({
             id: cardId,
+            userId,
             courseId: updated.id,
             chapterId: ch.id,
             word: vocab.word,
@@ -142,19 +382,27 @@ export async function saveCourse(course: Course): Promise<void> {
     }
   }
 
-  // Sync to Supabase Cloud if enabled
+  // Record study activity
+  await recordLearningActivity({
+    type: "lesson_generated",
+    title: `Cập nhật khóa học: ${updated.title}`,
+    details: `Đã lưu tiến độ ${updated.chapters.length} chương sách.`,
+  });
+
+  // Sync to Supabase Cloud with user_id
   const supabase = getSupabaseClient();
   const settings = getAppSettings();
   if (supabase && settings.autoSyncCloud) {
     try {
       await supabase.from("courses").upsert({
         id: updated.id,
+        user_id: userId || null,
         title: updated.title,
         data: updated,
         updated_at: updated.updatedAt,
       });
     } catch {
-      // Ignore network/table error so local experience never breaks
+      // Offline fallback
     }
   }
 }
@@ -188,17 +436,29 @@ export async function getCourseFlashcards(
 
 export async function updateFlashcard(card: FlashcardSRS): Promise<void> {
   if (!db) return;
-  await db.flashcards.put(card);
+  const user = await getCurrentUser();
+  const userId = user?.id || card.userId;
+  const updatedCard: FlashcardSRS = { ...card, userId };
+
+  await db.flashcards.put(updatedCard);
+
+  // Record streak activity when reviewing flashcards
+  await recordLearningActivity({
+    type: "vocab_review",
+    title: `Ôn từ vựng: ${card.word}`,
+    details: `Nghĩa: ${card.vietnameseMeaning} (Chu kỳ nhớ: ${card.interval} ngày)`,
+  });
 
   const supabase = getSupabaseClient();
   const settings = getAppSettings();
   if (supabase && settings.autoSyncCloud) {
     try {
       await supabase.from("flashcards").upsert({
-        id: card.id,
-        course_id: card.courseId,
-        data: card,
-        next_review_date: card.nextReviewDate,
+        id: updatedCard.id,
+        user_id: userId || null,
+        course_id: updatedCard.courseId,
+        data: updatedCard,
+        next_review_date: updatedCard.nextReviewDate,
       });
     } catch {
       // Ignore
@@ -209,10 +469,14 @@ export async function updateFlashcard(card: FlashcardSRS): Promise<void> {
 export async function exportAllDataJSON(): Promise<string> {
   const courses = await getAllCourses();
   const flashcards = await getCourseFlashcards();
+  const streak = getStudyStreak();
+  const activities = getLearningActivities();
   return JSON.stringify(
     {
-      version: 1,
+      version: 2,
       exportedAt: new Date().toISOString(),
+      streak,
+      activities,
       courses,
       flashcards,
     },
@@ -226,6 +490,13 @@ export async function importAllDataJSON(jsonString: string): Promise<number> {
   const parsed = JSON.parse(jsonString);
   const courses: Course[] = parsed.courses || (parsed.id ? [parsed] : []);
   const flashcards: FlashcardSRS[] = parsed.flashcards || [];
+
+  if (parsed.streak) {
+    localStorage.setItem(STREAK_KEY, JSON.stringify(parsed.streak));
+  }
+  if (parsed.activities) {
+    localStorage.setItem(ACTIVITIES_KEY, JSON.stringify(parsed.activities));
+  }
 
   for (const c of courses) {
     await saveCourse(c);
