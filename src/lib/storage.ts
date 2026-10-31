@@ -9,6 +9,20 @@ import {
 } from "@/types/course";
 import { SAMPLE_COURSE, SAMPLE_FLASHCARDS } from "./sampleData";
 
+export interface AppUser {
+  id: string;
+  email?: string;
+  user_metadata?: {
+    full_name?: string;
+    avatar_url?: string;
+    [key: string]: any;
+  };
+  app_metadata?: {
+    provider?: string;
+    [key: string]: any;
+  };
+}
+
 class BookLearningDatabase extends Dexie {
   courses!: EntityTable<Course, "id">;
   flashcards!: EntityTable<FlashcardSRS, "id">;
@@ -29,6 +43,7 @@ const SETTINGS_KEY = "book_agent_settings_v1";
 const SEEDED_KEY = "book_agent_seeded_v1";
 const STREAK_KEY = "book_agent_streak_v1";
 const ACTIVITIES_KEY = "book_agent_activities_v1";
+const LOCAL_USER_KEY = "book_agent_local_user_v1";
 
 export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: "",
@@ -87,15 +102,32 @@ export function getSupabaseClient(): SupabaseClient | null {
   }
 }
 
-export async function getCurrentUser(): Promise<User | null> {
+export async function getCurrentUser(): Promise<AppUser | null> {
   const supabase = getSupabaseClient();
-  if (!supabase) return null;
-  try {
-    const { data } = await supabase.auth.getUser();
-    return data.user || null;
-  } catch {
-    return null;
+  if (supabase) {
+    try {
+      const { data } = await supabase.auth.getUser();
+      if (data.user) {
+        return data.user as unknown as AppUser;
+      }
+    } catch {
+      // Supabase fetch failed or network offline
+    }
   }
+
+  // Fallback to local profile
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(LOCAL_USER_KEY);
+      if (raw) {
+        return JSON.parse(raw) as AppUser;
+      }
+    } catch {
+      return null;
+    }
+  }
+
+  return null;
 }
 
 export async function signInWithGoogle(): Promise<{ error: Error | null }> {
@@ -103,7 +135,7 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
   if (!supabase) {
     return {
       error: new Error(
-        "Chưa cấu hình Supabase URL hoặc Anon Key trong Cài đặt."
+        "Chưa cấu hình Supabase URL hoặc Anon Key trong Cài đặt để dùng Google Auth."
       ),
     };
   }
@@ -131,10 +163,80 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
   }
 }
 
+export async function signInWithEmailPassword(
+  email: string,
+  pass: string,
+  isSignUp = false
+): Promise<{ user: AppUser | null; error: Error | null }> {
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      if (isSignUp) {
+        const { data, error } = await supabase.auth.signUp({
+          email,
+          password: pass,
+          options: {
+            data: {
+              full_name: email.split("@")[0],
+            },
+          },
+        });
+        if (error) return { user: null, error: new Error(error.message) };
+        return { user: data.user as unknown as AppUser, error: null };
+      } else {
+        const { data, error } = await supabase.auth.signInWithPassword({
+          email,
+          password: pass,
+        });
+        if (error) return { user: null, error: new Error(error.message) };
+        return { user: data.user as unknown as AppUser, error: null };
+      }
+    } catch (err) {
+      return {
+        user: null,
+        error: err instanceof Error ? err : new Error("Lỗi xác thực Supabase"),
+      };
+    }
+  }
+
+  // If Supabase not connected, create a local session
+  const localUser = signInWithLocalProfile(email.split("@")[0], email);
+  return { user: localUser, error: null };
+}
+
+export function signInWithLocalProfile(
+  name: string,
+  email?: string
+): AppUser {
+  const cleanName = name.trim() || "Học viên BookMind";
+  const user: AppUser = {
+    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
+    email: email?.trim() || `${cleanName.toLowerCase().replace(/\s+/g, "")}@local.user`,
+    user_metadata: {
+      full_name: cleanName,
+      avatar_url: "",
+    },
+    app_metadata: {
+      provider: "local",
+    },
+  };
+  if (typeof window !== "undefined") {
+    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(user));
+  }
+  return user;
+}
+
 export async function signOutUser(): Promise<void> {
   const supabase = getSupabaseClient();
   if (supabase) {
-    await supabase.auth.signOut();
+    try {
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore
+    }
+  }
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(LOCAL_USER_KEY);
   }
 }
 

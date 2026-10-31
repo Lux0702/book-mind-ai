@@ -18,8 +18,8 @@ import {
   LogIn,
   LogOut,
   User as UserIcon,
+  ChevronDown,
 } from "lucide-react";
-import { User } from "@supabase/supabase-js";
 import { Course, FlashcardSRS, StudyStreak } from "@/types/course";
 import {
   getAllCourses,
@@ -32,6 +32,7 @@ import {
   signOutUser,
   getStudyStreak,
   getSupabaseClient,
+  AppUser,
 } from "@/lib/storage";
 import CreateCourseModal from "@/components/CreateCourseModal";
 import SettingsModal from "@/components/SettingsModal";
@@ -39,6 +40,7 @@ import ChapterWorkspace from "@/components/ChapterWorkspace";
 import FlashcardArena from "@/components/FlashcardArena";
 import ExamArena from "@/components/ExamArena";
 import AttendanceDashboard from "@/components/AttendanceDashboard";
+import LoginScreen from "@/components/LoginScreen";
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -47,7 +49,7 @@ export default function HomePage() {
   const [viewMode, setViewMode] = useState<
     "dashboard" | "srs_global" | "attendance"
   >("dashboard");
-  const [currentUser, setCurrentUser] = useState<User | null>(null);
+  const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [streakData, setStreakData] = useState<StudyStreak>({
     currentStreak: 0,
     longestStreak: 0,
@@ -55,6 +57,7 @@ export default function HomePage() {
     activeDates: [],
   });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
+  const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [reviewCourseId, setReviewCourseId] = useState<string>("");
   const [reviewChapterId, setReviewChapterId] = useState<string>("");
   const [reviewSubTab, setReviewSubTab] = useState<"exam" | "flashcards">(
@@ -92,26 +95,37 @@ export default function HomePage() {
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((_event, session) => {
-        setCurrentUser(session?.user || null);
+        if (session?.user) {
+          setCurrentUser(session.user as unknown as AppUser);
+        } else {
+          // Check if local user exists before nullifying
+          getCurrentUser().then((u) => setCurrentUser(u));
+        }
         refreshData();
       });
       return () => subscription.unsubscribe();
     }
   }, [refreshData]);
 
-  const handleGoogleLogin = async () => {
-    setIsLoggingIn(true);
-    const { error } = await signInWithGoogle();
-    if (error) {
-      alert(`Đăng nhập Google thất bại: ${error.message}`);
+  // Handle click outside to close user dropdown
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      const target = e.target as HTMLElement;
+      if (!target.closest("#user-profile-menu")) {
+        setIsUserMenuOpen(false);
+      }
+    };
+    if (isUserMenuOpen) {
+      window.addEventListener("click", handleClickOutside);
+      return () => window.removeEventListener("click", handleClickOutside);
     }
-    setIsLoggingIn(false);
-  };
+  }, [isUserMenuOpen]);
 
-  const handleGoogleLogout = async () => {
+  const handleLogout = async () => {
     if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
       await signOutUser();
       setCurrentUser(null);
+      setIsUserMenuOpen(false);
       await refreshData();
     }
   };
@@ -138,11 +152,44 @@ export default function HomePage() {
     await refreshData();
   };
 
+  if (isLoading) {
+    return (
+      <div className="min-h-screen flex flex-col items-center justify-center bg-slate-950 text-slate-300">
+        <div className="flex h-14 w-14 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-xl shadow-indigo-500/25 animate-pulse mb-4">
+          <BookOpen className="h-7 w-7" />
+        </div>
+        <p className="text-sm font-semibold text-white">BookMind AI</p>
+        <p className="mt-1 text-xs text-slate-400">Đang chuẩn bị không gian học tập...</p>
+      </div>
+    );
+  }
+
+  // AUTH GATE: Bắt buộc đăng nhập trước khi vào trang
+  if (!currentUser) {
+    return (
+      <>
+        <LoginScreen
+          onLoginSuccess={(user) => {
+            setCurrentUser(user);
+            refreshData();
+          }}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+        />
+        <SettingsModal
+          isOpen={isSettingsOpen}
+          onClose={() => setIsSettingsOpen(false)}
+          onSettingsChanged={refreshData}
+        />
+      </>
+    );
+  }
+
   return (
     <div className="min-h-screen flex flex-col bg-slate-950">
       {/* Top Navbar */}
-      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-md">
         <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+          {/* Left: Brand Logo & Optional Breadcrumb */}
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -150,145 +197,262 @@ export default function HomePage() {
                 setActiveCourseId(null);
                 setViewMode("dashboard");
               }}
-              className="flex items-center gap-2.5 text-left"
+              className="group flex items-center gap-2.5 text-left transition cursor-pointer"
             >
-              <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/20">
-                <BookOpen className="h-5 w-5" />
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-600/20 group-hover:scale-105 transition">
+                <BookOpen className="h-4.5 w-4.5" />
               </div>
-              <div>
+              <div className="flex items-center gap-1.5">
                 <span className="text-base font-extrabold tracking-tight text-white">
-                  BookMind <span className="text-indigo-400">AI</span>
+                  BookMind
                 </span>
-                <span className="block text-[11px] text-slate-400">
-                  Mỗi cuốn sách là một Khóa học chuyên sâu
+                <span className="rounded-md bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-black text-indigo-300 border border-indigo-500/30">
+                  AI
                 </span>
               </div>
             </button>
 
-            <nav className="ml-6 hidden items-center gap-1 md:flex">
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveCourseId(null);
-                  setViewMode("dashboard");
-                }}
-                className={`rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                  !activeCourseId && viewMode === "dashboard"
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
-                }`}
-              >
-                📚 Tủ Sách / Courses ({courses.length})
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveCourseId(null);
-                  setViewMode("srs_global");
-                }}
-                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-semibold transition ${
-                  !activeCourseId && viewMode === "srs_global"
-                    ? "bg-slate-800 text-white"
-                    : "text-slate-400 hover:bg-slate-900 hover:text-slate-200"
-                }`}
-              >
-                🗂️ Ôn tập & Thi theo Chương
-                {dueFlashcards.length > 0 && (
-                  <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-bold text-amber-300">
-                    {dueFlashcards.length} thẻ
-                  </span>
-                )}
-              </button>
-              <button
-                type="button"
-                onClick={() => {
-                  setActiveCourseId(null);
-                  setViewMode("attendance");
-                }}
-                className={`flex items-center gap-1.5 rounded-xl px-3.5 py-2 text-xs font-bold transition ${
-                  !activeCourseId && viewMode === "attendance"
-                    ? "bg-gradient-to-r from-amber-500/20 to-orange-500/20 border border-amber-500/40 text-amber-300 shadow"
-                    : "text-slate-400 hover:bg-slate-900 hover:text-amber-300"
-                }`}
-              >
-                <Flame className="h-4 w-4 text-amber-400 animate-pulse" />
-                <span>Điểm danh & Nhật ký ({streakData.currentStreak} ngày)</span>
-              </button>
-            </nav>
+            {/* Context breadcrumb when viewing a course */}
+            {activeCourse && (
+              <div className="hidden lg:flex items-center gap-2 pl-3 ml-1 border-l border-slate-800 text-xs">
+                <span className="text-slate-500">/</span>
+                <span className="max-w-[220px] truncate text-slate-300 font-medium">
+                  {activeCourse.title}
+                </span>
+              </div>
+            )}
           </div>
 
-          <div className="flex items-center gap-2.5">
-            {/* Google Authentication Status */}
-            {currentUser ? (
-              <div className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900/90 py-1 pl-1.5 pr-2.5 text-xs">
-                {currentUser.user_metadata?.avatar_url ? (
-                  <img
-                    src={currentUser.user_metadata.avatar_url}
-                    alt={currentUser.user_metadata?.full_name || "User"}
-                    className="h-7 w-7 rounded-lg object-cover ring-1 ring-amber-400"
-                  />
-                ) : (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-indigo-600 text-white font-bold">
-                    {currentUser.email?.slice(0, 1).toUpperCase() || "U"}
-                  </div>
-                )}
-                <div className="hidden max-w-[120px] truncate sm:block">
-                  <span className="block truncate font-bold text-slate-200">
-                    {currentUser.user_metadata?.full_name ||
-                      currentUser.email?.split("@")[0]}
-                  </span>
-                </div>
-                <button
-                  type="button"
-                  onClick={handleGoogleLogout}
-                  className="ml-1 rounded-lg p-1 text-slate-400 hover:bg-rose-950/60 hover:text-rose-400"
-                  title="Đăng xuất"
-                >
-                  <LogOut className="h-3.5 w-3.5" />
-                </button>
-              </div>
-            ) : (
-              <button
-                type="button"
-                disabled={isLoggingIn}
-                onClick={handleGoogleLogin}
-                className="flex items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-3.5 py-2 text-xs font-bold text-indigo-200 shadow transition hover:bg-indigo-900/50"
-                title="Đăng nhập tài khoản Google để lưu trữ khóa học riêng biệt"
-              >
-                <LogIn className="h-3.5 w-3.5 text-indigo-400" />
-                <span className="hidden sm:inline">Đăng nhập Google</span>
-                <span className="sm:hidden">Đăng nhập</span>
-              </button>
-            )}
+          {/* Center: Clean Segmented Navigation Bar */}
+          <nav className="hidden md:flex items-center p-1 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur shadow-inner">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("dashboard");
+              }}
+              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                !activeCourseId && viewMode === "dashboard"
+                  ? "bg-slate-800 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+              }`}
+            >
+              <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
+              <span>Tủ sách</span>
+              <span className="ml-0.5 rounded-md bg-slate-800/80 px-1.5 py-0.2 text-[10px] text-slate-400 font-medium">
+                {courses.length}
+              </span>
+            </button>
 
             <button
               type="button"
-              onClick={() => setIsSettingsOpen(true)}
-              className="flex items-center gap-2 rounded-xl border border-slate-800 bg-slate-900 px-3.5 py-2 text-xs font-medium text-slate-300 transition hover:border-slate-700 hover:bg-slate-800"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("srs_global");
+              }}
+              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                !activeCourseId && viewMode === "srs_global"
+                  ? "bg-slate-800 text-white shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+              }`}
             >
-              <Settings className="h-4 w-4 text-indigo-400" />
-              <span className="hidden sm:inline">Cài đặt API & Cloud</span>
-              <span
-                className={`h-2 w-2 rounded-full ${
-                  hasApiKey ? "bg-emerald-400" : "bg-amber-400"
-                }`}
-                title={
-                  hasApiKey
-                    ? "Đã cấu hình Gemini API Key"
-                    : "Chưa nhập Gemini API Key"
-                }
-              />
+              <GraduationCap className="h-3.5 w-3.5 text-purple-400" />
+              <span>Ôn tập & Thi</span>
+              {dueFlashcards.length > 0 && (
+                <span className="ml-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 text-[10px] font-bold text-amber-300">
+                  {dueFlashcards.length}
+                </span>
+              )}
             </button>
 
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("attendance");
+              }}
+              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                !activeCourseId && viewMode === "attendance"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+                  : "text-slate-400 hover:text-amber-300 hover:bg-slate-800/40"
+              }`}
+            >
+              <Flame className="h-3.5 w-3.5 text-amber-400" />
+              <span>Điểm danh</span>
+              <span className="ml-0.5 text-[10px] font-bold text-amber-400">
+                {streakData.currentStreak}d
+              </span>
+            </button>
+          </nav>
+
+          {/* Right: Unified Action Controls */}
+          <div className="flex items-center gap-2">
+            {/* Create New Course Button */}
             <button
               type="button"
               onClick={() => setIsCreateOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-xs font-bold text-white shadow-lg shadow-indigo-600/25 transition hover:from-indigo-500 hover:to-purple-500"
+              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/20 transition active:scale-95 cursor-pointer"
             >
-              <Plus className="h-4 w-4" />
-              <span>Thêm Sách / Course mới</span>
+              <Plus className="h-3.5 w-3.5" />
+              <span className="hidden sm:inline">Thêm sách mới</span>
+              <span className="sm:hidden">Thêm</span>
             </button>
+
+            {/* Settings Icon Button */}
+            <button
+              type="button"
+              onClick={() => setIsSettingsOpen(true)}
+              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition shadow-sm cursor-pointer"
+              title="Cài đặt Gemini API & Supabase Cloud"
+            >
+              <Settings className="h-4 w-4" />
+              <span
+                className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${
+                  hasApiKey ? "bg-emerald-400" : "bg-amber-400 ring-2 ring-slate-900"
+                }`}
+              />
+            </button>
+
+            {/* User Profile Menu Dropdown */}
+            <div id="user-profile-menu" className="relative">
+              <button
+                type="button"
+                onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
+                className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 p-1 pr-2 hover:border-slate-700 hover:bg-slate-800 transition cursor-pointer"
+                title="Tài khoản của bạn"
+              >
+                {currentUser?.user_metadata?.avatar_url ? (
+                  <img
+                    src={currentUser.user_metadata.avatar_url}
+                    alt={currentUser.user_metadata?.full_name || "User"}
+                    className="h-7 w-7 rounded-lg object-cover ring-1 ring-indigo-500/50"
+                  />
+                ) : (
+                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-bold text-xs shadow-sm">
+                    {currentUser?.user_metadata?.full_name
+                      ? currentUser.user_metadata.full_name.charAt(0).toUpperCase()
+                      : currentUser?.email?.charAt(0).toUpperCase() || "U"}
+                  </div>
+                )}
+                <span className="hidden md:inline max-w-[90px] truncate text-xs font-semibold text-slate-200">
+                  {currentUser?.user_metadata?.full_name ||
+                    currentUser?.email?.split("@")[0] ||
+                    "Học viên"}
+                </span>
+                <ChevronDown className="h-3 w-3 text-slate-400" />
+              </button>
+
+              {/* Dropdown Popover */}
+              {isUserMenuOpen && (
+                <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-800 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-2.5 border-b border-slate-800/80">
+                    <p className="text-xs font-bold text-white truncate">
+                      {currentUser?.user_metadata?.full_name || "Học viên BookMind"}
+                    </p>
+                    <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                      {currentUser?.email || "Chế độ lưu cục bộ"}
+                    </p>
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
+                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                      {currentUser?.app_metadata?.provider === "local"
+                        ? "Học viên Offline / IndexedDB"
+                        : "Đã liên kết Cloud"}
+                    </div>
+                  </div>
+
+                  <div className="py-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setActiveCourseId(null);
+                        setViewMode("attendance");
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                    >
+                      <Flame className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Nhật ký & Chuỗi học ({streakData.currentStreak} ngày)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsSettingsOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                    >
+                      <Settings className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>Cài đặt API & Cloud Sync</span>
+                    </button>
+                  </div>
+
+                  <div className="border-t border-slate-800/80 pt-1">
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        handleLogout();
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition text-left cursor-pointer"
+                    >
+                      <LogOut className="h-3.5 w-3.5" />
+                      <span>Đăng xuất tài khoản</span>
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
+        </div>
+
+        {/* Mobile Navigation Bar below header for small screens */}
+        <div className="flex md:hidden border-t border-slate-800/80 bg-slate-950 px-4 py-2 justify-around">
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCourseId(null);
+              setViewMode("dashboard");
+            }}
+            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
+              !activeCourseId && viewMode === "dashboard"
+                ? "bg-slate-800 text-white"
+                : "text-slate-400"
+            }`}
+          >
+            <BookOpen className="h-3.5 w-3.5" />
+            <span>Tủ sách ({courses.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCourseId(null);
+              setViewMode("srs_global");
+            }}
+            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
+              !activeCourseId && viewMode === "srs_global"
+                ? "bg-slate-800 text-white"
+                : "text-slate-400"
+            }`}
+          >
+            <GraduationCap className="h-3.5 w-3.5" />
+            <span>Ôn tập ({dueFlashcards.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCourseId(null);
+              setViewMode("attendance");
+            }}
+            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
+              !activeCourseId && viewMode === "attendance"
+                ? "bg-amber-500/20 text-amber-300"
+                : "text-slate-400"
+            }`}
+          >
+            <Flame className="h-3.5 w-3.5 text-amber-400" />
+            <span>Điểm danh ({streakData.currentStreak}d)</span>
+          </button>
         </div>
       </header>
 
