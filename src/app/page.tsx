@@ -34,6 +34,7 @@ import {
   getSupabaseClient,
   AppUser,
 } from "@/lib/storage";
+import { stopAllSpeech } from "@/lib/tts";
 import CreateCourseModal from "@/components/CreateCourseModal";
 import SettingsModal from "@/components/SettingsModal";
 import ChapterWorkspace from "@/components/ChapterWorkspace";
@@ -48,7 +49,7 @@ export default function HomePage() {
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<
     "dashboard" | "srs_global" | "attendance"
-  >("dashboard");
+  >("attendance");
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [streakData, setStreakData] = useState<StudyStreak>({
     currentStreak: 0,
@@ -89,6 +90,9 @@ export default function HomePage() {
   useEffect(() => {
     refreshData();
 
+    // Stop speech when changing views or unmounting
+    stopAllSpeech();
+
     // Listen to Supabase auth events
     const supabase = getSupabaseClient();
     if (supabase) {
@@ -106,6 +110,11 @@ export default function HomePage() {
       return () => subscription.unsubscribe();
     }
   }, [refreshData]);
+
+  // Stop all speech whenever user switches views or courses
+  useEffect(() => {
+    stopAllSpeech();
+  }, [viewMode, activeCourseId]);
 
   // Handle click outside to close user dropdown
   useEffect(() => {
@@ -225,6 +234,27 @@ export default function HomePage() {
 
           {/* Center: Clean Segmented Navigation Bar */}
           <nav className="hidden md:flex items-center p-1 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur shadow-inner">
+            {/* 1. Điểm danh hiển thị đầu tiên */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("attendance");
+              }}
+              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+                !activeCourseId && viewMode === "attendance"
+                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
+                  : "text-slate-400 hover:text-amber-300 hover:bg-slate-800/40"
+              }`}
+            >
+              <Flame className="h-3.5 w-3.5 text-amber-400" />
+              <span>Điểm danh & Streak</span>
+              <span className="ml-0.5 text-[10px] font-bold text-amber-400">
+                {streakData.currentStreak}d
+              </span>
+            </button>
+
+            {/* 2. Tủ sách */}
             <button
               type="button"
               onClick={() => {
@@ -244,6 +274,7 @@ export default function HomePage() {
               </span>
             </button>
 
+            {/* 3. Ôn tập & Thi */}
             <button
               type="button"
               onClick={() => {
@@ -263,25 +294,6 @@ export default function HomePage() {
                   {dueFlashcards.length}
                 </span>
               )}
-            </button>
-
-            <button
-              type="button"
-              onClick={() => {
-                setActiveCourseId(null);
-                setViewMode("attendance");
-              }}
-              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
-                !activeCourseId && viewMode === "attendance"
-                  ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
-                  : "text-slate-400 hover:text-amber-300 hover:bg-slate-800/40"
-              }`}
-            >
-              <Flame className="h-3.5 w-3.5 text-amber-400" />
-              <span>Điểm danh</span>
-              <span className="ml-0.5 text-[10px] font-bold text-amber-400">
-                {streakData.currentStreak}d
-              </span>
             </button>
           </nav>
 
@@ -412,6 +424,21 @@ export default function HomePage() {
             type="button"
             onClick={() => {
               setActiveCourseId(null);
+              setViewMode("attendance");
+            }}
+            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
+              !activeCourseId && viewMode === "attendance"
+                ? "bg-amber-500/20 text-amber-300"
+                : "text-slate-400"
+            }`}
+          >
+            <Flame className="h-3.5 w-3.5 text-amber-400" />
+            <span>Điểm danh ({streakData.currentStreak}d)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCourseId(null);
               setViewMode("dashboard");
             }}
             className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
@@ -437,21 +464,6 @@ export default function HomePage() {
           >
             <GraduationCap className="h-3.5 w-3.5" />
             <span>Ôn tập ({dueFlashcards.length})</span>
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCourseId(null);
-              setViewMode("attendance");
-            }}
-            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
-              !activeCourseId && viewMode === "attendance"
-                ? "bg-amber-500/20 text-amber-300"
-                : "text-slate-400"
-            }`}
-          >
-            <Flame className="h-3.5 w-3.5 text-amber-400" />
-            <span>Điểm danh ({streakData.currentStreak}d)</span>
           </button>
         </div>
       </header>

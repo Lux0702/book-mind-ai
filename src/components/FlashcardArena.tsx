@@ -10,11 +10,14 @@ import {
   ChevronLeft,
   ChevronRight,
   Shuffle,
+  Mic,
 } from "lucide-react";
 import { FlashcardSRS } from "@/types/course";
 import { calculateNextReview } from "@/lib/srs";
 import { updateFlashcard } from "@/lib/storage";
-import { speakSmart } from "@/lib/tts";
+import { speakSmart, stopAllSpeech } from "@/lib/tts";
+import AudioSpeakButton from "./AudioSpeakButton";
+import PronunciationModal from "./PronunciationModal";
 
 interface FlashcardArenaProps {
   cards: FlashcardSRS[];
@@ -29,10 +32,19 @@ export default function FlashcardArena({
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isFlipped, setIsFlipped] = useState(false);
   const [sessionReviewed, setSessionReviewed] = useState(0);
+  const [isPronounceOpen, setIsPronounceOpen] = useState(false);
 
   useEffect(() => {
     setDeck(cards);
   }, [cards]);
+
+  // Stop speech whenever card changes or component unmounts
+  useEffect(() => {
+    stopAllSpeech();
+    return () => {
+      stopAllSpeech();
+    };
+  }, [currentIndex]);
 
   // Keyboard navigation: Left/Right arrows to switch cards, Space to flip
   useEffect(() => {
@@ -180,28 +192,35 @@ export default function FlashcardArena({
               <h2 className="text-3xl font-extrabold tracking-tight text-white md:text-4xl">
                 {currentCard.word}
               </h2>
+              <AudioSpeakButton
+                text={currentCard.word}
+                showLabel={false}
+                className="rounded-xl bg-indigo-600/25 p-2.5 text-indigo-300 transition hover:bg-indigo-600 hover:text-white"
+              />
               <button
                 type="button"
-                onClick={(e) => speakSmart(currentCard.word, e)}
-                className="rounded-xl bg-indigo-600/25 p-2.5 text-indigo-300 transition hover:bg-indigo-600 hover:text-white"
-                title="Nghe phát âm chuẩn"
+                onClick={(e) => {
+                  e.stopPropagation();
+                  stopAllSpeech();
+                  setIsPronounceOpen(true);
+                }}
+                className="flex items-center gap-1.5 rounded-xl bg-emerald-500/20 border border-emerald-500/30 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/30 transition cursor-pointer"
+                title="Bấm để luyện đọc từ này cho AI chấm điểm"
               >
-                <Volume2 className="h-5 w-5" />
+                <Mic className="h-4 w-4" />
+                <span>Luyện nói</span>
               </button>
             </div>
             <p className="mt-2 font-mono text-base text-indigo-300">
               {currentCard.ipa}
             </p>
-            <div className="mt-6 flex items-center gap-2 max-w-xl rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm italic text-slate-300">
+            <div className="mt-6 flex items-center justify-between gap-3 max-w-xl rounded-xl border border-slate-800 bg-slate-950/70 px-4 py-3 text-sm italic text-slate-300">
               <span>&ldquo;{currentCard.quoteFromBook}&rdquo;</span>
-              <button
-                type="button"
-                onClick={(e) => speakSmart(currentCard.quoteFromBook, e)}
+              <AudioSpeakButton
+                text={currentCard.quoteFromBook}
+                showLabel={false}
                 className="shrink-0 rounded-lg bg-slate-800 p-1.5 text-indigo-400 hover:bg-indigo-600 hover:text-white"
-                title="Nghe câu ví dụ"
-              >
-                <Volume2 className="h-4 w-4" />
-              </button>
+              />
             </div>
           </div>
         ) : (
@@ -215,22 +234,30 @@ export default function FlashcardArena({
                 <span className="font-mono text-sm text-indigo-300">
                   {currentCard.ipa}
                 </span>
+                <AudioSpeakButton
+                  text={currentCard.word}
+                  showLabel={false}
+                  className="rounded-lg bg-slate-800 p-1.5 text-indigo-300 hover:bg-indigo-600 hover:text-white"
+                />
                 <button
                   type="button"
-                  onClick={(e) => speakSmart(currentCard.word, e)}
-                  className="rounded-lg bg-slate-800 p-1.5 text-indigo-300 hover:bg-indigo-600 hover:text-white"
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    stopAllSpeech();
+                    setIsPronounceOpen(true);
+                  }}
+                  className="flex items-center gap-1 rounded-lg bg-emerald-500/20 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/30 border border-emerald-500/30"
+                  title="Luyện nói từ này"
                 >
-                  <Volume2 className="h-3.5 w-3.5" />
+                  <Mic className="h-3 w-3" />
+                  <span>Chấm nói AI</span>
                 </button>
               </div>
-              <button
-                type="button"
-                onClick={(e) => speakSmart(currentCard.quoteFromBook, e)}
-                className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1 text-xs text-indigo-300 hover:bg-slate-700"
-              >
-                <Volume2 className="h-3.5 w-3.5" />
-                Đọc câu gốc
-              </button>
+              <AudioSpeakButton
+                text={currentCard.quoteFromBook}
+                label="Đọc câu gốc"
+                className="rounded-lg bg-slate-800 px-3 py-1 text-xs text-indigo-300 hover:bg-slate-700"
+              />
             </div>
 
             <div>
@@ -350,6 +377,18 @@ export default function FlashcardArena({
           </span>
         </button>
       </div>
+
+      {/* AI Pronunciation Coach Modal */}
+      {currentCard && (
+        <PronunciationModal
+          isOpen={isPronounceOpen}
+          onClose={() => setIsPronounceOpen(false)}
+          targetText={currentCard.word}
+          phonetic={currentCard.ipa}
+          vietnameseMeaning={currentCard.vietnameseMeaning}
+          contextHint={`Ví dụ: ${currentCard.quoteFromBook}`}
+        />
+      )}
     </div>
   );
 }

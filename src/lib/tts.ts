@@ -1,6 +1,8 @@
 "use client";
 
 let currentAudio: HTMLAudioElement | null = null;
+let currentSessionId = 0;
+let currentlyPlayingText: string | null = null;
 
 /**
  * Automatically detects the language of the text (Chinese, Japanese, Korean, Vietnamese, or English)
@@ -27,10 +29,71 @@ function cleanTextForSpeech(text: string): string {
 }
 
 /**
+ * Completely stops all audio & speech synthesis immediately.
+ */
+export function stopAllSpeech(): void {
+  currentSessionId++;
+  currentlyPlayingText = null;
+
+  if (typeof window !== "undefined") {
+    // 1. Cancel native browser SpeechSynthesis
+    if ("speechSynthesis" in window) {
+      try {
+        window.speechSynthesis.cancel();
+      } catch {
+        // Ignore
+      }
+    }
+
+    // 2. Pause and completely unload HTML5 Audio element
+    if (currentAudio) {
+      try {
+        currentAudio.pause();
+        currentAudio.currentTime = 0;
+        currentAudio.src = "";
+        currentAudio.load();
+      } catch {
+        // Ignore
+      }
+      currentAudio = null;
+    }
+
+    // Notify UI components
+    window.dispatchEvent(
+      new CustomEvent("bookmind-tts-status", {
+        detail: { isPlaying: false, text: "" },
+      })
+    );
+  }
+}
+
+// Automatically terminate audio whenever user switches browser tabs or hides page
+if (typeof window !== "undefined") {
+  document.addEventListener("visibilitychange", () => {
+    if (document.hidden) {
+      stopAllSpeech();
+    }
+  });
+  window.addEventListener("pagehide", () => {
+    stopAllSpeech();
+  });
+}
+
+/**
+ * Returns whether speech is currently playing, and for what text.
+ */
+export function getSpeechStatus(): { isPlaying: boolean; text: string | null } {
+  return {
+    isPlaying: Boolean(currentlyPlayingText),
+    text: currentlyPlayingText,
+  };
+}
+
+/**
  * Plays speech audio reliably across Windows/Mac/Chrome/Edge.
- * 1. Tries native Web Speech API if a matching voice for that language is installed on the OS/Browser.
- * 2. If no native voice exists for that language (very common on Windows for Chinese zh-TW/zh-CN)
- *    or if speechSynthesis fails, falls back to an online TTS audio endpoint via our API proxy.
+ * Fixed behavior:
+ * - When clicking a second time, immediately terminates the 1st playback and restarts cleanly.
+ * - Prevents SpeechSynthesis cancellation from mistakenly triggering fallback audio, eliminating overlapping voices.
  */
 export function speakSmart(text: string, e?: React.MouseEvent): void {
   if (e) {
@@ -41,26 +104,62 @@ export function speakSmart(text: string, e?: React.MouseEvent): void {
   const cleaned = cleanTextForSpeech(text);
   const lang = detectTextLang(cleaned);
 
-  // Stop any ongoing speech
-  if ("speechSynthesis" in window) {
-    window.speechSynthesis.cancel();
-  }
-  if (currentAudio) {
-    currentAudio.pause();
-    currentAudio = null;
-  }
+  // Stop any ongoing speech immediately before starting new one
+  stopAllSpeech();
+
+  // Create unique session token for this playback request
+  const sessionId = ++currentSessionId;
+  currentlyPlayingText = cleaned;
+
+  // Broadcast that speech has started
+  window.dispatchEvent(
+    new CustomEvent("bookmind-tts-status", {
+      detail: { isPlaying: true, text: cleaned },
+    })
+  );
+
+  const notifyStopped = () => {
+    if (sessionId === currentSessionId) {
+      currentlyPlayingText = null;
+      window.dispatchEvent(
+        new CustomEvent("bookmind-tts-status", {
+          detail: { isPlaying: false, text: "" },
+        })
+      );
+    }
+  };
 
   const playOnlineFallback = () => {
+    if (sessionId !== currentSessionId) return; // Superseded by a newer click
+
     try {
       const encoded = encodeURIComponent(cleaned.slice(0, 200));
       const url = `/api/tts?text=${encoded}&lang=${encodeURIComponent(lang)}`;
       const audio = new Audio(url);
       currentAudio = audio;
+
+      audio.onended = () => {
+        if (sessionId === currentSessionId) {
+          notifyStopped();
+          currentAudio = null;
+        }
+      };
+
+      audio.onerror = () => {
+        if (sessionId === currentSessionId) {
+          notifyStopped();
+          currentAudio = null;
+        }
+      };
+
       audio.play().catch(() => {
-        // Fallback if blocked
+        if (sessionId === currentSessionId) {
+          notifyStopped();
+          currentAudio = null;
+        }
       });
     } catch {
-      // Ignore
+      notifyStopped();
     }
   };
 
@@ -75,8 +174,8 @@ export function speakSmart(text: string, e?: React.MouseEvent): void {
     voices.find((v) => v.lang.toLowerCase() === lang.toLowerCase()) ||
     voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
 
-  // If the text is Chinese/Japanese/Korean and the OS has NO voice installed for it,
-  // native speechSynthesis will be completely silent! So use the online TTS stream immediately.
+  // If text is Chinese/Japanese/Korean and OS has NO voice installed for it,
+  // native speechSynthesis will stay completely silent on Windows, so stream online TTS immediately.
   if (langPrefix !== "en" && !matchedVoice) {
     playOnlineFallback();
     return;
@@ -89,9 +188,26 @@ export function speakSmart(text: string, e?: React.MouseEvent): void {
       utterance.voice = matchedVoice;
     }
     utterance.rate = 0.9;
-    utterance.onerror = () => {
+
+    utterance.onend = () => {
+      if (sessionId === currentSessionId) {
+        notifyStopped();
+      }
+    };
+
+    utterance.onerror = (ev) => {
+      // CRITICAL FIX: If cancelled/interrupted by a second user click, DO NOT trigger fallback!
+      // This was the exact bug causing audio to overlap and play on top of each other.
+      if (
+        ev.error === "canceled" ||
+        ev.error === "interrupted" ||
+        sessionId !== currentSessionId
+      ) {
+        return;
+      }
       playOnlineFallback();
     };
+
     window.speechSynthesis.speak(utterance);
   } catch {
     playOnlineFallback();

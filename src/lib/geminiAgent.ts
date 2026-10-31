@@ -1,5 +1,9 @@
 import { GoogleGenAI, Type, Schema } from "@google/genai";
-import { ChapterLesson, TranslationEvaluation } from "@/types/course";
+import {
+  ChapterLesson,
+  TranslationEvaluation,
+  PronunciationEvaluation,
+} from "@/types/course";
 
 function getClient(customApiKey?: string): GoogleGenAI {
   const apiKey =
@@ -322,6 +326,81 @@ const TRANSLATION_EVAL_SCHEMA: Schema = {
     "improvements",
     "suggestedTranslation",
     "wordByWordBreakdown",
+  ],
+};
+
+const PRONUNCIATION_EVAL_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    overallScore: {
+      type: Type.INTEGER,
+      description: "Điểm phần trăm độ chính xác phát âm từ 0 đến 100%",
+    },
+    accuracyGrade: {
+      type: Type.STRING,
+      description:
+        "Xếp loại: Xuất sắc (Native-like) | Tốt (Good) | Khá (Fair) | Cần cải thiện (Needs Work)",
+    },
+    correctWords: {
+      type: Type.ARRAY,
+      items: { type: Type.STRING },
+      description: "Danh sách các từ hoặc âm tiết phát âm chuẩn xác",
+    },
+    mispronouncedWords: {
+      type: Type.ARRAY,
+      description:
+        "Danh sách các từ/âm tiết bị phát âm sai, phát âm lệch hoặc nuốt âm",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          word: {
+            type: Type.STRING,
+            description: "Từ bị phát âm sai hoặc chưa chuẩn",
+          },
+          expectedPhonetic: {
+            type: Type.STRING,
+            description: "Phiên âm đúng chuẩn (IPA hoặc Pinyin)",
+          },
+          detectedSound: {
+            type: Type.STRING,
+            description: "Âm thanh/thanh điệu mà người học đã đọc lệch",
+          },
+          issue: {
+            type: Type.STRING,
+            description:
+              "Lỗi cụ thể (ví dụ: Sai thanh 3 thành thanh 4, thiếu âm đuôi, nuốt phụ âm...)",
+          },
+          tip: {
+            type: Type.STRING,
+            description:
+              "Mẹo cụ thể cách đặt khẩu hình miệng, uốn lưỡi, nhả thanh để phát âm chuẩn",
+          },
+        },
+        required: ["word", "issue", "tip"],
+      },
+    },
+    fluencyScore: {
+      type: Type.INTEGER,
+      description: "Điểm độ lưu loát và ngắt nghỉ tự nhiên (0-100)",
+    },
+    completenessScore: {
+      type: Type.INTEGER,
+      description: "Điểm độ đọc đủ từ không bị sót từ nào (0-100)",
+    },
+    generalFeedback: {
+      type: Type.STRING,
+      description:
+        "Nhận xét tổng quan, giải thích rõ sai chỗ nào và cần cải thiện gì bằng tiếng Việt",
+    },
+  },
+  required: [
+    "overallScore",
+    "accuracyGrade",
+    "correctWords",
+    "mispronouncedWords",
+    "fluencyScore",
+    "completenessScore",
+    "generalFeedback",
   ],
 };
 
@@ -765,4 +844,59 @@ ${params.chapterText.slice(0, 35000)}
 
   const parsed = JSON.parse(response.text);
   return parsed.vocabulary || [];
+}
+
+export async function evaluatePronunciationWithAI(params: {
+  expectedText: string;
+  spokenText: string;
+  language?: string;
+  pinyinOrIpa?: string;
+  apiKey?: string;
+  model?: string;
+}): Promise<PronunciationEvaluation> {
+  const ai = getClient(params.apiKey);
+  const modelName = params.model || "gemini-2.5-flash";
+
+  const prompt = `Bạn là Chuyên gia Ngữ âm và Gia sư Luyện Phát âm AI (AI Pronunciation & Phonetics Coach).
+Nhiệm vụ của bạn là đánh giá và chấm điểm phần trăm độ chính xác phát âm của người học khi đọc một từ vựng hoặc đoạn văn trích từ sách.
+
+VĂN BẢN MẪU CẦN ĐỌC (EXPECTED TEXT):
+"${params.expectedText}"
+${params.pinyinOrIpa ? `Phiên âm mẫu (IPA/Pinyin): "${params.pinyinOrIpa}"` : ""}
+Ngôn ngữ: ${params.language || "Tự động nhận diện (Tiếng Trung/Tiếng Anh/v.v.)"}
+
+VĂN BẢN THU ĐƯỢC TỪ GIỌNG ĐỌC CỦA NGƯỜI HỌC (SPOKEN TRANSCRIPT):
+"${params.spokenText}"
+
+YÊU CẦU ĐÁNH GIÁ CHUYÊN SÂU & TẬP TRUNG VÀO 3 YẾU TỐ:
+1. ĐÚNG BAO NHIÊU % (overallScore từ 0 - 100%):
+   - Đánh giá độ trùng khớp ngữ âm, thanh điệu, trọng âm, và phụ âm cuối.
+   - Nếu đọc hoàn hảo từng âm: 95-100%. Nếu đọc đúng hầu hết chỉ vấp 1 âm nhỏ: 80-90%. Nếu sai nhiều từ hoặc sai thanh điệu cốt lõi: 40-70%. Nếu không nói hoặc nói lung tung không liên quan: < 30%.
+2. SAI CHỖ NÀO (mispronouncedWords):
+   - Chỉ rõ từ nào bị đọc sai, lỗi là gì (ví dụ trong tiếng Trung: sai thanh điệu tone 1 vs tone 4, nhầm âm z/c/s, zh/ch/sh; trong tiếng Anh: nuốt ending sounds /t/, /d/, /s/, /z/, đọc sai trọng âm stress).
+3. CẦN CẢI THIỆN GÌ (tip & generalFeedback):
+   - Hướng dẫn cụ thể cách đặt khẩu hình miệng, đặt đầu lưỡi, bật hơi, hoặc giữ trường độ âm thanh để người học đọc lại lần sau sẽ đúng ngay.
+   - Nhận xét và góp ý bằng tiếng Việt truyền cảm hứng, dễ hiểu.`;
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: PRONUNCIATION_EVAL_SCHEMA,
+      temperature: 0.2,
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Không nhận được phản hồi đánh giá phát âm từ AI.");
+  }
+
+  const parsed = JSON.parse(response.text);
+  return {
+    ...parsed,
+    expectedText: params.expectedText,
+    spokenText: params.spokenText,
+    evaluatedAt: new Date().toISOString(),
+  };
 }

@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState } from "react";
+import React, { useState, useEffect } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -21,6 +21,7 @@ import {
   FileText,
   Trash2,
   Trophy,
+  Mic,
 } from "lucide-react";
 import {
   Course,
@@ -33,9 +34,15 @@ import {
   renderPdfPagesToImagesBase64,
   convertUploadedFilesToImagesBase64,
 } from "@/lib/pdfParser";
-import { speakSmart } from "@/lib/tts";
+import { speakSmart, stopAllSpeech } from "@/lib/tts";
+import AudioSpeakButton from "./AudioSpeakButton";
+import LessonGeneratingLoader from "./loadings/LessonGeneratingLoader";
+import TutorThinkingLoader from "./loadings/TutorThinkingLoader";
+import TranslationEvaluatingLoader from "./loadings/TranslationEvaluatingLoader";
+import VocabScanningLoader from "./loadings/VocabScanningLoader";
 import FlashcardArena from "./FlashcardArena";
 import ExamArena from "./ExamArena";
+import PronunciationModal from "./PronunciationModal";
 
 interface ChapterWorkspaceProps {
   course: Course;
@@ -95,6 +102,18 @@ export default function ChapterWorkspace({
   const [showRawText, setShowRawText] = useState(false);
   const [editableRawText, setEditableRawText] = useState("");
 
+  // Pronunciation Coach Modal state
+  const [pronounceModalData, setPronounceModalData] = useState<{
+    isOpen: boolean;
+    targetText: string;
+    phonetic?: string;
+    vietnameseMeaning?: string;
+    contextHint?: string;
+  }>({
+    isOpen: false,
+    targetText: "",
+  });
+
   const currentChapter: ChapterUnit | undefined =
     course.chapters.find((c) => c.id === selectedChapterId) ||
     course.chapters[0];
@@ -103,8 +122,29 @@ export default function ChapterWorkspace({
     (f) => f.chapterId === currentChapter?.id
   );
 
+  // Automatically stop speech when switching learning tabs, chapters, or leaving
+  useEffect(() => {
+    stopAllSpeech();
+    return () => {
+      stopAllSpeech();
+    };
+  }, [activeTab, selectedChapterId]);
+
   const speakEnglish = (text: string) => {
     speakSmart(text);
+  };
+
+  const openPronunciationCoach = (params: {
+    targetText: string;
+    phonetic?: string;
+    vietnameseMeaning?: string;
+    contextHint?: string;
+  }) => {
+    stopAllSpeech();
+    setPronounceModalData({
+      isOpen: true,
+      ...params,
+    });
   };
 
   const handleDeleteChapterFromCourse = async (
@@ -411,7 +451,10 @@ export default function ChapterWorkspace({
         <div className="border-b border-slate-800 p-4">
           <button
             type="button"
-            onClick={onBackToDashboard}
+            onClick={() => {
+              stopAllSpeech();
+              onBackToDashboard();
+            }}
             className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300"
           >
             <ArrowLeft className="h-3.5 w-3.5" />
@@ -604,9 +647,14 @@ export default function ChapterWorkspace({
           </div>
         )}
 
-        {/* If Lesson Not Generated Yet */}
-        {!lesson ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-10 text-center">
+        {/* If Generating Lesson */}
+        {isGeneratingLesson ? (
+          <LessonGeneratingLoader
+            chapterIndex={currentChapter.index}
+            chapterTitle={currentChapter.title}
+          />
+        ) : !lesson ? (
+          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-10 text-center animate-in fade-in duration-300">
             <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-400">
               <Sparkles className="h-8 w-8" />
             </div>
@@ -765,7 +813,7 @@ export default function ChapterWorkspace({
 
             {/* TAB 1: DEEP CONTENT & COMMENTARY */}
             {activeTab === "content" && (
-              <div className="space-y-6">
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {/* Overview Card */}
                 <div className="rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-slate-900 via-slate-900 to-indigo-950/30 p-6">
                   <h3 className="text-sm font-bold uppercase tracking-wider text-indigo-400">
@@ -812,14 +860,11 @@ export default function ChapterWorkspace({
                         <h4 className="text-base font-bold text-indigo-300">
                           {sec.sectionTitle}
                         </h4>
-                        <button
-                          type="button"
-                          onClick={() => speakEnglish(sec.originalExcerpt)}
-                          className="flex items-center gap-1.5 rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-slate-700"
-                        >
-                          <Volume2 className="h-3.5 w-3.5" />
-                          Nghe đoạn trích
-                        </button>
+                        <AudioSpeakButton
+                          text={sec.originalExcerpt}
+                          label="Nghe đoạn trích"
+                          className="rounded-lg bg-slate-800 px-3 py-1.5 text-xs font-medium text-indigo-300 hover:bg-slate-700"
+                        />
                       </div>
 
                       <div className="grid grid-cols-1 gap-4 lg:grid-cols-2">
@@ -886,8 +931,9 @@ export default function ChapterWorkspace({
                       Hỏi AI
                     </button>
                   </form>
-                  {tutorAnswer && (
-                    <div className="mt-4 whitespace-pre-wrap rounded-xl border border-indigo-500/30 bg-slate-950 p-4 text-sm leading-relaxed text-slate-200">
+                  {isAskingTutor && <TutorThinkingLoader />}
+                  {tutorAnswer && !isAskingTutor && (
+                    <div className="mt-4 whitespace-pre-wrap rounded-xl border border-indigo-500/30 bg-slate-950 p-4 text-sm leading-relaxed text-slate-200 animate-in fade-in duration-300">
                       {tutorAnswer}
                     </div>
                   )}
@@ -897,7 +943,7 @@ export default function ChapterWorkspace({
 
             {/* TAB 2: GRAMMAR IN CONTEXT */}
             {activeTab === "grammar" && (
-              <div className="space-y-4">
+              <div className="space-y-4 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {lesson.grammarPoints.map((gp, idx) => (
                   <div
                     key={gp.id}
@@ -920,13 +966,28 @@ export default function ChapterWorkspace({
                         <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
                           Câu trích thực tế từ chương sách:
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => speakEnglish(gp.quoteFromBook)}
-                          className="text-xs text-indigo-400 hover:underline flex items-center gap-1"
-                        >
-                          <Volume2 className="h-3.5 w-3.5" /> Nghe câu
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <AudioSpeakButton
+                            text={gp.quoteFromBook}
+                            label="Nghe câu"
+                            className="text-xs text-indigo-400 hover:text-indigo-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openPronunciationCoach({
+                                targetText: gp.quoteFromBook,
+                                vietnameseMeaning: gp.quoteTranslation,
+                                contextHint: `Cấu trúc: ${gp.patternFormula}`,
+                              })
+                            }
+                            className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-500/30 transition cursor-pointer"
+                            title="Luyện đọc câu này để AI chấm điểm"
+                          >
+                            <Mic className="h-3 w-3" />
+                            <span>Luyện đọc câu</span>
+                          </button>
+                        </div>
                       </div>
                       <p className="mt-1 font-serif text-sm italic text-white">
                         &ldquo;{gp.quoteFromBook}&rdquo;
@@ -977,7 +1038,7 @@ export default function ChapterWorkspace({
 
             {/* TAB 3: VOCABULARY & SRS FLASHCARDS */}
             {activeTab === "vocabulary" && (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {/* Interactive SRS Flashcard Deck for this chapter */}
                 <div>
                   <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-white">
@@ -1052,11 +1113,19 @@ export default function ChapterWorkspace({
                       </label>
                     </div>
                   </div>
+
+                  {/* Unique Vocab Scanning Loader */}
+                  {isExtractingFullVocab && (
+                    <div className="mb-6">
+                      <VocabScanningLoader />
+                    </div>
+                  )}
+
                   <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                     {lesson.vocabulary.map((voc) => (
                       <div
                         key={voc.id}
-                        className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-3"
+                        className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-3 hover:border-slate-700 transition"
                       >
                         <div className="flex items-start justify-between">
                           <div>
@@ -1064,12 +1133,26 @@ export default function ChapterWorkspace({
                               <h4 className="text-lg font-bold text-white">
                                 {voc.word}
                               </h4>
+                              <AudioSpeakButton
+                                text={voc.word}
+                                showLabel={false}
+                                className="rounded-lg bg-slate-800 p-1.5 text-indigo-400 hover:bg-indigo-600 hover:text-white"
+                              />
                               <button
                                 type="button"
-                                onClick={() => speakEnglish(voc.word)}
-                                className="rounded-lg bg-slate-800 p-1.5 text-indigo-400 hover:bg-indigo-600 hover:text-white"
+                                onClick={() =>
+                                  openPronunciationCoach({
+                                    targetText: voc.word,
+                                    phonetic: voc.ipa,
+                                    vietnameseMeaning: voc.vietnameseMeaning,
+                                    contextHint: `Ví dụ: ${voc.quoteFromBook}`,
+                                  })
+                                }
+                                className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 px-2 py-1 rounded-lg border border-emerald-500/30 transition cursor-pointer"
+                                title="Luyện đọc từ này để AI chấm điểm"
                               >
-                                <Volume2 className="h-3.5 w-3.5" />
+                                <Mic className="h-3 w-3" />
+                                <span>Luyện nói</span>
                               </button>
                             </div>
                             <span className="font-mono text-xs text-indigo-300">
@@ -1125,7 +1208,7 @@ export default function ChapterWorkspace({
 
             {/* TAB 4: CLOZE (FILL-IN-BLANK) & MULTIPLE CHOICE QUIZZES */}
             {activeTab === "practice" && (
-              <div className="space-y-8">
+              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 {/* Part A: Fill in the blank */}
                 <div className="space-y-4">
                   <h3 className="text-base font-bold text-white">
@@ -1339,7 +1422,7 @@ export default function ChapterWorkspace({
 
             {/* TAB 5: SENTENCE TRANSLATION & AI SEMANTIC EVALUATION (%) */}
             {activeTab === "translation" && (
-              <div className="space-y-6">
+              <div className="space-y-6 animate-in fade-in slide-in-from-bottom-2 duration-300">
                 <div className="rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-4 text-xs text-indigo-200">
                   <strong>🎯 Cơ chế AI Chấm Điểm Dịch Câu (Semantic Similarity Evaluation):</strong>{" "}
                   Bạn hãy dịch các câu trích từ chương sách sang tiếng Việt theo cách hiểu của bạn. AI Agent sẽ đối chiếu ngữ nghĩa, ngữ pháp và sắc thái văn phong để chấm điểm từ <strong>0% – 100%</strong>, chỉ rõ từng cụm từ bạn dịch hay hoặc cần chỉnh sửa.
@@ -1375,13 +1458,28 @@ export default function ChapterWorkspace({
                         <span className="rounded-lg bg-indigo-500/20 px-3 py-1 text-xs font-bold text-indigo-300">
                           Bài luyện dịch #{idx + 1} ({tr.direction})
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => speakEnglish(tr.originalSentence)}
-                          className="flex items-center gap-1 text-xs text-indigo-400 hover:underline"
-                        >
-                          <Volume2 className="h-3.5 w-3.5" /> Nghe câu gốc
-                        </button>
+                        <div className="flex items-center gap-2">
+                          <AudioSpeakButton
+                            text={tr.originalSentence}
+                            label="Nghe câu gốc"
+                            className="text-xs text-indigo-400 hover:text-indigo-300"
+                          />
+                          <button
+                            type="button"
+                            onClick={() =>
+                              openPronunciationCoach({
+                                targetText: tr.originalSentence,
+                                vietnameseMeaning: tr.referenceTranslation,
+                                contextHint: tr.contextHint,
+                              })
+                            }
+                            className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-500/30 transition cursor-pointer"
+                            title="Luyện đọc câu gốc này để AI chấm điểm"
+                          >
+                            <Mic className="h-3 w-3" />
+                            <span>Luyện phát âm</span>
+                          </button>
+                        </div>
                       </div>
 
                       <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
@@ -1452,9 +1550,10 @@ export default function ChapterWorkspace({
                         </button>
                       </div>
 
-                      {/* AI Evaluation Result Breakdown */}
-                      {evalResult && (
-                        <div className="mt-4 space-y-4 rounded-2xl border border-indigo-500/30 bg-slate-950/90 p-5">
+                      {/* AI Evaluation Loading & Result Breakdown */}
+                      {isEvaluating && <TranslationEvaluatingLoader />}
+                      {evalResult && !isEvaluating && (
+                        <div className="mt-4 space-y-4 rounded-2xl border border-indigo-500/30 bg-slate-950/90 p-5 animate-in fade-in duration-300">
                           {/* Score Gauges */}
                           <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
                             <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-3 text-center">
@@ -1571,6 +1670,18 @@ export default function ChapterWorkspace({
           </div>
         )}
       </main>
+
+      {/* AI Pronunciation Coach Modal */}
+      <PronunciationModal
+        isOpen={pronounceModalData.isOpen}
+        onClose={() =>
+          setPronounceModalData((prev) => ({ ...prev, isOpen: false }))
+        }
+        targetText={pronounceModalData.targetText}
+        phonetic={pronounceModalData.phonetic}
+        vietnameseMeaning={pronounceModalData.vietnameseMeaning}
+        contextHint={pronounceModalData.contextHint}
+      />
     </div>
   );
 }

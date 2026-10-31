@@ -179,3 +179,22 @@ export interface AppSettings {
   supabaseAnonKey: string;
   autoSyncCloud: boolean;
 }
+
+export interface PronunciationEvaluation {
+  expectedText: string;
+  spokenText: string;
+  overallScore: number; // 0 - 100%
+  accuracyGrade: "Xuất sắc (Native-like)" | "Tốt (Good)" | "Khá (Fair)" | "Cần cải thiện (Needs Work)";
+  correctWords: string[];
+  mispronouncedWords: {
+    word: string;
+    expectedPhonetic?: string;
+    detectedSound?: string;
+    issue: string;
+    tip: string;
+  }[];
+  fluencyScore: number;
+  completenessScore: number;
+  generalFeedback: string;
+  evaluatedAt: string;
+}

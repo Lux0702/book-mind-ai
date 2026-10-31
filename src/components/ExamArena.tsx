@@ -27,7 +27,9 @@ import {
   TranslationExercise,
   TranslationEvaluation,
 } from "@/types/course";
-import { speakSmart } from "@/lib/tts";
+import { speakSmart, stopAllSpeech } from "@/lib/tts";
+import AudioSpeakButton from "./AudioSpeakButton";
+import ExamGeneratingLoader from "./loadings/ExamGeneratingLoader";
 import { getAppSettings } from "@/lib/storage";
 
 interface ExamArenaProps {
@@ -141,6 +143,14 @@ export default function ExamArena({
       translationEval?: TranslationEvaluation;
     }[]
   >([]);
+
+  // Automatically stop any playing speech when switching modes or unmounting
+  useEffect(() => {
+    stopAllSpeech();
+    return () => {
+      stopAllSpeech();
+    };
+  }, [mode, examStepIndex, selectedChapterId]);
 
   // Build automatic exam questions for the selected chapter
   const examQuestions: TimedExamQuestion[] = useMemo(() => {
@@ -698,36 +708,33 @@ export default function ExamArena({
                 </div>
               )}
 
-              <div className="flex flex-wrap items-center justify-center gap-3">
-                <button
-                  type="button"
-                  disabled={examQuestions.length === 0}
-                  onClick={startTimedExam}
-                  className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40"
-                >
-                  <Play className="h-4 w-4" />
-                  Bắt Đầu Làm Bài Thi Ngay ({examQuestions.length} câu)
-                </button>
+              {isGeneratingAiExam ? (
+                <div className="mt-4">
+                  <ExamGeneratingLoader />
+                </div>
+              ) : (
+                <div className="flex flex-wrap items-center justify-center gap-3">
+                  <button
+                    type="button"
+                    disabled={examQuestions.length === 0}
+                    onClick={startTimedExam}
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40"
+                  >
+                    <Play className="h-4 w-4" />
+                    Bắt Đầu Làm Bài Thi Ngay ({examQuestions.length} câu)
+                  </button>
 
-                <button
-                  type="button"
-                  disabled={isGeneratingAiExam}
-                  onClick={handleGenerateFreshAiExamForChapter}
-                  className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/30 px-5 py-3 text-xs font-bold text-amber-300 hover:bg-amber-900/40 disabled:opacity-50"
-                >
-                  {isGeneratingAiExam ? (
-                    <>
-                      <Loader2 className="h-4 w-4 animate-spin" />
-                      AI đang tạo đề thi mới cho chương này (10s)...
-                    </>
-                  ) : (
-                    <>
-                      <Sparkles className="h-4 w-4" />
-                      🤖 AI Tạo Bộ Đề Thi Mới Tinh Cho Chương Này
-                    </>
-                  )}
-                </button>
-              </div>
+                  <button
+                    type="button"
+                    disabled={isGeneratingAiExam}
+                    onClick={handleGenerateFreshAiExamForChapter}
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/30 px-5 py-3 text-xs font-bold text-amber-300 hover:bg-amber-900/40 disabled:opacity-50"
+                  >
+                    <Sparkles className="h-4 w-4" />
+                    🤖 AI Tạo Bộ Đề Thi Mới Tinh Cho Chương Này
+                  </button>
+                </div>
+              )}
             </div>
           ) : examFinished ? (
             /* Exam Summary & Score Report */
@@ -891,14 +898,11 @@ export default function ExamArena({
                   <h4 className="text-base font-bold leading-relaxed text-white md:text-lg">
                     {currentExamQ.promptText}
                   </h4>
-                  <button
-                    type="button"
-                    onClick={() => speakSmart(currentExamQ.promptText)}
+                  <AudioSpeakButton
+                    text={currentExamQ.promptText}
+                    showLabel={false}
                     className="shrink-0 rounded-xl bg-slate-800 p-2 text-indigo-400 hover:bg-indigo-600 hover:text-white"
-                    title="Nghe phát âm"
-                  >
-                    <Volume2 className="h-4 w-4" />
-                  </button>
+                  />
                 </div>
                 {currentExamQ.subHint && (
                   <p className="text-xs text-amber-300/90">
@@ -1128,13 +1132,11 @@ export default function ExamArena({
                       <span className="text-3xl font-extrabold text-white">
                         {q.word}
                       </span>
-                      <button
-                        type="button"
-                        onClick={() => speakSmart(q.word)}
+                      <AudioSpeakButton
+                        text={q.word}
+                        showLabel={false}
                         className="rounded-xl bg-indigo-600/20 p-2 text-indigo-400 hover:bg-indigo-600 hover:text-white"
-                      >
-                        <Volume2 className="h-5 w-5" />
-                      </button>
+                      />
                     </div>
                     <p className="mt-1 font-mono text-sm text-indigo-300">
                       {q.ipa}
@@ -1346,14 +1348,11 @@ export default function ExamArena({
               ({currentTypingCard.partOfSpeech} • CEFR{" "}
               {currentTypingCard.cefrLevel})
             </p>
-            <button
-              type="button"
-              onClick={() => speakSmart(currentTypingCard.word)}
+            <AudioSpeakButton
+              text={currentTypingCard.word}
+              label="Bấm để nghe phát âm từ này"
               className="inline-flex items-center gap-2 rounded-xl bg-indigo-600/20 px-4 py-2 text-xs font-semibold text-indigo-300 hover:bg-indigo-600 hover:text-white"
-            >
-              <Volume2 className="h-4 w-4" />
-              Bấm để nghe phát âm từ này
-            </button>
+            />
             {showTypingHint && (
               <p className="font-mono text-xs text-amber-300">
                 Gợi ý: Bắt đầu bằng &ldquo;{currentTypingCard.word.slice(0, 1)}
