@@ -142,6 +142,10 @@ export interface FlashcardSRS {
 export interface Course {
   id: string;
   userId?: string;
+  ownerEmail?: string;
+  ownerName?: string;
+  clonedFromCourseId?: string;
+  isLibrarySample?: boolean;
   title: string;
   author: string;
   description: string;

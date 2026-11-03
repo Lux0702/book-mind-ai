@@ -455,11 +455,29 @@ function getYesterdayString(): string {
   return `${year}-${month}-${day}`;
 }
 
+function getActiveUserScopeKey(baseKey: string): string {
+  const uid = cachedUserResult?.user?.id;
+  if (uid) return `${baseKey}_${uid}`;
+  if (typeof window !== "undefined") {
+    try {
+      const raw = localStorage.getItem(LOCAL_USER_KEY);
+      if (raw) {
+        const parsed = JSON.parse(raw) as AppUser;
+        if (parsed?.id) return `${baseKey}_${parsed.id}`;
+      }
+    } catch {
+      // Ignore
+    }
+  }
+  return baseKey;
+}
+
 export function getStudyStreak(): StudyStreak {
   if (typeof window === "undefined") {
     return { currentStreak: 0, longestStreak: 0, lastActiveDate: "", activeDates: [] };
   }
-  const raw = localStorage.getItem(STREAK_KEY);
+  const scopedKey = getActiveUserScopeKey(STREAK_KEY);
+  const raw = localStorage.getItem(scopedKey);
   if (!raw) {
     return { currentStreak: 0, longestStreak: 0, lastActiveDate: "", activeDates: [] };
   }
@@ -490,6 +508,7 @@ export async function recordLearningActivity(activity: {
   title: string;
   details: string;
 }): Promise<StudyStreak> {
+  const user = await getCurrentUser();
   const today = getTodayString();
   const yesterday = getYesterdayString();
   const currentStreakData = getStudyStreak();
@@ -520,10 +539,11 @@ export async function recordLearningActivity(activity: {
   };
 
   if (typeof window !== "undefined") {
-    localStorage.setItem(STREAK_KEY, JSON.stringify(updatedStreak));
+    const scopedStreakKey = getActiveUserScopeKey(STREAK_KEY);
+    const scopedActivitiesKey = getActiveUserScopeKey(ACTIVITIES_KEY);
+    localStorage.setItem(scopedStreakKey, JSON.stringify(updatedStreak));
 
     // Save activity log
-    const user = await getCurrentUser();
     const newLog: LearningActivity = {
       id: `act-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
       userId: user?.id,
@@ -535,7 +555,7 @@ export async function recordLearningActivity(activity: {
 
     const existingLogs = getLearningActivities();
     const updatedLogs = [newLog, ...existingLogs].slice(0, 80); // keep last 80 events
-    localStorage.setItem(ACTIVITIES_KEY, JSON.stringify(updatedLogs));
+    localStorage.setItem(scopedActivitiesKey, JSON.stringify(updatedLogs));
 
     // Sync progress to Supabase if user is logged in
     const supabase = getSupabaseClient();
@@ -559,7 +579,8 @@ export async function recordLearningActivity(activity: {
 export function getLearningActivities(): LearningActivity[] {
   if (typeof window === "undefined") return [];
   try {
-    const raw = localStorage.getItem(ACTIVITIES_KEY);
+    const scopedActivitiesKey = getActiveUserScopeKey(ACTIVITIES_KEY);
+    const raw = localStorage.getItem(scopedActivitiesKey);
     return raw ? JSON.parse(raw) : [];
   } catch {
     return [];
@@ -567,60 +588,103 @@ export function getLearningActivities(): LearningActivity[] {
 }
 
 // -------------------------------------------------------------
-// COURSE & FLASHCARD STORAGE (WITH USER ISOLATION)
+// COURSE & FLASHCARD STORAGE (WITH STRICT PER-USER ISOLATION & COMMUNITY LIBRARY)
 // -------------------------------------------------------------
+
+export function isCourseOwnedByUser(
+  course: Course,
+  user: AppUser | null
+): boolean {
+  if (!user) return false;
+  if (course.userId && course.userId === user.id) return true;
+  if (
+    course.ownerEmail &&
+    user.email &&
+    course.ownerEmail.toLowerCase() === user.email.toLowerCase()
+  ) {
+    return true;
+  }
+  return false;
+}
 
 export async function ensureSeeded(): Promise<void> {
   if (!db || typeof window === "undefined") return;
   const seeded = localStorage.getItem(SEEDED_KEY);
-  const existingCount = await db.courses.count();
-  if (!seeded && existingCount === 0) {
-    await db.courses.put(SAMPLE_COURSE);
-    await db.flashcards.bulkPut(SAMPLE_FLASHCARDS);
+  const existingSample = await db.courses.get(SAMPLE_COURSE.id);
+  if (!seeded || !existingSample) {
+    await db.courses.put({
+      ...SAMPLE_COURSE,
+      isLibrarySample: true,
+      ownerName: "BookMind Official",
+    });
     localStorage.setItem(SEEDED_KEY, "true");
   }
 }
 
 const COURSES_SYNC_TTL_MS = 20_000;
 let lastCoursesCloudSyncAt = 0;
+let lastSyncedCoursesUserId: string | null = null;
 let inFlightGetAllCourses: Promise<Course[]> | null = null;
 
-export async function getAllCourses(): Promise<Course[]> {
+export async function getAllCourses(forceRefresh = false): Promise<Course[]> {
   if (!db) return [];
-  if (inFlightGetAllCourses) {
+  if (!forceRefresh && inFlightGetAllCourses) {
     return inFlightGetAllCourses;
   }
 
   const run = (async (): Promise<Course[]> => {
     await ensureSeeded();
 
-    // If Supabase is configured, try pulling remote updates (throttled to once per 20s)
     const supabase = getSupabaseClient();
     const settings = getAppSettings();
     const user = await getCurrentUser();
+    const currentUserId = user?.id || null;
 
+    if (!user) {
+      return [];
+    }
+
+    // Pull user's own courses from Supabase (or immediately if user switched accounts)
     if (
       supabase &&
       settings.autoSyncCloud &&
-      Date.now() - lastCoursesCloudSyncAt > COURSES_SYNC_TTL_MS
+      (forceRefresh ||
+        currentUserId !== lastSyncedCoursesUserId ||
+        Date.now() - lastCoursesCloudSyncAt > COURSES_SYNC_TTL_MS)
     ) {
       lastCoursesCloudSyncAt = Date.now();
+      lastSyncedCoursesUserId = currentUserId;
       try {
-        let query = supabase
+        const { data, error } = await supabase
           .from("courses")
           .select("id, user_id, data, updated_at")
+          .eq("user_id", user.id)
           .order("updated_at", { ascending: false });
 
-        // If user is logged in, prioritize their isolated courses
-        if (user) {
-          query = query.eq("user_id", user.id);
-        }
-
-        const { data, error } = await query;
         if (!error && data && data.length > 0) {
           for (const row of data) {
             if (row.data) {
-              await db.courses.put(row.data as Course);
+              const courseData = row.data as Course;
+              if (row.user_id && !courseData.userId) {
+                courseData.userId = row.user_id;
+              }
+              await db.courses.put(courseData);
+            }
+          }
+        } else if (error) {
+          // Fallback nếu bảng courses chưa có cột user_id: lọc theo JSONB data.userId
+          const { data: fallbackData } = await supabase
+            .from("courses")
+            .select("id, data, updated_at")
+            .order("updated_at", { ascending: false });
+          if (fallbackData && fallbackData.length > 0) {
+            for (const row of fallbackData) {
+              if (row.data) {
+                const courseData = row.data as Course;
+                if (isCourseOwnedByUser(courseData, user)) {
+                  await db.courses.put(courseData);
+                }
+              }
             }
           }
         }
@@ -630,16 +694,9 @@ export async function getAllCourses(): Promise<Course[]> {
     }
 
     const list = await db.courses.toArray();
-    // If user is logged in, filter courses belonging to user or created locally
-    if (user) {
-      const userCourses = list.filter((c) => !c.userId || c.userId === user.id);
-      return userCourses.sort(
-        (a, b) =>
-          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-      );
-    }
-
-    return list.sort(
+    // CÔ LẬP TUYỆT ĐỐI THEO TÀI KHOẢN: Chỉ trả về sách thuộc quyền sở hữu của user hiện tại
+    const userCourses = list.filter((c) => isCourseOwnedByUser(c, user));
+    return userCourses.sort(
       (a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
@@ -653,6 +710,207 @@ export async function getAllCourses(): Promise<Course[]> {
   }
 }
 
+// Bộ nhớ đệm ngắn hạn cho Thư viện sách cộng đồng
+const LIBRARY_SYNC_TTL_MS = 20_000;
+let lastLibrarySyncAt = 0;
+let cachedLibraryCourses: Course[] | null = null;
+let inFlightGetLibraryCourses: Promise<Course[]> | null = null;
+
+export async function getLibraryCourses(
+  forceRefresh = false
+): Promise<Course[]> {
+  if (!db) return [];
+  if (
+    !forceRefresh &&
+    cachedLibraryCourses &&
+    Date.now() - lastLibrarySyncAt < LIBRARY_SYNC_TTL_MS
+  ) {
+    return cachedLibraryCourses;
+  }
+  if (!forceRefresh && inFlightGetLibraryCourses) {
+    return inFlightGetLibraryCourses;
+  }
+
+  const run = (async (): Promise<Course[]> => {
+    await ensureSeeded();
+    const supabase = getSupabaseClient();
+    const settings = getAppSettings();
+    const remoteCourses: Course[] = [];
+
+    if (supabase && settings.autoSyncCloud) {
+      try {
+        const { data, error } = await supabase
+          .from("courses")
+          .select("id, user_id, title, data, updated_at")
+          .order("updated_at", { ascending: false })
+          .limit(100);
+
+        if (!error && data && data.length > 0) {
+          for (const row of data) {
+            if (row.data) {
+              const c = row.data as Course;
+              if (row.user_id && !c.userId) {
+                c.userId = row.user_id;
+              }
+              remoteCourses.push(c);
+            }
+          }
+        } else if (error) {
+          const { data: fallbackData } = await supabase
+            .from("courses")
+            .select("id, title, data, updated_at")
+            .order("updated_at", { ascending: false })
+            .limit(100);
+          if (fallbackData && fallbackData.length > 0) {
+            for (const row of fallbackData) {
+              if (row.data) {
+                remoteCourses.push(row.data as Course);
+              }
+            }
+          }
+        }
+      } catch {
+        // Ignore network error, use local courses + sample
+      }
+    }
+
+    const localCourses = await db.courses.toArray();
+    const sampleEntry: Course = {
+      ...SAMPLE_COURSE,
+      isLibrarySample: true,
+      ownerName: "BookMind Official",
+    };
+
+    // Gộp sách từ Supabase (của mọi user đã tải lên) + sách local + sách mẫu
+    const combined = [...remoteCourses, ...localCourses, sampleEntry];
+
+    // Chỉ hiển thị các sách gốc được tải lên (loại bỏ các bản clone có clonedFromCourseId để tránh trùng lặp trong Thư viện)
+    const canonicalById = new Map<string, Course>();
+    for (const c of combined) {
+      if (!c || !c.id || !c.title) continue;
+      if (c.clonedFromCourseId) continue;
+
+      const existing = canonicalById.get(c.id);
+      if (!existing) {
+        canonicalById.set(c.id, c);
+      } else {
+        const existingGen = existing.chapters.filter((ch) => ch.isGenerated).length;
+        const currentGen = c.chapters.filter((ch) => ch.isGenerated).length;
+        if (
+          currentGen > existingGen ||
+          new Date(c.updatedAt).getTime() > new Date(existing.updatedAt).getTime()
+        ) {
+          canonicalById.set(c.id, c);
+        }
+      }
+    }
+
+    // Lọc trùng theo (title + author + số chương) nếu cùng 1 sách được đẩy lên nhiều lần
+    const uniqueBySignature = new Map<string, Course>();
+    for (const c of canonicalById.values()) {
+      const sig = `${c.title.trim().toLowerCase()}__${(c.author || "")
+        .trim()
+        .toLowerCase()}__${c.chapters.length}`;
+      const prev = uniqueBySignature.get(sig);
+      if (!prev) {
+        uniqueBySignature.set(sig, c);
+      } else {
+        const prevGen = prev.chapters.filter((ch) => ch.isGenerated).length;
+        const currGen = c.chapters.filter((ch) => ch.isGenerated).length;
+        if (currGen > prevGen) {
+          uniqueBySignature.set(sig, c);
+        }
+      }
+    }
+
+    const result = Array.from(uniqueBySignature.values()).sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    );
+
+    cachedLibraryCourses = result;
+    lastLibrarySyncAt = Date.now();
+    return result;
+  })();
+
+  inFlightGetLibraryCourses = run;
+  try {
+    return await run;
+  } finally {
+    inFlightGetLibraryCourses = null;
+  }
+}
+
+export async function applyLibraryCourseToUser(
+  libraryCourse: Course
+): Promise<Course> {
+  const user = await getCurrentUser();
+  if (!user) {
+    throw new Error("Vui lòng đăng nhập để thêm sách từ Thư viện vào tài khoản!");
+  }
+
+  // Kiểm tra xem user đã sở hữu cuốn sách này hoặc đã Apply trước đó chưa
+  const myCourses = await getAllCourses();
+  const sourceId = libraryCourse.clonedFromCourseId || libraryCourse.id;
+  const alreadyOwned = myCourses.find(
+    (c) =>
+      c.id === libraryCourse.id ||
+      c.clonedFromCourseId === sourceId ||
+      (c.title.trim().toLowerCase() ===
+        libraryCourse.title.trim().toLowerCase() &&
+        c.chapters.length === libraryCourse.chapters.length)
+  );
+  if (alreadyOwned) {
+    return alreadyOwned;
+  }
+
+  const nowIso = new Date().toISOString();
+  const newCourseId = `course-${Date.now()}-${Math.random()
+    .toString(36)
+    .slice(2, 7)}`;
+
+  const clonedChapters = libraryCourse.chapters.map((ch, idx) => {
+    const newChapterId = `ch-${newCourseId}-${ch.index || idx + 1}`;
+    return {
+      ...ch,
+      id: newChapterId,
+      courseId: newCourseId,
+      lesson: ch.lesson
+        ? JSON.parse(JSON.stringify(ch.lesson))
+        : null,
+      // Reset tiến độ bài tập để user mới tự làm trên tài khoản của mình
+      completedClozeIds: [],
+      completedQuizIds: [],
+      completedTranslationIds: [],
+    };
+  });
+
+  const clonedCourse: Course = {
+    ...libraryCourse,
+    id: newCourseId,
+    userId: user.id,
+    ownerEmail: user.email,
+    ownerName:
+      user.user_metadata?.full_name ||
+      user.email?.split("@")[0] ||
+      "Học viên BookMind",
+    clonedFromCourseId: sourceId,
+    isLibrarySample: false,
+    chapters: clonedChapters,
+    createdAt: nowIso,
+    updatedAt: nowIso,
+  };
+
+  await saveCourse(clonedCourse);
+  await recordLearningActivity({
+    type: "lesson_generated",
+    title: `Thêm sách từ Thư viện: ${clonedCourse.title}`,
+    details: `Đã kiểm tra và Apply sách (${clonedCourse.chapters.length} chương) vào Tủ sách cá nhân.`,
+  });
+
+  return clonedCourse;
+}
+
 export async function getCourseById(id: string): Promise<Course | undefined> {
   if (!db) return undefined;
   await ensureSeeded();
@@ -663,15 +921,25 @@ export async function saveCourse(course: Course): Promise<void> {
   if (!db) return;
   const user = await getCurrentUser();
   const userId = user?.id || course.userId;
+  const ownerEmail = user?.email || course.ownerEmail;
+  const ownerName =
+    course.ownerName ||
+    user?.user_metadata?.full_name ||
+    user?.email?.split("@")[0] ||
+    "Học viên BookMind";
 
   const updated: Course = {
     ...course,
     userId,
+    ownerEmail,
+    ownerName,
     updatedAt: new Date().toISOString(),
   };
   await db.courses.put(updated);
+  lastCoursesCloudSyncAt = 0;
+  cachedLibraryCourses = null;
 
-  // Sync flashcards from generated lessons
+  // Sync flashcards from generated lessons (strictly scoped to userId)
   for (const ch of updated.chapters) {
     if (ch.lesson && ch.lesson.vocabulary) {
       for (const vocab of ch.lesson.vocabulary) {
@@ -714,13 +982,22 @@ export async function saveCourse(course: Course): Promise<void> {
   const settings = getAppSettings();
   if (supabase && settings.autoSyncCloud) {
     try {
-      await supabase.from("courses").upsert({
+      const { error } = await supabase.from("courses").upsert({
         id: updated.id,
         user_id: userId || null,
         title: updated.title,
         data: updated,
         updated_at: updated.updatedAt,
       });
+      if (error) {
+        // Fallback nếu bảng courses trên Supabase chưa có cột user_id
+        await supabase.from("courses").upsert({
+          id: updated.id,
+          title: updated.title,
+          data: updated,
+          updated_at: updated.updatedAt,
+        });
+      }
     } catch {
       // Offline fallback
     }
@@ -730,6 +1007,8 @@ export async function saveCourse(course: Course): Promise<void> {
 export async function deleteCourse(courseId: string): Promise<void> {
   if (!db) return;
   await db.courses.delete(courseId);
+  lastCoursesCloudSyncAt = 0;
+  cachedLibraryCourses = null;
   const cards = await db.flashcards.where("courseId").equals(courseId).toArray();
   await db.flashcards.bulkDelete(cards.map((c) => c.id));
 
@@ -748,10 +1027,22 @@ export async function getCourseFlashcards(
 ): Promise<FlashcardSRS[]> {
   if (!db) return [];
   await ensureSeeded();
+  const user = await getCurrentUser();
+  if (!user) return [];
+
   if (courseId) {
-    return db.flashcards.where("courseId").equals(courseId).toArray();
+    const cards = await db.flashcards.where("courseId").equals(courseId).toArray();
+    return cards.filter((f) => !f.userId || f.userId === user.id);
   }
-  return db.flashcards.toArray();
+
+  // Chỉ lấy Flashcards thuộc về các khóa học trong Tủ sách của đúng user hiện tại
+  const userCourses = await getAllCourses();
+  const ownedCourseIds = new Set(userCourses.map((c) => c.id));
+  const allCards = await db.flashcards.toArray();
+  return allCards.filter(
+    (f) =>
+      ownedCourseIds.has(f.courseId) && (!f.userId || f.userId === user.id)
+  );
 }
 
 export async function updateFlashcard(card: FlashcardSRS): Promise<void> {

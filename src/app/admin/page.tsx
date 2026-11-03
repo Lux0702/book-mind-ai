@@ -58,6 +58,7 @@ import CustomSelect from "@/components/ui/CustomSelect";
 const SUPABASE_ADMIN_SQL_SCHEMA = `-- 1. Tạo đầy đủ các bảng đồng bộ Cloud & Phân quyền trên Supabase:
 CREATE TABLE IF NOT EXISTS public.courses (
   id TEXT PRIMARY KEY,
+  user_id TEXT,
   title TEXT NOT NULL,
   data JSONB NOT NULL,
   updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -65,10 +66,14 @@ CREATE TABLE IF NOT EXISTS public.courses (
 
 CREATE TABLE IF NOT EXISTS public.flashcards (
   id TEXT PRIMARY KEY,
+  user_id TEXT,
   course_id TEXT NOT NULL,
   data JSONB NOT NULL,
   next_review_date TIMESTAMPTZ DEFAULT NOW()
 );
+
+ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS user_id TEXT;
+ALTER TABLE public.flashcards ADD COLUMN IF NOT EXISTS user_id TEXT;
 
 CREATE TABLE IF NOT EXISTS public.user_quotas (
   email TEXT PRIMARY KEY,

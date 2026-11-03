@@ -26,6 +26,7 @@ import {
   Crown,
   Zap,
   Infinity as InfinityIcon,
+  Library,
 } from "lucide-react";
 import {
   Course,
@@ -36,6 +37,8 @@ import {
 } from "@/types/course";
 import {
   getAllCourses,
+  getLibraryCourses,
+  applyLibraryCourseToUser,
   getCourseFlashcards,
   saveCourse,
   deleteCourse,
@@ -61,6 +64,7 @@ import ChapterWorkspace from "@/components/ChapterWorkspace";
 import FlashcardArena from "@/components/FlashcardArena";
 import ExamArena from "@/components/ExamArena";
 import AttendanceDashboard from "@/components/AttendanceDashboard";
+import BookLibraryView from "@/components/BookLibraryView";
 import LoginScreen from "@/components/LoginScreen";
 import CustomSelect from "@/components/ui/CustomSelect";
 import UpgradePlanModal from "@/components/UpgradePlanModal";
@@ -68,10 +72,11 @@ import EmailInboxModal from "@/components/EmailInboxModal";
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([]);
+  const [libraryCourses, setLibraryCourses] = useState<Course[]>([]);
   const [flashcards, setFlashcards] = useState<FlashcardSRS[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
   const [viewMode, setViewMode] = useState<
-    "dashboard" | "srs_global" | "attendance"
+    "dashboard" | "library" | "srs_global" | "attendance"
   >("attendance");
   const [currentUser, setCurrentUser] = useState<AppUser | null>(null);
   const [streakData, setStreakData] = useState<StudyStreak>({
@@ -82,6 +87,7 @@ export default function HomePage() {
   });
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
+  const [avatarImgError, setAvatarImgError] = useState(false);
   const [reviewCourseId, setReviewCourseId] = useState<string>("");
   const [reviewChapterId, setReviewChapterId] = useState<string>("");
   const [reviewSubTab, setReviewSubTab] = useState<"exam" | "flashcards">(
@@ -105,13 +111,20 @@ export default function HomePage() {
 
   const refreshData = useCallback(async () => {
     const user = await getCurrentUser();
-    const [loadedCourses, loadedCards] = await Promise.all([
+    const [loadedCourses, loadedCards, loadedLibrary] = await Promise.all([
       getAllCourses(),
       getCourseFlashcards(),
+      getLibraryCourses(),
     ]);
     setCourses(loadedCourses);
     setFlashcards(loadedCards);
-    setCurrentUser(user);
+    setLibraryCourses(loadedLibrary);
+    setCurrentUser((prev) => {
+      if (prev?.id !== user?.id) {
+        setAvatarImgError(false);
+      }
+      return user;
+    });
     setStreakData(getStudyStreak());
 
     if (user) {
@@ -362,65 +375,85 @@ export default function HomePage() {
             )}
           </div>
 
-          {/* Center: Clean Segmented Navigation Bar */}
-          <nav className="hidden md:flex items-center p-1 rounded-2xl bg-slate-900/60 border border-slate-800/80 backdrop-blur shadow-inner">
-            {/* 1. Điểm danh hiển thị đầu tiên */}
+          {/* Center: Clean Single-Line Segmented Navigation Bar */}
+          <nav className="hidden lg:flex items-center gap-1 p-1 rounded-2xl bg-slate-900/75 border border-slate-800/90 backdrop-blur shadow-inner shrink-0">
+            {/* 1. Điểm danh */}
             <button
               type="button"
               onClick={() => {
                 setActiveCourseId(null);
                 setViewMode("attendance");
               }}
-              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
                 !activeCourseId && viewMode === "attendance"
                   ? "bg-amber-500/20 text-amber-300 border border-amber-500/30 shadow-sm"
-                  : "text-slate-400 hover:text-amber-300 hover:bg-slate-800/40"
+                  : "text-slate-400 hover:text-amber-300 hover:bg-slate-800/40 border border-transparent"
               }`}
             >
-              <Flame className="h-3.5 w-3.5 text-amber-400" />
-              <span>Điểm danh & Streak</span>
-              <span className="ml-0.5 text-[10px] font-bold text-amber-400">
+              <Flame className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span>Điểm danh</span>
+              <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-400">
                 {streakData.currentStreak}d
               </span>
             </button>
 
-            {/* 2. Tủ sách */}
+            {/* 2. Tủ sách cá nhân */}
             <button
               type="button"
               onClick={() => {
                 setActiveCourseId(null);
                 setViewMode("dashboard");
               }}
-              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
                 !activeCourseId && viewMode === "dashboard"
-                  ? "bg-slate-800 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                  ? "bg-slate-800 text-white border border-slate-700/80 shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent"
               }`}
             >
-              <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
+              <BookOpen className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
               <span>Tủ sách</span>
-              <span className="ml-0.5 rounded-md bg-slate-800/80 px-1.5 py-0.2 text-[10px] text-slate-400 font-medium">
+              <span className="rounded-md bg-slate-800/90 px-1.5 py-0.5 text-[10px] text-slate-300 font-semibold">
                 {courses.length}
               </span>
             </button>
 
-            {/* 3. Ôn tập & Thi */}
+            {/* 3. Thư viện sách cộng đồng */}
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("library");
+              }}
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
+                !activeCourseId && viewMode === "library"
+                  ? "bg-indigo-500/20 text-indigo-300 border border-indigo-500/30 shadow-sm"
+                  : "text-slate-400 hover:text-indigo-300 hover:bg-slate-800/40 border border-transparent"
+              }`}
+            >
+              <Library className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <span>Thư viện</span>
+              <span className="rounded-md bg-emerald-500/15 border border-emerald-500/30 px-1.5 py-0.5 text-[10px] text-emerald-300 font-bold">
+                {libraryCourses.length}
+              </span>
+            </button>
+
+            {/* 4. Ôn tập & Thi */}
             <button
               type="button"
               onClick={() => {
                 setActiveCourseId(null);
                 setViewMode("srs_global");
               }}
-              className={`flex items-center gap-1.5 rounded-xl px-3.5 py-1.5 text-xs font-semibold transition ${
+              className={`flex items-center gap-1.5 rounded-xl px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
                 !activeCourseId && viewMode === "srs_global"
-                  ? "bg-slate-800 text-white shadow-sm"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40"
+                  ? "bg-slate-800 text-white border border-slate-700/80 shadow-sm"
+                  : "text-slate-400 hover:text-slate-200 hover:bg-slate-800/40 border border-transparent"
               }`}
             >
-              <GraduationCap className="h-3.5 w-3.5 text-purple-400" />
-              <span>Ôn tập & Thi</span>
+              <GraduationCap className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+              <span>Ôn tập &amp; Thi</span>
               {dueFlashcards.length > 0 && (
-                <span className="ml-0.5 rounded-full bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.2 text-[10px] font-bold text-amber-300">
+                <span className="rounded-full bg-amber-500/20 border border-amber-500/30 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
                   {dueFlashcards.length}
                 </span>
               )}
@@ -531,14 +564,16 @@ export default function HomePage() {
                 className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 p-1 pr-1.5 sm:pr-2 hover:border-slate-700 hover:bg-slate-800 transition cursor-pointer"
                 title="Tài khoản của bạn"
               >
-                {currentUser?.user_metadata?.avatar_url ? (
+                {currentUser?.user_metadata?.avatar_url && !avatarImgError ? (
                   <img
                     src={currentUser.user_metadata.avatar_url}
-                    alt={currentUser.user_metadata?.full_name || "User"}
-                    className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg object-cover ring-1 ring-indigo-500/50"
+                    alt=""
+                    referrerPolicy="no-referrer"
+                    onError={() => setAvatarImgError(true)}
+                    className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg object-cover ring-1 ring-indigo-500/50 shrink-0"
                   />
                 ) : (
-                  <div className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-bold text-xs shadow-sm">
+                  <div className="flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-bold text-xs shadow-sm">
                     {currentUser?.user_metadata?.full_name
                       ? currentUser.user_metadata.full_name.charAt(0).toUpperCase()
                       : currentUser?.email?.charAt(0).toUpperCase() || "U"}
@@ -661,8 +696,8 @@ export default function HomePage() {
           </div>
         </div>
 
-        {/* Mobile Navigation Bar below header for small screens */}
-        <div className="flex md:hidden border-t border-slate-800/80 bg-slate-950 px-2.5 py-2 gap-1.5 overflow-x-auto no-scrollbar justify-between">
+        {/* Sub-header Navigation Bar for screens below lg */}
+        <div className="flex lg:hidden border-t border-slate-800/80 bg-slate-950 px-2.5 py-2 gap-1.5 overflow-x-auto no-scrollbar justify-between">
           <button
             type="button"
             onClick={() => {
@@ -692,6 +727,21 @@ export default function HomePage() {
           >
             <BookOpen className="h-3.5 w-3.5 shrink-0" />
             <span>Tủ sách ({courses.length})</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              setActiveCourseId(null);
+              setViewMode("library");
+            }}
+            className={`flex items-center justify-center gap-1 text-[11px] font-semibold py-1.5 px-2.5 rounded-lg whitespace-nowrap shrink-0 flex-1 ${
+              !activeCourseId && viewMode === "library"
+                ? "bg-indigo-500/20 text-indigo-300"
+                : "text-slate-400"
+            }`}
+          >
+            <Library className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+            <span>Thư viện ({libraryCourses.length})</span>
           </button>
           <button
             type="button"
@@ -858,6 +908,26 @@ export default function HomePage() {
             </div>
           );
         })()
+      ) : viewMode === "library" ? (
+        <BookLibraryView
+          libraryCourses={libraryCourses}
+          myCourses={courses}
+          currentUser={currentUser}
+          onApplyCourse={async (libCourse) => {
+            const added = await applyLibraryCourseToUser(libCourse);
+            await refreshData();
+            return added;
+          }}
+          onOpenMyCourse={(courseId) => {
+            setActiveCourseId(courseId);
+            setViewMode("dashboard");
+          }}
+          onRefreshLibrary={async () => {
+            const freshLib = await getLibraryCourses(true);
+            setLibraryCourses(freshLib);
+          }}
+          onOpenCreateModal={() => setIsCreateOpen(true)}
+        />
       ) : viewMode === "attendance" ? (
         <AttendanceDashboard
           courses={courses}
@@ -958,12 +1028,21 @@ export default function HomePage() {
           <div className="mb-5 flex flex-wrap items-center justify-between gap-4">
             <div>
               <h2 className="text-xl font-bold text-white">
-                Các Khóa Học Sách Của Bạn (My Courses)
+                Tủ Sách Cá Nhân Của Bạn ({courses.length} cuốn)
               </h2>
               <p className="text-xs text-slate-400">
-                Chọn một cuốn sách để vào học từng chương hoặc thêm sách PDF mới (hỗ trợ cả file PDF 80MB+ đọc trực tiếp)
+                Dữ liệu sách &amp; tiến độ học được cô lập riêng cho tài khoản{" "}
+                <strong className="text-indigo-300">{currentUser?.email}</strong>. Bạn có thể tự tải sách PDF mới lên hoặc chọn Apply sách có sẵn từ Thư viện cộng đồng.
               </p>
             </div>
+            <button
+              type="button"
+              onClick={() => setViewMode("library")}
+              className="flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-500/15 hover:bg-emerald-500/25 px-4 py-2 text-xs font-bold text-emerald-300 transition cursor-pointer"
+            >
+              <Library className="h-4 w-4 text-emerald-400" />
+              <span>Khám phá Thư viện sách ({libraryCourses.length})</span>
+            </button>
           </div>
 
           {/* Courses Grid */}
@@ -1079,17 +1158,34 @@ export default function HomePage() {
                 );
               })}
 
+              {/* Browse Community Library Card */}
+              <button
+                type="button"
+                onClick={() => setViewMode("library")}
+                className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-emerald-500/30 bg-emerald-950/10 p-6 text-center transition hover:border-emerald-500/70 hover:bg-emerald-950/20 cursor-pointer"
+              >
+                <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-emerald-500/15 text-emerald-400">
+                  <Library className="h-6 w-6" />
+                </div>
+                <h3 className="text-base font-bold text-white">
+                  Khám Phá Thư Viện Sách 
+                </h3>
+                <p className="mt-1 max-w-xs text-xs text-slate-400">
+                  Xem &amp; kiểm tra các sách do cộng đồng đã tải lên và bấm Apply để thêm ngay vào Tủ sách của bạn
+                </p>
+              </button>
+
               {/* Add New Course Card */}
               <button
                 type="button"
                 onClick={() => setIsCreateOpen(true)}
-                className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-800 bg-slate-900/30 p-6 text-center transition hover:border-indigo-500 hover:bg-slate-900/60"
+                className="flex min-h-[280px] flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-800 bg-slate-900/30 p-6 text-center transition hover:border-indigo-500 hover:bg-slate-900/60 cursor-pointer"
               >
                 <div className="mb-3 flex h-12 w-12 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-400">
                   <Plus className="h-6 w-6" />
                 </div>
                 <h3 className="text-base font-bold text-white">
-                  + Thêm Cuốn Sách / Tài Liệu Mới
+                  + Tải Sách Mới Của Bạn Lên
                 </h3>
                 <p className="mt-1 max-w-xs text-xs text-slate-400">
                   Tải lên file PDF (kể cả sách 80MB+), TXT hoặc dán văn bản để AI tạo một Course độc lập
