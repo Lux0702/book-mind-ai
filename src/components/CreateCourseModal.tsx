@@ -14,8 +14,11 @@ import {
   Plus,
   Loader2,
   Wand2,
+  GraduationCap,
+  Lightbulb,
 } from "lucide-react";
 import { Course, ChapterUnit } from "@/types/course";
+import CustomSelect from "./ui/CustomSelect";
 import {
   parseHeavyPdfClientSide,
   parseRawTextIntoChapters,
@@ -24,6 +27,7 @@ import {
   ExtractedChapterRaw,
 } from "@/lib/pdfParser";
 import { getAppSettings } from "@/lib/storage";
+import { fetchAiAgent } from "@/lib/quotaManager";
 
 interface CreateCourseModalProps {
   isOpen: boolean;
@@ -121,15 +125,11 @@ export default function CreateCourseModal({
     try {
       const settings = getAppSettings();
       const pageSummaries = buildTocPromptPayload(allPageTexts);
-      const res = await fetch("/api/agent/detect-toc", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          pageSummaries,
-          totalPages: allPageTexts.length,
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel,
-        }),
+      const res = await fetchAiAgent("/api/agent/detect-toc", {
+        pageSummaries,
+        totalPages: allPageTexts.length,
+        apiKey: settings.geminiApiKey,
+        model: settings.geminiModel,
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -359,16 +359,39 @@ export default function CreateCourseModal({
               <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
                 Cấp độ mục tiêu
               </label>
-              <select
+              <CustomSelect
                 value={level}
-                onChange={(e) => setLevel(e.target.value)}
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white focus:border-indigo-500 focus:outline-none"
-              >
-                <option value="A1 - A2">A1 - A2 / TOCFL 1-2 (Sơ cấp)</option>
-                <option value="B1 - B2">B1 - B2 / TOCFL 3-4 (Trung cấp)</option>
-                <option value="B2 - C1">B2 - C1 (Khá giỏi)</option>
-                <option value="C1 - C2">C1 - C2 (Cao cấp)</option>
-              </select>
+                onChange={(newVal) => setLevel(newVal)}
+                accentColor="indigo"
+                icon={<GraduationCap className="h-3.5 w-3.5" />}
+                options={[
+                  {
+                    value: "A1 - A2",
+                    label: "A1 - A2 / TOCFL 1-2",
+                    badge: "Sơ cấp",
+                  },
+                  {
+                    value: "B1 - B2",
+                    label: "B1 - B2 / TOCFL 3-4",
+                    badge: "Trung cấp",
+                  },
+                  {
+                    value: "B1 - C1",
+                    label: "B1 - C1",
+                    badge: "Trung - Cao",
+                  },
+                  {
+                    value: "B2 - C1",
+                    label: "B2 - C1",
+                    badge: "Khá giỏi",
+                  },
+                  {
+                    value: "C1 - C2",
+                    label: "C1 - C2",
+                    badge: "Cao cấp",
+                  },
+                ]}
+              />
             </div>
           </div>
 
@@ -472,7 +495,7 @@ export default function CreateCourseModal({
                           ) : (
                             <>
                               <Wand2 className="h-3.5 w-3.5" />
-                              🤖 AI Đọc Mục Lục (TOC) & Lọc Bài Học Chuẩn
+                              AI Đọc Mục Lục (TOC) & Lọc Bài Học Chuẩn
                             </>
                           )}
                         </button>
@@ -488,8 +511,11 @@ export default function CreateCourseModal({
                     </div>
                   </div>
 
-                  <p className="text-[11px] text-slate-400">
-                    💡 Bạn có thể <strong>Xóa (🗑️)</strong> các chương dẫn nhập không cần thiết, hoặc <strong>sửa trực tiếp Tên bài & Số trang bắt đầu – kết thúc</strong> ở bảng dưới đây:
+                  <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
+                    <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                    <span>
+                      Bạn có thể <strong>Xóa</strong> các chương dẫn nhập không cần thiết, hoặc <strong>sửa trực tiếp Tên bài & Số trang bắt đầu – kết thúc</strong> ở bảng dưới đây:
+                    </span>
                   </p>
 
                   <div className="max-h-60 space-y-2 overflow-y-auto pr-1">

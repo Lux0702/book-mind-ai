@@ -6,7 +6,17 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { expectedText, spokenText, language, pinyinOrIpa, apiKey, model } = body;
+    const {
+      expectedText,
+      spokenText,
+      audioBase64,
+      audioMimeType,
+      language,
+      pinyinOrIpa,
+      apiKey,
+      masterApiKey,
+      model,
+    } = body;
 
     if (!expectedText || !expectedText.trim()) {
       return NextResponse.json(
@@ -15,7 +25,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!spokenText || !spokenText.trim()) {
+    if ((!spokenText || !spokenText.trim()) && !audioBase64) {
       return NextResponse.json(
         { error: "Chưa ghi nhận được giọng đọc của bạn. Vui lòng bấm vào Micro và đọc to rõ ràng." },
         { status: 400 }
@@ -24,10 +34,13 @@ export async function POST(req: NextRequest) {
 
     const evaluation = await evaluatePronunciationWithAI({
       expectedText,
-      spokenText,
+      spokenText: spokenText || "",
+      audioBase64,
+      audioMimeType,
       language,
       pinyinOrIpa,
       apiKey,
+      masterApiKey,
       model,
     });
 

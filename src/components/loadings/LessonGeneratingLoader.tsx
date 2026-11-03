@@ -1,7 +1,7 @@
 "use client";
 
 import React, { useState, useEffect } from "react";
-import { BookOpen, Sparkles, Brain, CheckCircle2, Layers } from "lucide-react";
+import { BookOpen, Sparkles, Brain, Check, Layers } from "lucide-react";
 
 interface LessonGeneratingLoaderProps {
   chapterIndex: number;
@@ -82,27 +82,27 @@ export default function LessonGeneratingLoader({
           return (
             <div
               key={idx}
-              className={`flex items-start gap-3.5 rounded-2xl p-3.5 transition-all duration-500 ${
+              className={`flex items-center gap-3.5 rounded-2xl p-3.5 transition-all duration-500 ${
                 isCurrent
                   ? "border border-indigo-500/40 bg-indigo-950/40 shadow-lg shadow-indigo-600/10 scale-[1.02]"
                   : isDone
-                  ? "border border-emerald-500/20 bg-emerald-950/10 opacity-80"
-                  : "border border-slate-800/40 bg-slate-900/20 opacity-35"
+                  ? "border border-emerald-500/20 bg-emerald-950/10 opacity-85"
+                  : "border border-slate-800/40 bg-slate-900/20 opacity-40"
               }`}
             >
               <div
-                className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl transition ${
+                className={`flex h-9 w-9 shrink-0 items-center justify-center rounded-xl leading-none transition ${
                   isCurrent
-                    ? "bg-indigo-600 text-white animate-pulse"
+                    ? "bg-indigo-600 text-white animate-pulse shadow-md shadow-indigo-600/30"
                     : isDone
-                    ? "bg-emerald-600 text-white"
+                    ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
                     : "bg-slate-800 text-slate-400"
                 }`}
               >
                 {isDone ? (
-                  <CheckCircle2 className="h-4 w-4" />
+                  <Check className="h-4 w-4 stroke-[2.5]" />
                 ) : (
-                  <Icon className="h-3.5 w-3.5" />
+                  <Icon className="h-4 w-4" />
                 )}
               </div>
               <div className="flex-1 min-w-0">
@@ -117,12 +117,12 @@ export default function LessonGeneratingLoader({
                 >
                   {step.label}
                 </p>
-                <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                <p className="text-[11px] leading-snug text-slate-400 truncate mt-0.5">
                   {step.sub}
                 </p>
               </div>
               {isCurrent && (
-                <div className="flex items-center gap-1 shrink-0 pt-1">
+                <div className="flex items-center gap-1.5 shrink-0">
                   <span className="h-1.5 w-1.5 rounded-full bg-indigo-400 animate-ping" />
                   <span className="text-[10px] font-semibold text-indigo-400">
                     Đang xử lý

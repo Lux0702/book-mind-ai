@@ -4,20 +4,51 @@ import {
   TranslationEvaluation,
   PronunciationEvaluation,
 } from "@/types/course";
+import { verifyVirtualApiKey } from "@/lib/quotaManager";
 
-function getClient(customApiKey?: string): GoogleGenAI {
-  const apiKey =
-    customApiKey?.trim() ||
+function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
+  const inputKey = customApiKey?.trim() || "";
+
+  // Nếu người dùng truyền mã BookMind Virtual Key (BM-FREE-..., BM-PRO-..., BM-VIP-...)
+  if (inputKey.toUpperCase().startsWith("BM-")) {
+    const check = verifyVirtualApiKey(inputKey);
+    if (!check.valid) {
+      throw new Error(
+        "Mã BookMind API Key không hợp lệ hoặc bị sai chữ ký. Vui lòng kiểm tra lại mã Key trong Email của bạn!"
+      );
+    }
+
+    const resolvedMasterKey =
+      masterApiKey?.trim() ||
+      process.env.MASTER_GEMINI_API_KEY ||
+      process.env.GEMINI_API_KEY ||
+      process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
+      "";
+
+    if (!resolvedMasterKey) {
+      throw new Error(
+        "Hệ thống đã xác nhận Mã BookMind API Key hợp lệ, nhưng Chủ hệ thống (Admin) chưa nhập Master Google Gemini API Key (AIzaSy...). Hãy mở 'Cài đặt API & Cloud -> Mục Quản trị Chủ Web' để nhập Master Gemini Key hoặc cấu hình GEMINI_API_KEY trong .env!"
+      );
+    }
+
+    return new GoogleGenAI({ apiKey: resolvedMasterKey });
+  }
+
+  // Fallback nếu truyền trực tiếp key Google hoặc biến môi trường
+  const directKey =
+    inputKey ||
+    masterApiKey?.trim() ||
+    process.env.MASTER_GEMINI_API_KEY ||
     process.env.GEMINI_API_KEY ||
     process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
     "";
 
-  if (!apiKey) {
+  if (!directKey) {
     throw new Error(
-      "Chưa có Gemini API Key. Vui lòng bấm vào nút 'Cài đặt API & Cloud' ở góc phải trên cùng để nhập Gemini API Key miễn phí của bạn."
+      "Chưa kích hoạt BookMind API Key. Vui lòng kiểm tra Hộp thư Email (góc phải trên cùng) để lấy mã API Key được cấp khi đăng ký và nhập vào mục Kích hoạt API Key!"
     );
   }
-  return new GoogleGenAI({ apiKey });
+  return new GoogleGenAI({ apiKey: directKey });
 }
 
 const CHAPTER_LESSON_SCHEMA: Schema = {
@@ -410,9 +441,10 @@ export async function generateChapterLessonWithAI(params: {
   chapterText: string;
   pageImagesBase64?: string[];
   apiKey?: string;
+  masterApiKey?: string;
   model?: string;
 }): Promise<ChapterLesson> {
-  const ai = getClient(params.apiKey);
+  const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
   // Limit text per single chapter call to ~35,000 chars (~8,000 words) for fast & deep response
@@ -490,9 +522,10 @@ export async function evaluateSentenceTranslationWithAI(params: {
   contextHint: string;
   userTranslation: string;
   apiKey?: string;
+  masterApiKey?: string;
   model?: string;
 }): Promise<TranslationEvaluation> {
-  const ai = getClient(params.apiKey);
+  const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
   const prompt = `Bạn là Giám khảo Chấm thi Dịch thuật Song ngữ Anh - Việt (AI Semantic Translation Evaluator).
@@ -544,9 +577,10 @@ export async function askBookTutorWithAI(params: {
   question: string;
   selectedExcerpt?: string;
   apiKey?: string;
+  masterApiKey?: string;
   model?: string;
 }): Promise<string> {
-  const ai = getClient(params.apiKey);
+  const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
   const prompt = `Bạn là Gia sư AI chuyên giải đáp sách "${params.courseTitle}" (${params.chapterTitle}).
@@ -605,9 +639,10 @@ export async function extractBookTocWithAI(params: {
   pageSummaries: string;
   totalPages: number;
   apiKey?: string;
+  masterApiKey?: string;
   model?: string;
 }): Promise<{ title: string; startPage: number; endPage: number }[]> {
-  const ai = getClient(params.apiKey);
+  const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
   const prompt = `Bạn là Chuyên gia Phân tích Cấu trúc Sách & Mục lục (Table of Contents Analyzer).
@@ -724,9 +759,10 @@ export async function generateCustomExamWithAI(params: {
   scopeTitle: string;
   scannedContentAndVocab: string;
   apiKey?: string;
+  masterApiKey?: string;
   model?: string;
 }) {
-  const ai = getClient(params.apiKey);
+  const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
   const prompt = `Bạn là Giám khảo Ra Đề Thi Ngôn Ngữ (AI Exam Generator).
@@ -773,9 +809,10 @@ export async function extractAllChapterVocabWithAI(params: {
   chapterText: string;
   pageImagesBase64?: string[];
   apiKey?: string;
+  masterApiKey?: string;
   model?: string;
 }) {
-  const ai = getClient(params.apiKey);
+  const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
   const prompt = `Bạn là Chuyên gia Từ điển & Ngôn ngữ học kiêm Giảng viên cao cấp.
@@ -849,24 +886,32 @@ ${params.chapterText.slice(0, 35000)}
 export async function evaluatePronunciationWithAI(params: {
   expectedText: string;
   spokenText: string;
+  audioBase64?: string;
+  audioMimeType?: string;
   language?: string;
   pinyinOrIpa?: string;
   apiKey?: string;
+  masterApiKey?: string;
   model?: string;
 }): Promise<PronunciationEvaluation> {
-  const ai = getClient(params.apiKey);
+  const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
   const prompt = `Bạn là Chuyên gia Ngữ âm và Gia sư Luyện Phát âm AI (AI Pronunciation & Phonetics Coach).
 Nhiệm vụ của bạn là đánh giá và chấm điểm phần trăm độ chính xác phát âm của người học khi đọc một từ vựng hoặc đoạn văn trích từ sách.
+${
+  params.audioBase64
+    ? "ĐÍNH KÈM FILE ÂM THANH GIỌNG ĐỌC THỰC TẾ CỦA NGƯỜI HỌC: Hãy lắng nghe trực tiếp sóng âm giọng nói (ngữ điệu, thanh điệu, trọng âm, âm cuối, độ trôi chảy) kết hợp với bản nhận diện Speech-to-Text bên dưới để chấm điểm chính xác nhất."
+    : ""
+}
 
 VĂN BẢN MẪU CẦN ĐỌC (EXPECTED TEXT):
 "${params.expectedText}"
 ${params.pinyinOrIpa ? `Phiên âm mẫu (IPA/Pinyin): "${params.pinyinOrIpa}"` : ""}
 Ngôn ngữ: ${params.language || "Tự động nhận diện (Tiếng Trung/Tiếng Anh/v.v.)"}
 
-VĂN BẢN THU ĐƯỢC TỪ GIỌNG ĐỌC CỦA NGƯỜI HỌC (SPOKEN TRANSCRIPT):
-"${params.spokenText}"
+VĂN BẢN THU ĐƯỢC TỪ MICRO CỦA NGƯỜI HỌC (SPOKEN TRANSCRIPT):
+"${params.spokenText || "(Phân tích trực tiếp từ file âm thanh đính kèm)"}"
 
 YÊU CẦU ĐÁNH GIÁ CHUYÊN SÂU & TẬP TRUNG VÀO 3 YẾU TỐ:
 1. ĐÚNG BAO NHIÊU % (overallScore từ 0 - 100%):
@@ -878,9 +923,26 @@ YÊU CẦU ĐÁNH GIÁ CHUYÊN SÂU & TẬP TRUNG VÀO 3 YẾU TỐ:
    - Hướng dẫn cụ thể cách đặt khẩu hình miệng, đặt đầu lưỡi, bật hơi, hoặc giữ trường độ âm thanh để người học đọc lại lần sau sẽ đúng ngay.
    - Nhận xét và góp ý bằng tiếng Việt truyền cảm hứng, dễ hiểu.`;
 
+  const contents = params.audioBase64
+    ? [
+        {
+          role: "user",
+          parts: [
+            {
+              inlineData: {
+                data: params.audioBase64,
+                mimeType: params.audioMimeType || "audio/webm",
+              },
+            },
+            { text: prompt },
+          ],
+        },
+      ]
+    : prompt;
+
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: prompt,
+    contents,
     config: {
       responseMimeType: "application/json",
       responseSchema: PRONUNCIATION_EVAL_SCHEMA,

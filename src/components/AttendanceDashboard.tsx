@@ -13,6 +13,10 @@ import {
   GraduationCap,
   Layers,
   Languages,
+  BarChart3,
+  Trophy,
+  Zap,
+  Rocket,
 } from "lucide-react";
 import {
   Course,
@@ -113,14 +117,15 @@ export default function AttendanceDashboard({
               <span className="text-5xl font-black text-white sm:text-6xl">
                 {streak.currentStreak}
               </span>
-              <span className="text-xl font-bold text-amber-300">
-                ngày liên tục 🔥
+              <span className="flex items-center gap-1.5 text-xl font-bold text-amber-300">
+                <span>ngày liên tục</span>
+                <Flame className="h-5 w-5 text-amber-400" />
               </span>
             </div>
 
             <p className="max-w-md text-xs text-slate-300 leading-relaxed">
               {isCheckedInToday
-                ? "🎉 Tuyệt vời! Bạn đã hoàn thành điểm danh hôm nay. Hãy học thêm một bài hoặc ôn Flashcard để giữ vững phong độ nhé!"
+                ? "Tuyệt vời! Bạn đã hoàn thành điểm danh hôm nay. Hãy học thêm một bài hoặc ôn Flashcard để giữ vững phong độ nhé!"
                 : "Hôm nay bạn chưa điểm danh. Hãy bấm nút điểm danh hoặc học một bài học bất kỳ để tiếp tục giữ chuỗi lửa!"}
             </p>
           </div>
@@ -133,13 +138,13 @@ export default function AttendanceDashboard({
               className={`flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-black shadow-xl transition ${
                 isCheckedInToday
                   ? "bg-emerald-600/25 border border-emerald-500/40 text-emerald-300 cursor-default"
-                  : "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-600/30 hover:scale-105"
+                  : "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-600/30 hover:scale-105 cursor-pointer"
               }`}
             >
               <CheckCircle2 className="h-5 w-5" />
               <span>
                 {isCheckedInToday
-                  ? "Đã Điểm Danh Hôm Nay ✅"
+                  ? "Đã Điểm Danh Hôm Nay"
                   : "Điểm Danh Hôm Nay (+1 Ngày)"}
               </span>
             </button>
@@ -207,13 +212,18 @@ export default function AttendanceDashboard({
 
       {/* 2. STATS "ĐÃ HỌC ĐƯỢC GÌ" (WHAT HAS BEEN LEARNED) */}
       <div className="space-y-4">
-        <div>
-          <h2 className="text-xl font-bold text-white">
-            📊 Tổng Kết: Bạn Đã Học Được Những Gì?
-          </h2>
-          <p className="text-xs text-slate-400">
-            Báo cáo chi tiết khối lượng kiến thức đã tích lũy từ các cuốn sách của bạn
-          </p>
+        <div className="flex items-center gap-3">
+          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/25">
+            <BarChart3 className="h-5 w-5" />
+          </div>
+          <div>
+            <h2 className="text-xl font-bold text-white">
+              Tổng Kết: Bạn Đã Học Được Những Gì?
+            </h2>
+            <p className="text-xs text-slate-400">
+              Báo cáo chi tiết khối lượng kiến thức đã tích lũy từ các cuốn sách của bạn
+            </p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
@@ -225,8 +235,9 @@ export default function AttendanceDashboard({
             <div className="text-3xl font-black text-white">
               {totalVocab} <span className="text-xs text-slate-400">từ</span>
             </div>
-            <p className="text-[11px] text-emerald-400">
-              🔥 Trong đó: {masteredVocab} từ đã thuộc vững (SRS)
+            <p className="flex items-center gap-1.5 text-[11px] text-emerald-400">
+              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
+              <span>Trong đó: {masteredVocab} từ đã thuộc vững (SRS)</span>
             </p>
           </div>
 
@@ -261,14 +272,28 @@ export default function AttendanceDashboard({
               <span>Đẳng Cấp Tự Học</span>
               <Award className="h-4 w-4 text-amber-400" />
             </div>
-            <div className="text-xl font-bold text-amber-300">
-              {streak.currentStreak >= 14
-                ? "Bậc Thầy Chăm Chỉ 🏆"
-                : streak.currentStreak >= 7
-                ? "Chiến Thần Đọc Sách ⚡"
-                : streak.currentStreak >= 3
-                ? "Người Bắt Đầu Vững Vàng 🚀"
-                : "Mầm Mống Tri Thức 🌱"}
+            <div className="flex items-center gap-2 text-lg font-bold text-amber-300">
+              {streak.currentStreak >= 14 ? (
+                <>
+                  <Trophy className="h-5 w-5 text-amber-400 shrink-0" />
+                  <span>Bậc Thầy Chăm Chỉ</span>
+                </>
+              ) : streak.currentStreak >= 7 ? (
+                <>
+                  <Zap className="h-5 w-5 text-amber-400 shrink-0" />
+                  <span>Chiến Thần Đọc Sách</span>
+                </>
+              ) : streak.currentStreak >= 3 ? (
+                <>
+                  <Rocket className="h-5 w-5 text-amber-400 shrink-0" />
+                  <span>Người Bắt Đầu Vững Vàng</span>
+                </>
+              ) : (
+                <>
+                  <Sparkles className="h-5 w-5 text-amber-400 shrink-0" />
+                  <span>Mầm Mống Tri Thức</span>
+                </>
+              )}
             </div>
             <p className="text-[11px] text-slate-400">
               Duy trì 7 ngày liên tục để mở khóa danh hiệu mới!
@@ -298,9 +323,9 @@ export default function AttendanceDashboard({
             {activities.map((act) => (
               <div
                 key={act.id}
-                className="flex items-start gap-3 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-3.5 text-xs transition hover:border-slate-700"
+                className="flex items-center gap-3.5 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-3.5 text-xs transition hover:border-slate-700"
               >
-                <div className="mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300 leading-none">
                   {act.type === "vocab_review" ? (
                     <Sparkles className="h-3.5 w-3.5" />
                   ) : act.type === "check_in" ? (

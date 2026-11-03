@@ -19,8 +19,21 @@ import {
   LogOut,
   User as UserIcon,
   ChevronDown,
+  Timer,
+  AlertCircle,
+  Key,
+  Mail,
+  Crown,
+  Zap,
+  Infinity as InfinityIcon,
 } from "lucide-react";
-import { Course, FlashcardSRS, StudyStreak } from "@/types/course";
+import {
+  Course,
+  FlashcardSRS,
+  StudyStreak,
+  UserQuotaAccount,
+  VirtualEmailItem,
+} from "@/types/course";
 import {
   getAllCourses,
   getCourseFlashcards,
@@ -34,6 +47,13 @@ import {
   getSupabaseClient,
   AppUser,
 } from "@/lib/storage";
+import {
+  getUserQuotaAccount,
+  ensureUserQuotaProvisioned,
+  syncAndVerifyAdminRoleFromSupabase,
+  getVirtualEmails,
+  PLAN_CONFIG,
+} from "@/lib/quotaManager";
 import { stopAllSpeech } from "@/lib/tts";
 import CreateCourseModal from "@/components/CreateCourseModal";
 import SettingsModal from "@/components/SettingsModal";
@@ -42,6 +62,9 @@ import FlashcardArena from "@/components/FlashcardArena";
 import ExamArena from "@/components/ExamArena";
 import AttendanceDashboard from "@/components/AttendanceDashboard";
 import LoginScreen from "@/components/LoginScreen";
+import CustomSelect from "@/components/ui/CustomSelect";
+import UpgradePlanModal from "@/components/UpgradePlanModal";
+import EmailInboxModal from "@/components/EmailInboxModal";
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([]);
@@ -66,23 +89,50 @@ export default function HomePage() {
   );
   const [isCreateOpen, setIsCreateOpen] = useState(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isUpgradeModalOpen, setIsUpgradeModalOpen] = useState(false);
+  const [isInboxModalOpen, setIsInboxModalOpen] = useState(false);
+  const [prefillKeyForModal, setPrefillKeyForModal] = useState("");
+  const [quotaAccount, setQuotaAccount] = useState<UserQuotaAccount | null>(
+    null
+  );
+  const [unreadEmailCount, setUnreadEmailCount] = useState(0);
+  const [newEmailToast, setNewEmailToast] = useState<VirtualEmailItem | null>(
+    null
+  );
   const [hasApiKey, setHasApiKey] = useState(false);
   const [hasCloudSync, setHasCloudSync] = useState(false);
   const [isLoading, setIsLoading] = useState(true);
 
   const refreshData = useCallback(async () => {
-    const [loadedCourses, loadedCards, user] = await Promise.all([
+    const user = await getCurrentUser();
+    const [loadedCourses, loadedCards] = await Promise.all([
       getAllCourses(),
       getCourseFlashcards(),
-      getCurrentUser(),
     ]);
     setCourses(loadedCourses);
     setFlashcards(loadedCards);
     setCurrentUser(user);
     setStreakData(getStudyStreak());
 
+    if (user) {
+      let qAcc = getUserQuotaAccount(user);
+      if (!qAcc) {
+        const provisioned = await ensureUserQuotaProvisioned(user);
+        qAcc = provisioned.account;
+      }
+      await syncAndVerifyAdminRoleFromSupabase(user);
+      qAcc = getUserQuotaAccount(user) || qAcc;
+      setQuotaAccount(qAcc);
+      const userEmails = getVirtualEmails(user.email);
+      setUnreadEmailCount(userEmails.filter((e) => !e.isRead).length);
+      setHasApiKey(Boolean(qAcc?.isKeyActivated && qAcc?.activatedApiKey));
+    } else {
+      setQuotaAccount(null);
+      setUnreadEmailCount(0);
+      setHasApiKey(false);
+    }
+
     const s = getAppSettings();
-    setHasApiKey(Boolean(s.geminiApiKey?.trim()));
     setHasCloudSync(Boolean(s.supabaseUrl && s.supabaseAnonKey));
     setIsLoading(false);
   }, []);
@@ -93,12 +143,13 @@ export default function HomePage() {
     // Stop speech when changing views or unmounting
     stopAllSpeech();
 
-    // Listen to Supabase auth events
+    // Listen to Supabase auth events (ignore INITIAL_SESSION to prevent duplicate mount calls)
     const supabase = getSupabaseClient();
     if (supabase) {
       const {
         data: { subscription },
-      } = supabase.auth.onAuthStateChange((_event, session) => {
+      } = supabase.auth.onAuthStateChange((event, session) => {
+        if (event === "INITIAL_SESSION") return;
         if (session?.user) {
           setCurrentUser(session.user as unknown as AppUser);
         } else {
@@ -115,6 +166,85 @@ export default function HomePage() {
   useEffect(() => {
     stopAllSpeech();
   }, [viewMode, activeCourseId]);
+
+  // Listen to quota & virtual email events
+  useEffect(() => {
+    const handleQuotaUpdated = () => {
+      refreshData();
+    };
+    const handleEmailUpdated = () => {
+      refreshData();
+    };
+    const handleNewEmail = (e: Event) => {
+      const customEvt = e as CustomEvent<VirtualEmailItem>;
+      if (customEvt.detail) {
+        setNewEmailToast(customEvt.detail);
+      }
+      refreshData();
+    };
+    const handleRequireKeyActivation = () => {
+      setIsUpgradeModalOpen(true);
+    };
+    const handleQuotaExceeded = () => {
+      setIsUpgradeModalOpen(true);
+    };
+    const handleSessionExpired = () => {
+      stopAllSpeech();
+      setActiveCourseId(null);
+      setIsUpgradeModalOpen(false);
+      setIsSettingsOpen(false);
+      setIsInboxModalOpen(false);
+      setCurrentUser(null);
+      setQuotaAccount(null);
+    };
+
+    const checkSessionInterval = setInterval(() => {
+      getCurrentUser().then((u) => {
+        if (!u) {
+          setCurrentUser(null);
+        }
+      });
+    }, 60_000);
+
+    const handleWindowFocus = () => {
+      getCurrentUser().then((u) => {
+        if (!u) {
+          setCurrentUser(null);
+        }
+      });
+    };
+
+    window.addEventListener("bookmind:quota-updated", handleQuotaUpdated);
+    window.addEventListener("bookmind:email-updated", handleEmailUpdated);
+    window.addEventListener("bookmind:new-email", handleNewEmail);
+    window.addEventListener(
+      "bookmind:require-key-activation",
+      handleRequireKeyActivation
+    );
+    window.addEventListener("bookmind:quota-exceeded", handleQuotaExceeded);
+    window.addEventListener("bookmind:session-expired", handleSessionExpired);
+    window.addEventListener("focus", handleWindowFocus);
+
+    return () => {
+      clearInterval(checkSessionInterval);
+      window.removeEventListener("bookmind:quota-updated", handleQuotaUpdated);
+      window.removeEventListener("bookmind:email-updated", handleEmailUpdated);
+      window.removeEventListener("bookmind:new-email", handleNewEmail);
+      window.removeEventListener(
+        "bookmind:require-key-activation",
+        handleRequireKeyActivation
+      );
+      window.removeEventListener(
+        "bookmind:quota-exceeded",
+        handleQuotaExceeded
+      );
+      window.removeEventListener(
+        "bookmind:session-expired",
+        handleSessionExpired
+      );
+      window.removeEventListener("focus", handleWindowFocus);
+    };
+  }, [refreshData]);
 
   // Handle click outside to close user dropdown
   useEffect(() => {
@@ -197,25 +327,25 @@ export default function HomePage() {
     <div className="min-h-screen flex flex-col bg-slate-950">
       {/* Top Navbar */}
       <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/85 backdrop-blur-md">
-        <div className="mx-auto flex h-16 max-w-7xl items-center justify-between px-4 sm:px-6">
+        <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:px-6">
           {/* Left: Brand Logo & Optional Breadcrumb */}
-          <div className="flex items-center gap-3">
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
             <button
               type="button"
               onClick={() => {
                 setActiveCourseId(null);
                 setViewMode("dashboard");
               }}
-              className="group flex items-center gap-2.5 text-left transition cursor-pointer"
+              className="group flex items-center gap-2 sm:gap-2.5 text-left transition cursor-pointer"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-600/20 group-hover:scale-105 transition">
-                <BookOpen className="h-4.5 w-4.5" />
+              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-gradient-to-br from-indigo-500 to-purple-600 text-white shadow-md shadow-indigo-600/20 group-hover:scale-105 transition">
+                <BookOpen className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
               </div>
-              <div className="flex items-center gap-1.5">
-                <span className="text-base font-extrabold tracking-tight text-white">
+              <div className="flex items-center gap-1">
+                <span className="text-sm sm:text-base font-extrabold tracking-tight text-white">
                   BookMind
                 </span>
-                <span className="rounded-md bg-indigo-500/20 px-1.5 py-0.5 text-[10px] font-black text-indigo-300 border border-indigo-500/30">
+                <span className="rounded-md bg-indigo-500/20 px-1.5 py-0.5 text-[9px] sm:text-[10px] font-black text-indigo-300 border border-indigo-500/30">
                   AI
                 </span>
               </div>
@@ -298,23 +428,91 @@ export default function HomePage() {
           </nav>
 
           {/* Right: Unified Action Controls */}
-          <div className="flex items-center gap-2">
+          <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
+            {/* Quota & Plan Upgrade Pill */}
+            <button
+              type="button"
+              onClick={() => setIsUpgradeModalOpen(true)}
+              className={`flex items-center gap-1 sm:gap-1.5 rounded-xl border px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold transition cursor-pointer shrink-0 ${
+                quotaAccount &&
+                quotaAccount.plan !== "unlimited" &&
+                quotaAccount.maxCalls !== -1 &&
+                quotaAccount.usedCalls >= quotaAccount.maxCalls
+                  ? "border-rose-500/50 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 animate-pulse"
+                  : quotaAccount?.plan === "unlimited"
+                  ? "border-purple-500/40 bg-purple-500/15 text-purple-300 hover:bg-purple-500/25"
+                  : quotaAccount?.plan === "pro"
+                  ? "border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
+                  : "border-indigo-500/30 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25"
+              }`}
+              title="Xem số dư AI Credit hôm nay, bảng quy đổi 1-5 Credit & nâng cấp gói"
+            >
+              {quotaAccount?.plan === "unlimited" ? (
+                <>
+                  <InfinityIcon className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                  <span className="sm:hidden">VIP</span>
+                  <span className="hidden sm:inline">
+                    VIP: {quotaAccount.usedCalls}/{quotaAccount.fupDailyLimit || 500} Credit
+                  </span>
+                </>
+              ) : quotaAccount &&
+                quotaAccount.maxCalls !== -1 &&
+                quotaAccount.usedCalls >= quotaAccount.maxCalls ? (
+                <>
+                  <Zap className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                  <span className="sm:hidden">Hết Credit</span>
+                  <span className="hidden sm:inline">
+                    Hết Credit ({quotaAccount.usedCalls}/{quotaAccount.maxCalls}) • Nâng cấp
+                  </span>
+                </>
+              ) : (
+                <>
+                  <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <span className="sm:hidden">
+                    {quotaAccount?.usedCalls ?? 0}/{quotaAccount?.maxCalls ?? 30}
+                  </span>
+                  <span className="hidden sm:inline">
+                    {PLAN_CONFIG[quotaAccount?.plan || "free"].shortBadge}:{" "}
+                    {quotaAccount?.usedCalls ?? 0}/{quotaAccount?.maxCalls ?? 30} Credit
+                  </span>
+                </>
+              )}
+            </button>
+
+            {/* Email Inbox Icon Button */}
+            <button
+              type="button"
+              onClick={() => {
+                setNewEmailToast(null);
+                setIsInboxModalOpen(true);
+              }}
+              className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition shadow-sm cursor-pointer"
+              title="Hộp thư Email nhận Mã BookMind API Key"
+            >
+              <Mail className="h-4 w-4 text-indigo-400" />
+              {unreadEmailCount > 0 && (
+                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white shadow">
+                  {unreadEmailCount}
+                </span>
+              )}
+            </button>
+
             {/* Create New Course Button */}
             <button
               type="button"
               onClick={() => setIsCreateOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/20 transition active:scale-95 cursor-pointer"
+              className="flex items-center gap-1 sm:gap-1.5 shrink-0 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-2.5 sm:px-3.5 py-1.5 sm:py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/20 transition active:scale-95 cursor-pointer"
             >
-              <Plus className="h-3.5 w-3.5" />
+              <Plus className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">Thêm sách mới</span>
               <span className="sm:hidden">Thêm</span>
             </button>
 
-            {/* Settings Icon Button */}
+            {/* Settings Icon Button (Hidden on tiny screens since it's in the User menu) */}
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="relative flex h-9 w-9 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition shadow-sm cursor-pointer"
+              className="hidden sm:flex relative h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition shadow-sm cursor-pointer"
               title="Cài đặt Gemini API & Supabase Cloud"
             >
               <Settings className="h-4 w-4" />
@@ -326,21 +524,21 @@ export default function HomePage() {
             </button>
 
             {/* User Profile Menu Dropdown */}
-            <div id="user-profile-menu" className="relative">
+            <div id="user-profile-menu" className="relative shrink-0">
               <button
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 p-1 pr-2 hover:border-slate-700 hover:bg-slate-800 transition cursor-pointer"
+                className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 p-1 pr-1.5 sm:pr-2 hover:border-slate-700 hover:bg-slate-800 transition cursor-pointer"
                 title="Tài khoản của bạn"
               >
                 {currentUser?.user_metadata?.avatar_url ? (
                   <img
                     src={currentUser.user_metadata.avatar_url}
                     alt={currentUser.user_metadata?.full_name || "User"}
-                    className="h-7 w-7 rounded-lg object-cover ring-1 ring-indigo-500/50"
+                    className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg object-cover ring-1 ring-indigo-500/50"
                   />
                 ) : (
-                  <div className="flex h-7 w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-bold text-xs shadow-sm">
+                  <div className="flex h-6 w-6 sm:h-7 sm:w-7 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-bold text-xs shadow-sm">
                     {currentUser?.user_metadata?.full_name
                       ? currentUser.user_metadata.full_name.charAt(0).toUpperCase()
                       : currentUser?.email?.charAt(0).toUpperCase() || "U"}
@@ -356,11 +554,22 @@ export default function HomePage() {
 
               {/* Dropdown Popover */}
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-64 rounded-2xl border border-slate-800 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
+                <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-[16.5rem] rounded-2xl border border-slate-800 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
                   <div className="px-3 py-2.5 border-b border-slate-800/80">
-                    <p className="text-xs font-bold text-white truncate">
-                      {currentUser?.user_metadata?.full_name || "Học viên BookMind"}
-                    </p>
+                    <div className="flex items-center justify-between gap-2">
+                      <p className="text-xs font-bold text-white truncate">
+                        {currentUser?.user_metadata?.full_name || "Học viên BookMind"}
+                      </p>
+                      <span
+                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase ${
+                          quotaAccount?.role === "admin"
+                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
+                            : "bg-slate-800 text-slate-300 border border-slate-700"
+                        }`}
+                      >
+                        {quotaAccount?.role === "admin" ? "Admin" : "User"}
+                      </span>
+                    </div>
                     <p className="text-[11px] text-slate-400 truncate mt-0.5">
                       {currentUser?.email || "Chế độ lưu cục bộ"}
                     </p>
@@ -390,12 +599,46 @@ export default function HomePage() {
                       type="button"
                       onClick={() => {
                         setIsUserMenuOpen(false);
+                        setIsUpgradeModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                    >
+                      <Crown className="h-3.5 w-3.5 text-amber-400" />
+                      <span>Gói AI Credit & Nâng cấp (30 / 120 / VIP)</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsInboxModalOpen(true);
+                      }}
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                    >
+                      <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>Hộp thư thông báo tài khoản</span>
+                    </button>
+
+                    {quotaAccount?.role === "admin" && (
+                      <a
+                        href="/admin"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-amber-300 hover:bg-amber-950/40 hover:text-amber-200 transition text-left cursor-pointer font-semibold"
+                      >
+                        <Key className="h-3.5 w-3.5 text-amber-400" />
+                        <span>Trang Quản Trị Admin (/admin)</span>
+                      </a>
+                    )}
+
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
                         setIsSettingsOpen(true);
                       }}
                       className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
                     >
                       <Settings className="h-3.5 w-3.5 text-indigo-400" />
-                      <span>Cài đặt API & Cloud Sync</span>
+                      <span>Cài đặt Mô hình AI & Sao lưu</span>
                     </button>
                   </div>
 
@@ -419,20 +662,20 @@ export default function HomePage() {
         </div>
 
         {/* Mobile Navigation Bar below header for small screens */}
-        <div className="flex md:hidden border-t border-slate-800/80 bg-slate-950 px-4 py-2 justify-around">
+        <div className="flex md:hidden border-t border-slate-800/80 bg-slate-950 px-2.5 py-2 gap-1.5 overflow-x-auto no-scrollbar justify-between">
           <button
             type="button"
             onClick={() => {
               setActiveCourseId(null);
               setViewMode("attendance");
             }}
-            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
+            className={`flex items-center justify-center gap-1 text-[11px] font-semibold py-1.5 px-2.5 rounded-lg whitespace-nowrap shrink-0 flex-1 ${
               !activeCourseId && viewMode === "attendance"
                 ? "bg-amber-500/20 text-amber-300"
                 : "text-slate-400"
             }`}
           >
-            <Flame className="h-3.5 w-3.5 text-amber-400" />
+            <Flame className="h-3.5 w-3.5 text-amber-400 shrink-0" />
             <span>Điểm danh ({streakData.currentStreak}d)</span>
           </button>
           <button
@@ -441,13 +684,13 @@ export default function HomePage() {
               setActiveCourseId(null);
               setViewMode("dashboard");
             }}
-            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
+            className={`flex items-center justify-center gap-1 text-[11px] font-semibold py-1.5 px-2.5 rounded-lg whitespace-nowrap shrink-0 flex-1 ${
               !activeCourseId && viewMode === "dashboard"
                 ? "bg-slate-800 text-white"
                 : "text-slate-400"
             }`}
           >
-            <BookOpen className="h-3.5 w-3.5" />
+            <BookOpen className="h-3.5 w-3.5 shrink-0" />
             <span>Tủ sách ({courses.length})</span>
           </button>
           <button
@@ -456,13 +699,13 @@ export default function HomePage() {
               setActiveCourseId(null);
               setViewMode("srs_global");
             }}
-            className={`flex items-center gap-1 text-xs font-semibold py-1 px-2.5 rounded-lg ${
+            className={`flex items-center justify-center gap-1 text-[11px] font-semibold py-1.5 px-2.5 rounded-lg whitespace-nowrap shrink-0 flex-1 ${
               !activeCourseId && viewMode === "srs_global"
                 ? "bg-slate-800 text-white"
                 : "text-slate-400"
             }`}
           >
-            <GraduationCap className="h-3.5 w-3.5" />
+            <GraduationCap className="h-3.5 w-3.5 shrink-0" />
             <span>Ôn tập ({dueFlashcards.length})</span>
           </button>
         </div>
@@ -517,71 +760,81 @@ export default function HomePage() {
               {targetCourse && (
                 <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 md:grid-cols-3">
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-indigo-300">
-                      1. Chọn Khóa Học (Course)
+                    <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-300">
+                      <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
+                      <span>1. Chọn Khóa Học (Course)</span>
                     </label>
-                    <select
+                    <CustomSelect
                       value={targetCourse.id}
-                      onChange={(e) => {
-                        const newC = courses.find(
-                          (c) => c.id === e.target.value
-                        );
-                        setReviewCourseId(e.target.value);
+                      onChange={(newVal) => {
+                        const newC = courses.find((c) => c.id === newVal);
+                        setReviewCourseId(newVal);
                         setReviewChapterId(newC?.chapters[0]?.id || "");
                       }}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs font-semibold text-white"
-                    >
-                      {courses.map((c) => (
-                        <option key={c.id} value={c.id}>
-                          📚 {c.title}
-                        </option>
-                      ))}
-                    </select>
+                      accentColor="indigo"
+                      icon={<BookOpen className="h-3.5 w-3.5" />}
+                      options={courses.map((c) => ({
+                        value: c.id,
+                        label: c.title,
+                        subLabel: `${c.chapters.length} chương • CEFR ${c.level}`,
+                        badge: `${c.chapters.length} ch`,
+                      }))}
+                    />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-emerald-300">
-                      2. Chọn Chương Cần Kiểm Tra / Ôn Tập
+                    <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-300">
+                      <Layers className="h-3.5 w-3.5 text-emerald-400" />
+                      <span>2. Chọn Chương Cần Kiểm Tra / Ôn Tập</span>
                     </label>
-                    <select
+                    <CustomSelect
                       value={targetChapter?.id || ""}
-                      onChange={(e) => setReviewChapterId(e.target.value)}
-                      className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-xs font-semibold text-white"
-                    >
-                      {targetCourse.chapters.map((ch) => (
-                        <option key={ch.id} value={ch.id}>
-                          Chương {ch.index}: {ch.title}
-                        </option>
-                      ))}
-                    </select>
+                      onChange={(newVal) => setReviewChapterId(newVal)}
+                      accentColor="emerald"
+                      icon={<Layers className="h-3.5 w-3.5" />}
+                      options={targetCourse.chapters.map((ch) => ({
+                        value: ch.id,
+                        label: `Chương ${ch.index}: ${ch.title}`,
+                        subLabel:
+                          ch.startPage && ch.endPage
+                            ? `Trang ${ch.startPage}–${ch.endPage}`
+                            : undefined,
+                        badge: ch.isGenerated ? "Đã soạn" : "Chưa soạn",
+                      }))}
+                    />
                   </div>
 
                   <div>
-                    <label className="mb-1.5 block text-xs font-bold uppercase tracking-wider text-amber-300">
-                      3. Chế độ
+                    <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-300">
+                      <Sparkles className="h-3.5 w-3.5 text-amber-400" />
+                      <span>3. Chế độ</span>
                     </label>
                     <div className="grid grid-cols-2 gap-2">
                       <button
                         type="button"
                         onClick={() => setReviewSubTab("exam")}
-                        className={`rounded-xl py-2.5 text-xs font-bold transition ${
+                        className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${
                           reviewSubTab === "exam"
-                            ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow"
-                            : "bg-slate-950 text-slate-400 hover:text-white"
+                            ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-600/20"
+                            : "border border-slate-800 bg-slate-950 text-slate-400 hover:bg-slate-900 hover:text-white"
                         }`}
                       >
-                        ⏱️ Thi Kiểm Tra Chương
+                        <Timer className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">Thi Kiểm Tra</span>
                       </button>
                       <button
                         type="button"
                         onClick={() => setReviewSubTab("flashcards")}
-                        className={`rounded-xl py-2.5 text-xs font-bold transition ${
+                        className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${
                           reviewSubTab === "flashcards"
-                            ? "bg-indigo-600 text-white shadow"
-                            : "bg-slate-950 text-slate-400 hover:text-white"
+                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
+                            : "border border-slate-800 bg-slate-950 text-slate-400 hover:bg-slate-900 hover:text-white"
                         }`}
                       >
-                        🗂️ Thẻ Flashcard ({scopedFlashcards.length})
+                        <GraduationCap className="h-3.5 w-3.5 shrink-0" />
+                        <span className="truncate">
+                          Flashcard ({scopedFlashcards.length})
+                        </span>
                       </button>
                     </div>
                   </div>
@@ -621,7 +874,7 @@ export default function HomePage() {
         /* DASHBOARD: All Courses Grid */
         <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6">
           {/* Top Stats Banner */}
-          <div className="mb-8 grid grid-cols-2 gap-4 lg:grid-cols-4">
+          <div className="mb-8 grid grid-cols-1 gap-3 sm:grid-cols-2 sm:gap-4 lg:grid-cols-4">
             <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5">
               <div className="flex items-center justify-between text-xs text-slate-400">
                 <span>Tổng số Khóa học (Sách)</span>
@@ -666,20 +919,37 @@ export default function HomePage() {
               </div>
             </div>
 
-            <div className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5">
+            <div
+              onClick={() => setIsUpgradeModalOpen(true)}
+              className="rounded-2xl border border-slate-800/80 bg-slate-900/60 p-5 cursor-pointer hover:border-indigo-500/40 transition"
+            >
               <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Trạng thái Lưu trữ & AI</span>
-                <Database className="h-4 w-4 text-sky-400" />
+                <span>Gói AI & Hạn mức API Key</span>
+                <Crown className="h-4 w-4 text-amber-400" />
               </div>
-              <div className="mt-2 text-sm font-bold text-white">
-                {hasCloudSync
-                  ? "IndexedDB + Supabase Cloud"
-                  : "IndexedDB Local-First"}
+              <div className="mt-2 text-base font-extrabold text-white">
+                {quotaAccount
+                  ? PLAN_CONFIG[quotaAccount.plan].name
+                  : "Gói Free (15 lượt)"}
               </div>
-              <div className="mt-1 text-[11px] text-slate-400">
-                {hasApiKey
-                  ? "✅ Đã kết nối Gemini AI"
-                  : "⚠️ Bấm Cài đặt để thêm Gemini Key"}
+              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400">
+                {quotaAccount?.isKeyActivated ? (
+                  <>
+                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <span className="text-emerald-300">
+                      {quotaAccount.plan === "unlimited"
+                        ? `Đã dùng ${quotaAccount.usedCalls} lượt • Unlimited`
+                        : `Đã dùng ${quotaAccount.usedCalls}/${quotaAccount.maxCalls} lượt gọi AI`}
+                    </span>
+                  </>
+                ) : (
+                  <>
+                    <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                    <span className="text-amber-300">
+                      Bấm để lấy & nhập Mã API Key từ Email
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
@@ -830,6 +1100,62 @@ export default function HomePage() {
         </div>
       )}
 
+      {/* Floating Account Confirmation Toast */}
+      {newEmailToast && (
+        <div className="fixed bottom-5 right-5 z-40 max-w-sm rounded-2xl border border-emerald-500/50 bg-slate-900/95 p-4 shadow-2xl shadow-emerald-950/80 backdrop-blur-xl animate-in slide-in-from-bottom-5 duration-200">
+          <div className="flex items-start justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+                <CheckCircle2 className="h-4 w-4" />
+              </div>
+              <div>
+                <p className="text-xs font-extrabold text-white">
+                  {newEmailToast.paymentMethod === "momo" ||
+                  newEmailToast.paymentMethod === "vnpay"
+                    ? "Đã nâng cấp gói AI thành công!"
+                    : "Đăng ký tài khoản thành công!"}
+                </p>
+                <p className="text-[11px] text-slate-400 truncate max-w-[210px]">
+                  Tài khoản: {newEmailToast.toEmail}
+                </p>
+              </div>
+            </div>
+            <button
+              type="button"
+              onClick={() => setNewEmailToast(null)}
+              className="text-xs text-slate-400 hover:text-white"
+            >
+              Đóng
+            </button>
+          </div>
+          <div className="mt-2.5 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-emerald-300 text-center font-semibold">
+            Đã tự động kích hoạt {PLAN_CONFIG[newEmailToast.plan].name}
+          </div>
+          <div className="mt-3 flex items-center gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                setNewEmailToast(null);
+                setIsInboxModalOpen(true);
+              }}
+              className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 py-2 text-xs font-bold text-white transition cursor-pointer"
+            >
+              Xem thông báo
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setNewEmailToast(null);
+                setIsUpgradeModalOpen(true);
+              }}
+              className="rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-3 py-2 text-xs font-bold text-amber-300 transition cursor-pointer"
+            >
+              Chi tiết gói
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Modals */}
       <CreateCourseModal
         isOpen={isCreateOpen}
@@ -845,6 +1171,30 @@ export default function HomePage() {
         isOpen={isSettingsOpen}
         onClose={() => setIsSettingsOpen(false)}
         onSettingsChanged={refreshData}
+      />
+
+      <UpgradePlanModal
+        isOpen={isUpgradeModalOpen}
+        onClose={() => {
+          setIsUpgradeModalOpen(false);
+          setPrefillKeyForModal("");
+        }}
+        currentUser={currentUser}
+        quotaAccount={quotaAccount}
+        initialPrefillKey={prefillKeyForModal}
+        onOpenInbox={() => setIsInboxModalOpen(true)}
+        onQuotaChanged={refreshData}
+      />
+
+      <EmailInboxModal
+        isOpen={isInboxModalOpen}
+        onClose={() => setIsInboxModalOpen(false)}
+        currentUser={currentUser}
+        quotaAccount={quotaAccount}
+        onOpenActivateModal={(prefillKey) => {
+          if (prefillKey) setPrefillKeyForModal(prefillKey);
+          setIsUpgradeModalOpen(true);
+        }}
       />
     </div>
   );

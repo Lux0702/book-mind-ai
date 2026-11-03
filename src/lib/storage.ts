@@ -12,6 +12,7 @@ import { SAMPLE_COURSE, SAMPLE_FLASHCARDS } from "./sampleData";
 export interface AppUser {
   id: string;
   email?: string;
+  expiresAt?: number; // Thời điểm hết hạn phiên đăng nhập (epoch ms)
   user_metadata?: {
     full_name?: string;
     avatar_url?: string;
@@ -44,9 +45,15 @@ const SEEDED_KEY = "book_agent_seeded_v1";
 const STREAK_KEY = "book_agent_streak_v1";
 const ACTIVITIES_KEY = "book_agent_activities_v1";
 const LOCAL_USER_KEY = "book_agent_local_user_v1";
+const SESSION_EXPIRED_NOTICE_KEY = "book_agent_session_expired_notice_v1";
+const HAD_SUPABASE_SESSION_KEY = "book_agent_had_sb_session_v1";
+export const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // Phiên đăng nhập có hiệu lực 12 giờ
 
 export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: "",
+  masterGeminiApiKey: "",
+  adminPasscode: "admin123",
+  resendApiKey: "",
   geminiModel: "gemini-2.5-flash",
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
@@ -58,7 +65,19 @@ export function getAppSettings(): AppSettings {
   try {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULT_SETTINGS;
-    return { ...DEFAULT_SETTINGS, ...JSON.parse(raw) };
+    const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as AppSettings;
+    // Tự động chuyển key Google gốc (AIza...) đã lưu trước đó sang Master Key của hệ thống
+    // để geminiApiKey đóng vai trò là BookMind Virtual API Key (BM-FREE / BM-PRO / BM-VIP) của User
+    if (
+      parsed.geminiApiKey &&
+      parsed.geminiApiKey.trim().startsWith("AIza") &&
+      !parsed.masterGeminiApiKey
+    ) {
+      parsed.masterGeminiApiKey = parsed.geminiApiKey.trim();
+      parsed.geminiApiKey = "";
+      localStorage.setItem(SETTINGS_KEY, JSON.stringify(parsed));
+    }
+    return parsed;
   } catch {
     return DEFAULT_SETTINGS;
   }
@@ -102,32 +121,196 @@ export function getSupabaseClient(): SupabaseClient | null {
   }
 }
 
-export async function getCurrentUser(): Promise<AppUser | null> {
+export async function triggerSessionExpiredLogout(
+  reason = "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại để tiếp tục!"
+): Promise<void> {
+  cachedUserResult = null;
+  inFlightGetCurrentUser = null;
+  if (typeof window !== "undefined") {
+    sessionStorage.setItem(SESSION_EXPIRED_NOTICE_KEY, reason);
+    localStorage.removeItem(LOCAL_USER_KEY);
+    localStorage.removeItem(HAD_SUPABASE_SESSION_KEY);
+  }
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
-      const { data } = await supabase.auth.getUser();
-      if (data.user) {
-        return data.user as unknown as AppUser;
+      await supabase.auth.signOut();
+    } catch {
+      // Ignore signout error
+    }
+  }
+  if (typeof window !== "undefined") {
+    window.dispatchEvent(
+      new CustomEvent("bookmind:session-expired", { detail: { reason } })
+    );
+  }
+}
+
+export function consumeSessionExpiredNotice(): string | null {
+  if (typeof window === "undefined") return null;
+  const msg = sessionStorage.getItem(SESSION_EXPIRED_NOTICE_KEY);
+  if (msg) {
+    sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+  }
+  return msg;
+}
+
+export async function getSessionAuthHeaders(): Promise<Record<string, string>> {
+  const settings = getAppSettings();
+  const headers: Record<string, string> = {};
+
+  if (settings.supabaseUrl && settings.supabaseAnonKey) {
+    headers["X-Supabase-Url"] = settings.supabaseUrl;
+    headers["X-Supabase-Anon-Key"] = settings.supabaseAnonKey;
+  }
+
+  const supabase = getSupabaseClient();
+  if (supabase) {
+    try {
+      const { data } = await supabase.auth.getSession();
+      const session = data?.session;
+      if (session?.access_token) {
+        const expiresAtMs = (session.expires_at || 0) * 1000;
+        headers["Authorization"] = `Bearer ${session.access_token}`;
+        headers["X-User-Email"] = session.user?.email || "";
+        headers["X-Session-Expires-At"] = String(
+          expiresAtMs || Date.now() + SESSION_TTL_MS
+        );
+        return headers;
       }
     } catch {
-      // Supabase fetch failed or network offline
+      // Fall through to local check
     }
   }
 
-  // Fallback to local profile
   if (typeof window !== "undefined") {
     try {
       const raw = localStorage.getItem(LOCAL_USER_KEY);
       if (raw) {
-        return JSON.parse(raw) as AppUser;
+        const localUser = JSON.parse(raw) as AppUser;
+        headers["X-User-Email"] = localUser.email || localUser.id;
+        headers["X-Session-Expires-At"] = String(
+          localUser.expiresAt || Date.now() + SESSION_TTL_MS
+        );
       }
     } catch {
-      return null;
+      // Ignore
     }
   }
 
-  return null;
+  return headers;
+}
+
+// Bộ nhớ đệm ngắn hạn (20s) + Chống gọi trùng lặp đồng thời (In-flight Deduplication) cho getCurrentUser()
+const USER_CACHE_TTL_MS = 20_000;
+let cachedUserResult: { user: AppUser | null; fetchedAt: number } | null = null;
+let inFlightGetCurrentUser: Promise<AppUser | null> | null = null;
+
+export function invalidateUserCache(): void {
+  cachedUserResult = null;
+  inFlightGetCurrentUser = null;
+}
+
+export async function getCurrentUser(forceRefresh = false): Promise<AppUser | null> {
+  if (
+    !forceRefresh &&
+    cachedUserResult &&
+    Date.now() - cachedUserResult.fetchedAt < USER_CACHE_TTL_MS
+  ) {
+    return cachedUserResult.user;
+  }
+
+  if (!forceRefresh && inFlightGetCurrentUser) {
+    return inFlightGetCurrentUser;
+  }
+
+  const fetchPromise = (async (): Promise<AppUser | null> => {
+    const supabase = getSupabaseClient();
+    if (supabase) {
+      try {
+        const { data: sessionData, error: sessionErr } =
+          await supabase.auth.getSession();
+        const session = sessionData?.session;
+
+        if (session) {
+          if (typeof window !== "undefined") {
+            localStorage.setItem(HAD_SUPABASE_SESSION_KEY, "1");
+          }
+          const expiresAtMs = (session.expires_at || 0) * 1000;
+          if (expiresAtMs > 0 && expiresAtMs <= Date.now()) {
+            // Thử refresh token 1 lần, nếu thất bại thì logout bắt đăng nhập lại
+            const { data: refreshed, error: refreshErr } =
+              await supabase.auth.refreshSession();
+            if (refreshErr || !refreshed.session) {
+              await triggerSessionExpiredLogout(
+                "Phiên đăng nhập Supabase đã hết hạn. Vui lòng đăng nhập lại!"
+              );
+              return null;
+            }
+          }
+
+          const { data: userData, error: userErr } =
+            await supabase.auth.getUser();
+          if (userErr || !userData?.user) {
+            await triggerSessionExpiredLogout(
+              "Phiên xác thực đã hết hạn hoặc không còn hợp lệ. Vui lòng đăng nhập lại!"
+            );
+            return null;
+          }
+
+          const appUser = userData.user as unknown as AppUser;
+          appUser.expiresAt =
+            (session.expires_at || 0) * 1000 || Date.now() + SESSION_TTL_MS;
+          cachedUserResult = { user: appUser, fetchedAt: Date.now() };
+          return appUser;
+        } else if (
+          sessionErr ||
+          (typeof window !== "undefined" &&
+            localStorage.getItem(HAD_SUPABASE_SESSION_KEY) === "1")
+        ) {
+          await triggerSessionExpiredLogout(
+            "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại để tiếp tục!"
+          );
+          return null;
+        }
+      } catch {
+        // Supabase fetch failed or network offline
+      }
+    }
+
+    // Fallback to local profile with strict session expiration check
+    if (typeof window !== "undefined") {
+      try {
+        const raw = localStorage.getItem(LOCAL_USER_KEY);
+        if (raw) {
+          const parsed = JSON.parse(raw) as AppUser;
+          if (!parsed.expiresAt) {
+            parsed.expiresAt = Date.now() + SESSION_TTL_MS;
+            localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(parsed));
+          } else if (Date.now() > parsed.expiresAt) {
+            await triggerSessionExpiredLogout(
+              "Phiên đăng nhập của bạn đã hết hạn (quá 12 giờ). Vui lòng đăng nhập lại để bảo mật tài khoản!"
+            );
+            return null;
+          }
+          cachedUserResult = { user: parsed, fetchedAt: Date.now() };
+          return parsed;
+        }
+      } catch {
+        return null;
+      }
+    }
+
+    cachedUserResult = { user: null, fetchedAt: Date.now() };
+    return null;
+  })();
+
+  inFlightGetCurrentUser = fetchPromise;
+  try {
+    return await fetchPromise;
+  } finally {
+    inFlightGetCurrentUser = null;
+  }
 }
 
 export async function signInWithGoogle(): Promise<{ error: Error | null }> {
@@ -168,6 +351,8 @@ export async function signInWithEmailPassword(
   pass: string,
   isSignUp = false
 ): Promise<{ user: AppUser | null; error: Error | null }> {
+  invalidateUserCache();
+  lastCoursesCloudSyncAt = 0;
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -182,14 +367,18 @@ export async function signInWithEmailPassword(
           },
         });
         if (error) return { user: null, error: new Error(error.message) };
-        return { user: data.user as unknown as AppUser, error: null };
+        const appUser = data.user as unknown as AppUser;
+        cachedUserResult = { user: appUser, fetchedAt: Date.now() };
+        return { user: appUser, error: null };
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
           email,
           password: pass,
         });
         if (error) return { user: null, error: new Error(error.message) };
-        return { user: data.user as unknown as AppUser, error: null };
+        const appUser = data.user as unknown as AppUser;
+        cachedUserResult = { user: appUser, fetchedAt: Date.now() };
+        return { user: appUser, error: null };
       }
     } catch (err) {
       return {
@@ -212,6 +401,7 @@ export function signInWithLocalProfile(
   const user: AppUser = {
     id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
     email: email?.trim() || `${cleanName.toLowerCase().replace(/\s+/g, "")}@local.user`,
+    expiresAt: Date.now() + SESSION_TTL_MS,
     user_metadata: {
       full_name: cleanName,
       avatar_url: "",
@@ -223,10 +413,13 @@ export function signInWithLocalProfile(
   if (typeof window !== "undefined") {
     localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(user));
   }
+  cachedUserResult = { user, fetchedAt: Date.now() };
   return user;
 }
 
 export async function signOutUser(): Promise<void> {
+  cachedUserResult = null;
+  inFlightGetCurrentUser = null;
   const supabase = getSupabaseClient();
   if (supabase) {
     try {
@@ -237,6 +430,7 @@ export async function signOutUser(): Promise<void> {
   }
   if (typeof window !== "undefined") {
     localStorage.removeItem(LOCAL_USER_KEY);
+    localStorage.removeItem(HAD_SUPABASE_SESSION_KEY);
   }
 }
 
@@ -387,52 +581,76 @@ export async function ensureSeeded(): Promise<void> {
   }
 }
 
+const COURSES_SYNC_TTL_MS = 20_000;
+let lastCoursesCloudSyncAt = 0;
+let inFlightGetAllCourses: Promise<Course[]> | null = null;
+
 export async function getAllCourses(): Promise<Course[]> {
   if (!db) return [];
-  await ensureSeeded();
+  if (inFlightGetAllCourses) {
+    return inFlightGetAllCourses;
+  }
 
-  // If Supabase is configured, try pulling remote updates
-  const supabase = getSupabaseClient();
-  const settings = getAppSettings();
-  const user = await getCurrentUser();
+  const run = (async (): Promise<Course[]> => {
+    await ensureSeeded();
 
-  if (supabase && settings.autoSyncCloud) {
-    try {
-      let query = supabase
-        .from("courses")
-        .select("id, user_id, data, updated_at")
-        .order("updated_at", { ascending: false });
+    // If Supabase is configured, try pulling remote updates (throttled to once per 20s)
+    const supabase = getSupabaseClient();
+    const settings = getAppSettings();
+    const user = await getCurrentUser();
 
-      // If user is logged in, prioritize their isolated courses
-      if (user) {
-        query = query.eq("user_id", user.id);
-      }
+    if (
+      supabase &&
+      settings.autoSyncCloud &&
+      Date.now() - lastCoursesCloudSyncAt > COURSES_SYNC_TTL_MS
+    ) {
+      lastCoursesCloudSyncAt = Date.now();
+      try {
+        let query = supabase
+          .from("courses")
+          .select("id, user_id, data, updated_at")
+          .order("updated_at", { ascending: false });
 
-      const { data, error } = await query;
-      if (!error && data && data.length > 0) {
-        for (const row of data) {
-          if (row.data) {
-            await db.courses.put(row.data as Course);
+        // If user is logged in, prioritize their isolated courses
+        if (user) {
+          query = query.eq("user_id", user.id);
+        }
+
+        const { data, error } = await query;
+        if (!error && data && data.length > 0) {
+          for (const row of data) {
+            if (row.data) {
+              await db.courses.put(row.data as Course);
+            }
           }
         }
+      } catch {
+        // Offline fallback to IndexedDB
       }
-    } catch {
-      // Offline fallback to IndexedDB
     }
-  }
 
-  const list = await db.courses.toArray();
-  // If user is logged in, filter courses belonging to user or created locally
-  if (user) {
-    const userCourses = list.filter((c) => !c.userId || c.userId === user.id);
-    return userCourses.sort(
-      (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+    const list = await db.courses.toArray();
+    // If user is logged in, filter courses belonging to user or created locally
+    if (user) {
+      const userCourses = list.filter((c) => !c.userId || c.userId === user.id);
+      return userCourses.sort(
+        (a, b) =>
+          new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
+      );
+    }
+
+    return list.sort(
+      (a, b) =>
+        new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
-  }
+  })();
 
-  return list.sort(
-    (a, b) => new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
-  );
+  inFlightGetAllCourses = run;
+  try {
+    return await run;
+  } finally {
+    inFlightGetAllCourses = null;
+  }
 }
 
 export async function getCourseById(id: string): Promise<Course | undefined> {

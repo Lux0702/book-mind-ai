@@ -172,8 +172,78 @@ export interface LearningActivity {
   timestamp: string;
 }
 
+export type PlanTier = "free" | "pro" | "unlimited";
+
+export type UserRole = "user" | "admin";
+
+export interface UserQuotaAccount {
+  userId: string;
+  email: string;
+  name: string;
+  role?: UserRole; // Phân quyền: "user" (Học viên) hoặc "admin" (Quản trị viên)
+  plan: PlanTier;
+  issuedApiKey: string; // Mã định danh gói dịch vụ (Subscription Reference Code) gắn tự động vào tài khoản
+  activatedApiKey: string;
+  isKeyActivated: boolean;
+  usedCalls: number; // Số AI Credit đã sử dụng trong ngày hôm nay
+  totalCalls?: number; // Tổng số AI Credit đã tiêu thụ tích lũy từ khi tạo tài khoản
+  maxCalls: number; // 30 Credit/ngày (free), 120 Credit/ngày (pro), 500 Credit/ngày (VIP Fair Usage Policy)
+  fupDailyLimit?: number; // Ngưỡng Fair Usage Policy cho gói VIP (mặc định 500 Credit/ngày)
+  lastResetDate?: string; // YYYY-MM-DD để tự động reset Credit mỗi ngày
+  isLocked?: boolean; // Admin có thể khóa/mở khóa quyền gọi AI của user
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface AiUsageLogItem {
+  id: string;
+  idempotencyKey: string;
+  userEmail: string;
+  endpoint: string;
+  taskLabel: string;
+  creditsCharged: number;
+  status: "success" | "failed_refunded" | "rate_limited";
+  refunded: boolean;
+  retryCount: number;
+  latencyMs: number;
+  errorMessage?: string;
+  createdAt: string;
+}
+
+export interface PaymentTransaction {
+  id: string;
+  orderCode: string;
+  userEmail: string;
+  userName: string;
+  plan: PlanTier;
+  amountVnd: number;
+  amountFormatted: string;
+  paymentMethod: "momo" | "vnpay";
+  assignedApiKey: string;
+  createdAt: string;
+}
+
+export interface VirtualEmailItem {
+  id: string;
+  toEmail: string;
+  toName: string;
+  subject: string;
+  plan: PlanTier;
+  apiKey: string;
+  maxCalls: number;
+  createdAt: string;
+  isRead: boolean;
+  paymentMethod?: "register" | "momo" | "vnpay";
+  amountFormatted?: string;
+  orderCode?: string;
+  realEmailSent?: boolean;
+}
+
 export interface AppSettings {
-  geminiApiKey: string;
+  geminiApiKey: string; // Mã BookMind Virtual Key (BM-FREE-..., BM-PRO-..., BM-VIP-...)
+  masterGeminiApiKey?: string; // Master Google Gemini API Key (AIzaSy...) của chủ hệ thống
+  adminPasscode?: string; // Mật khẩu bảo vệ trang Quản trị /admin (mặc định: admin123)
+  resendApiKey?: string; // Resend API Key (tùy chọn để gửi email thật)
   geminiModel: string;
   supabaseUrl: string;
   supabaseAnonKey: string;

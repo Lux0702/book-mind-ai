@@ -6,12 +6,13 @@ export const maxDuration = 60;
 export async function POST(req: NextRequest) {
   try {
     const body = await req.json();
-    const { pageSummaries, totalPages, apiKey, model } = body;
+    const { pageSummaries, totalPages, apiKey, masterApiKey, model } = body;
 
     const chapters = await extractBookTocWithAI({
       pageSummaries,
       totalPages,
       apiKey,
+      masterApiKey,
       model,
     });
 

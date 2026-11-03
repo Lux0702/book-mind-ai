@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       chapterText,
       pageImagesBase64,
       apiKey,
+      masterApiKey,
       model,
     } = body;
 
@@ -34,6 +35,7 @@ export async function POST(req: NextRequest) {
       chapterText: chapterText || "",
       pageImagesBase64,
       apiKey,
+      masterApiKey,
       model,
     });
 

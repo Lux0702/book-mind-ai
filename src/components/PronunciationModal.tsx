@@ -14,9 +14,13 @@ import {
   Flame,
   Award,
   ArrowRight,
+  Lightbulb,
+  XCircle,
+  Target,
 } from "lucide-react";
 import { PronunciationEvaluation } from "@/types/course";
 import { getAppSettings } from "@/lib/storage";
+import { fetchAiAgent } from "@/lib/quotaManager";
 import { detectTextLang, stopAllSpeech } from "@/lib/tts";
 import AudioSpeakButton from "./AudioSpeakButton";
 
@@ -39,10 +43,14 @@ export default function PronunciationModal({
 }: PronunciationModalProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [spokenTranscript, setSpokenTranscript] = useState("");
+  const [audioBase64, setAudioBase64] = useState("");
+  const [audioMimeType, setAudioMimeType] = useState("audio/webm");
   const [isEvaluating, setIsEvaluating] = useState(false);
   const [evaluation, setEvaluation] = useState<PronunciationEvaluation | null>(null);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const recognitionRef = useRef<any>(null);
+  const mediaRecorderRef = useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = useRef<MediaStream | null>(null);
 
   const langCode = detectTextLang(targetText);
 
@@ -55,15 +63,62 @@ export default function PronunciationModal({
       }
       recognitionRef.current = null;
     }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+      mediaRecorderRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
     setIsRecording(false);
   }, []);
 
-  const startRecording = useCallback(() => {
+  const startRecording = useCallback(async () => {
     stopAllSpeech();
     setErrorMessage(null);
     setEvaluation(null);
     setSpokenTranscript("");
+    setAudioBase64("");
 
+    // 1. Thu sóng âm giọng nói thực tế bằng MediaRecorder để gửi cho Gemini Multimodal Audio
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "audio/webm";
+        setAudioMimeType(mime.split(";")[0]);
+        const recorder = new MediaRecorder(stream);
+        const chunks: BlobPart[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: mime });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const resStr = String(reader.result || "");
+            const b64 = resStr.includes(",") ? resStr.split(",")[1] : "";
+            if (b64) setAudioBase64(b64);
+          };
+          reader.readAsDataURL(blob);
+          stream.getTracks().forEach((t) => t.stop());
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setIsRecording(true);
+      } catch {
+        // Fallback sang SpeechRecognition
+      }
+    }
+
+    // 2. Chạy song song Web Speech API để hiển thị chữ trực tiếp lên khung Read-Only
     const SpeechRecognition =
       typeof window !== "undefined"
         ? (window as any).SpeechRecognition ||
@@ -71,10 +126,11 @@ export default function PronunciationModal({
         : null;
 
     if (!SpeechRecognition) {
-      setErrorMessage(
-        "Trình duyệt hiện tại chưa hỗ trợ Web Speech API. Bạn có thể tự gõ văn bản bạn vừa đọc vào ô bên dưới để AI chấm điểm."
-      );
-      setIsRecording(true);
+      if (!mediaRecorderRef.current) {
+        setErrorMessage(
+          "Trình duyệt hiện tại chưa hỗ trợ thu âm trực tiếp. Vui lòng sử dụng Chrome hoặc Edge và cấp quyền Micro."
+        );
+      }
       return;
     }
 
@@ -90,7 +146,7 @@ export default function PronunciationModal({
 
       recognition.onresult = (event: any) => {
         let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
         if (transcript.trim()) {
@@ -99,28 +155,31 @@ export default function PronunciationModal({
       };
 
       recognition.onerror = (event: any) => {
-        if (event.error !== "no-speech") {
-          setErrorMessage(
-            `Lỗi micro: ${event.error}. Bạn vẫn có thể nhập trực tiếp câu bạn đã đọc bên dưới.`
-          );
+        if (event.error !== "no-speech" && event.error !== "aborted") {
+          setErrorMessage(`Lỗi micro: ${event.error}. Vui lòng kiểm tra quyền Micro.`);
         }
       };
 
       recognition.onend = () => {
-        setIsRecording(false);
+        if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") {
+          setIsRecording(false);
+        }
       };
 
       recognitionRef.current = recognition;
       recognition.start();
-    } catch (err: unknown) {
-      setErrorMessage("Không thể kích hoạt Microphone. Vui lòng cho phép quyền truy cập Micro.");
-      setIsRecording(false);
+    } catch {
+      if (!mediaRecorderRef.current) {
+        setErrorMessage("Không thể kích hoạt Microphone. Vui lòng cho phép quyền truy cập Micro.");
+        setIsRecording(false);
+      }
     }
   }, [langCode]);
 
   useEffect(() => {
     if (isOpen) {
       setSpokenTranscript("");
+      setAudioBase64("");
       setEvaluation(null);
       setErrorMessage(null);
       setIsRecording(false);
@@ -139,7 +198,8 @@ export default function PronunciationModal({
 
   const handleEvaluate = async () => {
     stopRecording();
-    if (!spokenTranscript.trim()) {
+    await new Promise((r) => setTimeout(r, 250));
+    if (!spokenTranscript.trim() && !audioBase64) {
       setErrorMessage("Vui lòng bấm vào Microphone và đọc to rõ ràng trước khi chấm điểm.");
       return;
     }
@@ -149,17 +209,15 @@ export default function PronunciationModal({
 
     const s = getAppSettings();
     try {
-      const res = await fetch("/api/agent/evaluate-pronunciation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expectedText: targetText,
-          spokenText: spokenTranscript,
-          language: langCode,
-          pinyinOrIpa: phonetic,
-          apiKey: s.geminiApiKey,
-          model: s.geminiModel,
-        }),
+      const res = await fetchAiAgent("/api/agent/evaluate-pronunciation", {
+        expectedText: targetText,
+        spokenText: spokenTranscript,
+        audioBase64: audioBase64 || undefined,
+        audioMimeType,
+        language: langCode,
+        pinyinOrIpa: phonetic,
+        apiKey: s.geminiApiKey,
+        model: s.geminiModel,
       });
 
       const data = await res.json();
@@ -241,8 +299,9 @@ export default function PronunciationModal({
           )}
 
           {contextHint && (
-            <div className="text-[11px] text-amber-300/90 italic">
-              💡 {contextHint}
+            <div className="flex items-center gap-1.5 text-[11px] text-amber-300/90 italic">
+              <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <span>{contextHint}</span>
             </div>
           )}
         </div>
@@ -275,41 +334,65 @@ export default function PronunciationModal({
           </div>
 
           <div>
-            <p className="text-sm font-bold text-white">
-              {isRecording
-                ? "🔴 Đang lắng nghe giọng bạn... Hãy đọc to và rõ ràng!"
-                : "Bấm vào Micro để bắt đầu đọc"}
+            <p className="flex items-center justify-center gap-2 text-sm font-bold text-white">
+              {isRecording ? (
+                <>
+                  <span className="h-2.5 w-2.5 rounded-full bg-rose-500 animate-ping" />
+                  <span>Đang lắng nghe giọng bạn... Hãy đọc to và rõ ràng!</span>
+                </>
+              ) : (
+                "Bấm vào Micro để bắt đầu đọc"
+              )}
             </p>
             <p className="text-xs text-slate-400 mt-0.5">
               Hỗ trợ tự động nhận dạng ngôn ngữ tương ứng
             </p>
           </div>
 
-          {/* Live Transcript / Speech Input */}
+          {/* Live Transcript / Speech Display (Read-Only: chỉ hiển thị chữ thu từ Micro, không cho nhập phím) */}
           <div className="text-left">
-            <label className="block text-xs font-semibold text-slate-400 mb-1.5">
-              Lời nói thu được từ bạn:
-            </label>
-            <div className="relative">
-              <input
-                type="text"
-                value={spokenTranscript}
-                onChange={(e) => setSpokenTranscript(e.target.value)}
-                placeholder={
-                  isRecording
-                    ? "Đang nhận diện giọng nói của bạn..."
-                    : "Giọng nói của bạn sẽ xuất hiện ở đây sau khi đọc..."
-                }
-                className="w-full rounded-xl border border-slate-700 bg-slate-900/90 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
-              />
-              {spokenTranscript && (
+            <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mb-1.5">
+              <span className="flex items-center gap-2">
+                <span>Âm thanh ghi nhận được từ micro của bạn:</span>
+                <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+                  Chỉ nhận giọng đọc từ Micro • Không cho gõ phím
+                </span>
+              </span>
+              {(spokenTranscript || audioBase64) && (
                 <button
                   type="button"
-                  onClick={() => setSpokenTranscript("")}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-slate-500 hover:text-white"
+                  onClick={() => {
+                    setSpokenTranscript("");
+                    setAudioBase64("");
+                  }}
+                  className="text-xs text-slate-500 hover:text-white cursor-pointer"
                 >
-                  Xóa
+                  Thu âm lại
                 </button>
+              )}
+            </div>
+            <div
+              aria-readonly="true"
+              className={`min-h-[52px] w-full rounded-xl border px-4 py-3 text-sm select-none cursor-default transition ${
+                isRecording
+                  ? "border-emerald-500/50 bg-slate-900/95 text-white shadow-inner"
+                  : spokenTranscript
+                  ? "border-indigo-500/40 bg-slate-900/90 text-white"
+                  : "border-slate-800 bg-slate-900/70 text-slate-500"
+              }`}
+            >
+              {spokenTranscript ? (
+                <p className="font-medium leading-relaxed text-white">
+                  {spokenTranscript}
+                </p>
+              ) : isRecording ? (
+                <p className="italic text-emerald-300 animate-pulse">
+                  Đang thu sóng âm giọng đọc của bạn qua Micro... Hãy đọc to và rõ ràng!
+                </p>
+              ) : (
+                <p className="text-slate-500">
+                  Bấm nút micro ở trên và đọc to rõ ràng. Lời đọc của bạn sẽ tự động chạy chữ tại đây (không cho phép gõ văn bản thủ công)...
+                </p>
               )}
             </div>
           </div>
@@ -318,7 +401,7 @@ export default function PronunciationModal({
           <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
             <button
               type="button"
-              disabled={isEvaluating || !spokenTranscript.trim()}
+              disabled={isEvaluating || (!spokenTranscript.trim() && !audioBase64)}
               onClick={handleEvaluate}
               className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 transition active:scale-95 disabled:opacity-50 cursor-pointer"
             >
@@ -426,17 +509,23 @@ export default function PronunciationModal({
                       className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-4 space-y-2 text-xs"
                     >
                       <div className="flex items-center justify-between">
-                        <strong className="text-rose-200 text-sm">
-                          ❌ Từ &ldquo;{item.word}&rdquo;
-                          {item.expectedPhonetic && ` (${item.expectedPhonetic})`}
+                        <strong className="flex items-center gap-1.5 text-rose-200 text-sm">
+                          <XCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                          <span>
+                            Từ &ldquo;{item.word}&rdquo;
+                            {item.expectedPhonetic && ` (${item.expectedPhonetic})`}
+                          </span>
                         </strong>
                         <span className="text-[11px] text-rose-300 bg-rose-950/60 px-2 py-0.5 rounded-lg border border-rose-500/30">
                           {item.issue}
                         </span>
                       </div>
-                      <div className="text-slate-300 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                        <strong className="text-amber-300">💡 Mẹo sửa khẩu hình: </strong>
-                        {item.tip}
+                      <div className="flex items-start gap-1.5 text-slate-300 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
+                        <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                        <div>
+                          <strong className="text-amber-300">Mẹo sửa khẩu hình: </strong>
+                          {item.tip}
+                        </div>
                       </div>
                     </div>
                   ))}
@@ -451,8 +540,9 @@ export default function PronunciationModal({
 
             {/* General Feedback */}
             <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-1.5 text-xs leading-relaxed text-slate-200">
-              <strong className="text-indigo-300 block">
-                🎯 Nhận xét tổng quan từ Gia sư AI:
+              <strong className="flex items-center gap-1.5 text-indigo-300">
+                <Target className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+                <span>Nhận xét tổng quan từ Gia sư AI:</span>
               </strong>
               <p>{evaluation.generalFeedback}</p>
             </div>

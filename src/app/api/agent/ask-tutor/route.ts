@@ -13,6 +13,7 @@ export async function POST(req: NextRequest) {
       question,
       selectedExcerpt,
       apiKey,
+      masterApiKey,
       model,
     } = body;
 
@@ -23,6 +24,7 @@ export async function POST(req: NextRequest) {
       question,
       selectedExcerpt,
       apiKey,
+      masterApiKey,
       model,
     });
 

@@ -12,6 +12,7 @@ export async function POST(req: NextRequest) {
       contextHint,
       userTranslation,
       apiKey,
+      masterApiKey,
       model,
     } = body;
 
@@ -28,6 +29,7 @@ export async function POST(req: NextRequest) {
       contextHint,
       userTranslation,
       apiKey,
+      masterApiKey,
       model,
     });
 

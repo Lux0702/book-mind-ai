@@ -22,6 +22,8 @@ import {
   Award,
   AlertCircle,
   Check,
+  Layers,
+  Clock,
 } from "lucide-react";
 import {
   Course,
@@ -36,7 +38,9 @@ import {
 import { speakSmart, stopAllSpeech, detectTextLang } from "@/lib/tts";
 import AudioSpeakButton from "./AudioSpeakButton";
 import ExamGeneratingLoader from "./loadings/ExamGeneratingLoader";
+import CustomSelect from "./ui/CustomSelect";
 import { getAppSettings } from "@/lib/storage";
+import { fetchAiAgent } from "@/lib/quotaManager";
 
 interface ExamArenaProps {
   course: Course;
@@ -170,11 +174,15 @@ export default function ExamArena({
   const [speakingScope, setSpeakingScope] = useState<"all" | "vocab" | "sentences">("all");
   const [isSpeakingRecording, setIsSpeakingRecording] = useState(false);
   const [speakingTranscript, setSpeakingTranscript] = useState("");
+  const [speakingAudioBase64, setSpeakingAudioBase64] = useState("");
+  const [speakingAudioMime, setSpeakingAudioMime] = useState("audio/webm");
   const [isEvaluatingSpeech, setIsEvaluatingSpeech] = useState(false);
   const [speechEvaluation, setSpeechEvaluation] = useState<PronunciationEvaluation | null>(null);
   const [speechScores, setSpeechScores] = useState<Record<string, number>>({});
   const [speakingError, setSpeakingError] = useState<string | null>(null);
   const speechRecognitionRef = React.useRef<any>(null);
+  const mediaRecorderRef = React.useRef<MediaRecorder | null>(null);
+  const mediaStreamRef = React.useRef<MediaStream | null>(null);
 
   // Build speaking practice list (Vocab + Sentences from this chapter)
   const speakingItems = useMemo(() => {
@@ -233,12 +241,47 @@ export default function ExamArena({
 
   const currentSpeakingItem = speakingItems[speakingIdx] || speakingItems[0];
 
-  const startSpeakingRecording = () => {
+  const startSpeakingRecording = async () => {
     stopAllSpeech();
     setSpeakingError(null);
     setSpeechEvaluation(null);
     setSpeakingTranscript("");
+    setSpeakingAudioBase64("");
 
+    // 1. Khởi tạo MediaRecorder để thu sóng âm giọng nói thực tế gửi cho Gemini Multimodal Audio
+    if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
+      try {
+        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+        mediaStreamRef.current = stream;
+        const mimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "audio/webm";
+        setSpeakingAudioMime(mimeType.split(";")[0]);
+        const recorder = new MediaRecorder(stream);
+        const chunks: BlobPart[] = [];
+        recorder.ondataavailable = (e) => {
+          if (e.data && e.data.size > 0) chunks.push(e.data);
+        };
+        recorder.onstop = () => {
+          const blob = new Blob(chunks, { type: mimeType });
+          const reader = new FileReader();
+          reader.onloadend = () => {
+            const resStr = String(reader.result || "");
+            const base64 = resStr.includes(",") ? resStr.split(",")[1] : "";
+            if (base64) setSpeakingAudioBase64(base64);
+          };
+          reader.readAsDataURL(blob);
+          stream.getTracks().forEach((t) => t.stop());
+        };
+        mediaRecorderRef.current = recorder;
+        recorder.start();
+        setIsSpeakingRecording(true);
+      } catch {
+        // Fallback nếu chỉ dùng SpeechRecognition
+      }
+    }
+
+    // 2. Khởi tạo Web Speech API để hiển thị chữ trực tiếp khi người dùng đang đọc
     const SpeechRecognition =
       typeof window !== "undefined"
         ? (window as any).SpeechRecognition ||
@@ -246,8 +289,11 @@ export default function ExamArena({
         : null;
 
     if (!SpeechRecognition) {
-      setSpeakingError("Trình duyệt chưa hỗ trợ Web Speech API. Bạn có thể tự gõ văn bản bạn vừa đọc để AI chấm điểm.");
-      setIsSpeakingRecording(true);
+      if (!mediaRecorderRef.current) {
+        setSpeakingError(
+          "Trình duyệt chưa hỗ trợ thu âm trực tiếp. Vui lòng sử dụng Chrome hoặc Edge và cấp quyền Micro."
+        );
+      }
       return;
     }
 
@@ -262,23 +308,29 @@ export default function ExamArena({
       recognition.onstart = () => setIsSpeakingRecording(true);
       recognition.onresult = (event: any) => {
         let transcript = "";
-        for (let i = event.resultIndex; i < event.results.length; i++) {
+        for (let i = 0; i < event.results.length; i++) {
           transcript += event.results[i][0].transcript;
         }
         if (transcript.trim()) setSpeakingTranscript(transcript.trim());
       };
       recognition.onerror = (event: any) => {
-        if (event.error !== "no-speech") {
+        if (event.error !== "no-speech" && event.error !== "aborted") {
           setSpeakingError(`Lỗi mic: ${event.error}`);
         }
       };
-      recognition.onend = () => setIsSpeakingRecording(false);
+      recognition.onend = () => {
+        if (!mediaRecorderRef.current || mediaRecorderRef.current.state === "inactive") {
+          setIsSpeakingRecording(false);
+        }
+      };
 
       speechRecognitionRef.current = recognition;
       recognition.start();
     } catch {
-      setSpeakingError("Không thể kích hoạt Microphone. Vui lòng cho phép quyền truy cập Micro.");
-      setIsSpeakingRecording(false);
+      if (!mediaRecorderRef.current) {
+        setSpeakingError("Không thể kích hoạt Microphone. Vui lòng cho phép quyền truy cập Micro.");
+        setIsSpeakingRecording(false);
+      }
     }
   };
 
@@ -291,13 +343,28 @@ export default function ExamArena({
       }
       speechRecognitionRef.current = null;
     }
+    if (mediaRecorderRef.current && mediaRecorderRef.current.state !== "inactive") {
+      try {
+        mediaRecorderRef.current.stop();
+      } catch {
+        // ignore
+      }
+      mediaRecorderRef.current = null;
+    }
+    if (mediaStreamRef.current) {
+      mediaStreamRef.current.getTracks().forEach((t) => t.stop());
+      mediaStreamRef.current = null;
+    }
     setIsSpeakingRecording(false);
   };
 
   const handleEvaluateSpeaking = async () => {
     stopSpeakingRecording();
-    if (!speakingTranscript.trim() || !currentSpeakingItem) {
-      setSpeakingError("Vui lòng đọc vào Micro trước khi chấm điểm.");
+    // Chờ 250ms để MediaRecorder kịp chuyển đổi Blob sang Base64 nếu người dùng vừa bấm Chấm Điểm ngay khi đang ghi âm
+    await new Promise((r) => setTimeout(r, 250));
+
+    if ((!speakingTranscript.trim() && !speakingAudioBase64) || !currentSpeakingItem) {
+      setSpeakingError("Vui lòng bấm Micro và đọc to rõ ràng trước khi chấm điểm.");
       return;
     }
 
@@ -306,17 +373,15 @@ export default function ExamArena({
     const s = getAppSettings();
 
     try {
-      const res = await fetch("/api/agent/evaluate-pronunciation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          expectedText: currentSpeakingItem.targetText,
-          spokenText: speakingTranscript,
-          language: detectTextLang(currentSpeakingItem.targetText),
-          pinyinOrIpa: currentSpeakingItem.phonetic,
-          apiKey: s.geminiApiKey,
-          model: s.geminiModel,
-        }),
+      const res = await fetchAiAgent("/api/agent/evaluate-pronunciation", {
+        expectedText: currentSpeakingItem.targetText,
+        spokenText: speakingTranscript,
+        audioBase64: speakingAudioBase64 || undefined,
+        audioMimeType: speakingAudioMime,
+        language: detectTextLang(currentSpeakingItem.targetText),
+        pinyinOrIpa: currentSpeakingItem.phonetic,
+        apiKey: s.geminiApiKey,
+        model: s.geminiModel,
       });
 
       const data = await res.json();
@@ -557,17 +622,13 @@ export default function ExamArena({
     setIsEvaluatingTranslation(true);
     try {
       const settings = getAppSettings();
-      const res = await fetch("/api/agent/evaluate-translation", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          originalSentence: currentExamQ.promptText,
-          referenceTranslation: currentExamQ.referenceTranslation || "",
-          contextHint: currentExamQ.subHint || "",
-          userTranslation: userTranslationInput,
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel,
-        }),
+      const res = await fetchAiAgent("/api/agent/evaluate-translation", {
+        originalSentence: currentExamQ.promptText,
+        referenceTranslation: currentExamQ.referenceTranslation || "",
+        contextHint: currentExamQ.subHint || "",
+        userTranslation: userTranslationInput,
+        apiKey: settings.geminiApiKey,
+        model: settings.geminiModel,
       });
       const data = await res.json();
       if (!res.ok || data.error) {
@@ -631,16 +692,12 @@ export default function ExamArena({
         20000
       )}`;
 
-      const res = await fetch("/api/agent/generate-exam", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          courseTitle: course.title,
-          scopeTitle: targetChapter.title,
-          scannedContentAndVocab: combinedPayload,
-          apiKey: settings.geminiApiKey,
-          model: settings.geminiModel,
-        }),
+      const res = await fetchAiAgent("/api/agent/generate-exam", {
+        courseTitle: course.title,
+        scopeTitle: targetChapter.title,
+        scannedContentAndVocab: combinedPayload,
+        apiKey: settings.geminiApiKey,
+        model: settings.geminiModel,
       });
 
       const data = await res.json();
@@ -760,24 +817,27 @@ export default function ExamArena({
             <BookOpen className="h-4 w-4 text-indigo-400" />
             <span>Đang ôn tập & kiểm tra theo Chương:</span>
           </div>
-          <select
-            value={selectedChapterId}
-            onChange={(e) => {
-              setSelectedChapterId(e.target.value);
-              setExamStarted(false);
-              setExamFinished(false);
-              setAiGeneratedExam(null);
-              setQuizIdx(0);
-              setMatchedIds([]);
-            }}
-            className="max-w-md rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs font-semibold text-white focus:border-indigo-500 focus:outline-none"
-          >
-            {course.chapters.map((ch) => (
-              <option key={ch.id} value={ch.id}>
-                Chương {ch.index}: {ch.title}
-              </option>
-            ))}
-          </select>
+          <div className="w-full sm:w-96">
+            <CustomSelect
+              value={selectedChapterId}
+              onChange={(newVal) => {
+                setSelectedChapterId(newVal);
+                setExamStarted(false);
+                setExamFinished(false);
+                setAiGeneratedExam(null);
+                setQuizIdx(0);
+                setMatchedIds([]);
+              }}
+              size="sm"
+              accentColor="indigo"
+              icon={<Layers className="h-3.5 w-3.5" />}
+              options={course.chapters.map((ch) => ({
+                value: ch.id,
+                label: `Chương ${ch.index}: ${ch.title}`,
+                badge: ch.isGenerated ? "Đã soạn" : "Chưa soạn",
+              }))}
+            />
+          </div>
         </div>
 
         {/* 4 Practice & Exam Sub-Tabs */}
@@ -871,7 +931,7 @@ export default function ExamArena({
                   Bài Thi Kiểm Tra: {targetChapter.title}
                 </h3>
                 <p className="mx-auto mt-1 max-w-xl text-xs leading-relaxed text-slate-400">
-                  Bài thi kiểm tra toàn diện <strong>Từ vựng & Ngữ pháp</strong> của chương này (không hỏi các chi tiết hội thoại vụn vặt). Mỗi câu Trắc nghiệm và Điền từ đều có <strong>đồng hồ đếm ngược</strong>; riêng phần <strong>Dịch câu tự luận không giới hạn thời gian</strong>.
+                  Bài thi kiểm tra toàn diện <strong>Từ vựng & Ngữ pháp</strong> của chương này.
                 </p>
               </div>
 
@@ -887,19 +947,24 @@ export default function ExamArena({
                   <span className="text-slate-400">
                     Thời gian trả lời mỗi câu:
                   </span>
-                  <select
-                    value={secondsPerQuestion}
-                    onChange={(e) =>
-                      setSecondsPerQuestion(Number(e.target.value))
-                    }
-                    className="rounded-lg border border-slate-700 bg-slate-900 px-2.5 py-1 font-bold text-amber-300"
-                  >
-                    <option value={15}>15 giây / câu</option>
-                    <option value={20}>20 giây / câu</option>
-                    <option value={30}>30 giây / câu</option>
-                    <option value={45}>45 giây / câu</option>
-                    <option value={60}>60 giây / câu</option>
-                  </select>
+                  <div className="w-40 text-left">
+                    <CustomSelect
+                      value={secondsPerQuestion}
+                      onChange={(newVal) =>
+                        setSecondsPerQuestion(Number(newVal))
+                      }
+                      size="sm"
+                      accentColor="amber"
+                      icon={<Timer className="h-3.5 w-3.5" />}
+                      options={[
+                        { value: 15, label: "15 giây / câu" },
+                        { value: 20, label: "20 giây / câu" },
+                        { value: 30, label: "30 giây / câu" },
+                        { value: 45, label: "45 giây / câu" },
+                        { value: 60, label: "60 giây / câu" },
+                      ]}
+                    />
+                  </div>
                 </div>
               </div>
 
@@ -919,7 +984,7 @@ export default function ExamArena({
                     type="button"
                     disabled={examQuestions.length === 0}
                     onClick={startTimedExam}
-                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40"
+                    className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-emerald-600/20 hover:from-emerald-500 hover:to-teal-500 disabled:opacity-40 cursor-pointer"
                   >
                     <Play className="h-4 w-4" />
                     Bắt Đầu Làm Bài Thi Ngay ({examQuestions.length} câu)
@@ -929,10 +994,10 @@ export default function ExamArena({
                     type="button"
                     disabled={isGeneratingAiExam}
                     onClick={handleGenerateFreshAiExamForChapter}
-                    className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/30 px-5 py-3 text-xs font-bold text-amber-300 hover:bg-amber-900/40 disabled:opacity-50"
+                    className="inline-flex items-center gap-2 rounded-xl border border-amber-500/40 bg-amber-950/30 px-5 py-3 text-xs font-bold text-amber-300 hover:bg-amber-900/40 disabled:opacity-50 cursor-pointer"
                   >
                     <Sparkles className="h-4 w-4" />
-                    🤖 AI Tạo Bộ Đề Thi Mới Tinh Cho Chương Này
+                    AI Tạo Bộ Đề Thi Mới Tinh Cho Chương Này
                   </button>
                 </div>
               )}
@@ -1005,31 +1070,46 @@ export default function ExamArena({
                         {res.question.promptText}
                       </span>
                       <span
-                        className={
+                        className={`inline-flex items-center gap-1 ${
                           res.isCorrect ? "text-emerald-400" : "text-rose-400"
-                        }
+                        }`}
                       >
-                        {res.timedOut
-                          ? "⏰ Hết giờ"
-                          : res.translationScore !== undefined
-                          ? `Điểm dịch AI: ${res.translationScore}%`
-                          : res.isCorrect
-                          ? "✅ Đúng"
-                          : "❌ Sai"}
+                        {res.timedOut ? (
+                          <>
+                            <Clock className="h-3.5 w-3.5" />
+                            <span>Hết giờ</span>
+                          </>
+                        ) : res.translationScore !== undefined ? (
+                          `Điểm dịch AI: ${res.translationScore}%`
+                        ) : res.isCorrect ? (
+                          <>
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            <span>Đúng</span>
+                          </>
+                        ) : (
+                          <>
+                            <XCircle className="h-3.5 w-3.5" />
+                            <span>Sai</span>
+                          </>
+                        )}
                       </span>
                     </div>
                     <p className="text-slate-300">
                       Câu trả lời của bạn: <strong>{res.userAnswerText}</strong>
                     </p>
                     {res.question.explanation && (
-                      <p className="text-indigo-300">
-                        💡 Giải thích: {res.question.explanation}
+                      <p className="flex items-start gap-1.5 text-indigo-300">
+                        <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-indigo-400" />
+                        <span>Giải thích: {res.question.explanation}</span>
                       </p>
                     )}
                     {res.translationEval && (
-                      <p className="text-emerald-300">
-                        🌟 Bản dịch gợi ý:{" "}
-                        {res.translationEval.suggestedTranslation}
+                      <p className="flex items-start gap-1.5 text-emerald-300">
+                        <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5 text-emerald-400" />
+                        <span>
+                          Bản dịch gợi ý:{" "}
+                          {res.translationEval.suggestedTranslation}
+                        </span>
                       </p>
                     )}
                   </div>
@@ -1106,8 +1186,9 @@ export default function ExamArena({
                   />
                 </div>
                 {currentExamQ.subHint && (
-                  <p className="text-xs text-amber-300/90">
-                    💡 {currentExamQ.subHint}
+                  <p className="flex items-center gap-1.5 text-xs text-amber-300/90">
+                    <Lightbulb className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                    <span>{currentExamQ.subHint}</span>
                   </p>
                 )}
               </div>
@@ -1231,8 +1312,11 @@ export default function ExamArena({
                   )}
 
                   {currentExamQ.explanation && (
-                    <p className="text-xs text-slate-300">
-                      💡 <strong>Giải thích:</strong> {currentExamQ.explanation}
+                    <p className="flex items-start gap-1.5 text-xs text-slate-300">
+                      <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-amber-400" />
+                      <span>
+                        <strong>Giải thích:</strong> {currentExamQ.explanation}
+                      </span>
                     </p>
                   )}
 
@@ -1247,9 +1331,12 @@ export default function ExamArena({
                         % • Ngữ pháp:{" "}
                         {currentTranslationEval.grammarAndStructure}%)
                       </div>
-                      <p className="text-emerald-300">
-                        🌟 Bản dịch gợi ý:{" "}
-                        {currentTranslationEval.suggestedTranslation}
+                      <p className="flex items-start gap-1.5 text-emerald-300">
+                        <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5 text-emerald-400" />
+                        <span>
+                          Bản dịch gợi ý:{" "}
+                          {currentTranslationEval.suggestedTranslation}
+                        </span>
                       </p>
                     </div>
                   )}
@@ -1833,14 +1920,17 @@ export default function ExamArena({
                   {/* Submit to AI button */}
                   <button
                     type="button"
-                    disabled={isEvaluatingSpeech || !speakingTranscript.trim()}
+                    disabled={
+                      isEvaluatingSpeech ||
+                      (!speakingTranscript.trim() && !speakingAudioBase64)
+                    }
                     onClick={handleEvaluateSpeaking}
-                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 text-xs font-bold text-white shadow-md hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 transition"
+                    className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-3 text-xs font-bold text-white shadow-md hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40 transition cursor-pointer"
                   >
                     {isEvaluatingSpeech ? (
                       <>
                         <Loader2 className="h-4 w-4 animate-spin" />
-                        <span>AI đang phân tích khẩu âm & ngữ điệu...</span>
+                        <span>AI đang nghe giọng & phân tích khẩu âm...</span>
                       </>
                     ) : (
                       <>
@@ -1851,27 +1941,52 @@ export default function ExamArena({
                   </button>
                 </div>
 
-                {/* Real-time transcript feedback */}
+                {/* Real-time transcript feedback (Read-Only: chỉ hiển thị chữ thu từ Micro, không cho nhập/chỉnh sửa bằng bàn phím) */}
                 <div className="space-y-1.5">
                   <div className="flex items-center justify-between text-xs text-slate-400">
-                    <span>Âm thanh ghi nhận được từ micro của bạn:</span>
-                    {speakingTranscript && (
+                    <span className="flex items-center gap-2">
+                      <span>Âm thanh ghi nhận được từ micro của bạn:</span>
+                      <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-semibold text-slate-400">
+                        Chỉ nhận giọng đọc từ Micro • Không cho gõ phím
+                      </span>
+                    </span>
+                    {(speakingTranscript || speakingAudioBase64) && (
                       <button
                         type="button"
-                        onClick={() => setSpeakingTranscript("")}
-                        className="text-slate-500 hover:text-slate-300"
+                        onClick={() => {
+                          setSpeakingTranscript("");
+                          setSpeakingAudioBase64("");
+                        }}
+                        className="text-slate-500 hover:text-slate-300 cursor-pointer"
                       >
-                        Xóa bản ghi
+                        Thu âm lại
                       </button>
                     )}
                   </div>
-                  <textarea
-                    rows={2}
-                    value={speakingTranscript}
-                    onChange={(e) => setSpeakingTranscript(e.target.value)}
-                    placeholder="Bấm nút micro ở trên và đọc to rõ ràng. Lời đọc của bạn sẽ hiển thị tự động tại đây..."
-                    className="w-full rounded-xl border border-slate-800 bg-slate-900/90 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
-                  />
+                  <div
+                    aria-readonly="true"
+                    className={`min-h-[64px] w-full rounded-xl border px-4 py-3 text-sm select-none cursor-default transition ${
+                      isSpeakingRecording
+                        ? "border-emerald-500/50 bg-slate-900/95 text-white shadow-inner"
+                        : speakingTranscript
+                        ? "border-indigo-500/40 bg-slate-900/90 text-white"
+                        : "border-slate-800 bg-slate-900/70 text-slate-500"
+                    }`}
+                  >
+                    {speakingTranscript ? (
+                      <p className="font-medium leading-relaxed text-white">
+                        {speakingTranscript}
+                      </p>
+                    ) : isSpeakingRecording ? (
+                      <p className="italic text-emerald-300 animate-pulse">
+                        Đang thu sóng âm giọng đọc của bạn qua Micro... Hãy đọc to và rõ ràng!
+                      </p>
+                    ) : (
+                      <p className="text-slate-500">
+                        Bấm nút micro ở trên và đọc to rõ ràng. Lời đọc của bạn sẽ tự động chạy chữ tại đây (không cho phép gõ văn bản thủ công)...
+                      </p>
+                    )}
+                  </div>
                 </div>
 
                 {speakingError && (
@@ -2003,8 +2118,9 @@ export default function ExamArena({
                           ))}
                         </div>
                       ) : (
-                        <p className="text-xs text-emerald-300 font-semibold">
-                          🎉 Tuyệt vời! Không có từ nào bị phát âm sai!
+                        <p className="flex items-center gap-1.5 text-xs text-emerald-300 font-semibold">
+                          <CheckCircle2 className="h-4 w-4 text-emerald-400 shrink-0" />
+                          <span>Tuyệt vời! Không có từ nào bị phát âm sai!</span>
                         </p>
                       )}
                     </div>
