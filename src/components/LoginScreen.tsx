@@ -129,7 +129,19 @@ export default function LoginScreen({
 
       <div className="relative z-10 w-full max-w-md mx-auto">
         {/* Brand Header */}
-        <div className="text-center mb-8">
+        <div className="text-center mb-6 relative">
+          <div className="absolute right-0 top-0">
+            <button
+              type="button"
+              onClick={onOpenSettings}
+              className="flex items-center gap-1.5 px-3 py-1.5 rounded-xl border border-slate-800/90 bg-slate-900/80 hover:bg-slate-800 text-xs text-slate-300 hover:text-white transition cursor-pointer shadow-sm"
+              title="Cài đặt Supabase & Mô hình AI"
+            >
+              <Settings className="h-3.5 w-3.5 text-indigo-400" />
+              <span className="hidden sm:inline">Cài đặt</span>
+            </button>
+          </div>
+
           <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 text-white shadow-xl shadow-indigo-500/25 ring-1 ring-white/20 mb-4 animate-in fade-in zoom-in duration-300">
             <BookOpen className="h-7 w-7" />
           </div>
@@ -156,10 +168,23 @@ export default function LoginScreen({
             </div>
           )}
 
-          {/* Error Banner */}
+          {/* Error Banner with Quick Action */}
           {errorMessage && (
-            <div className="mb-5 rounded-xl border border-rose-500/30 bg-rose-950/40 p-3.5 text-xs text-rose-300 leading-relaxed">
-              {errorMessage}
+            <div className="mb-5 rounded-2xl border border-rose-500/40 bg-rose-950/40 p-4 text-xs text-rose-200 leading-relaxed space-y-2.5">
+              <div className="flex items-start gap-2">
+                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                <div>{errorMessage}</div>
+              </div>
+              <div className="flex items-center gap-2 pt-1 border-t border-rose-500/20">
+                <button
+                  type="button"
+                  onClick={onOpenSettings}
+                  className="flex items-center gap-1.5 rounded-xl bg-rose-500/20 hover:bg-rose-500/30 border border-rose-500/40 px-3 py-1.5 text-xs font-bold text-rose-200 transition cursor-pointer"
+                >
+                  <Settings className="h-3.5 w-3.5 text-rose-300" />
+                  <span>Mở Cài Đặt để nhập Supabase Key</span>
+                </button>
+              </div>
             </div>
           )}
 
