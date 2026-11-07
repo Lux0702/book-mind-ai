@@ -22,8 +22,8 @@ const TRANSACTIONS_STORAGE_KEY = "book_agent_payment_tx_v1";
 const AI_USAGE_LOGS_STORAGE_KEY = "book_agent_ai_usage_logs_v1";
 
 export const VIP_FUP_DAILY_CREDITS = 500; // Fair Usage Policy cho gói VIP Unlimited (500 Credits/ngày)
-export const MAX_REQUESTS_PER_MINUTE = 10; // Rate limit chống spam
-export const MAX_CONCURRENT_REQUESTS = 2; // Tối đa 2 request xử lý đồng thời / tài khoản
+export const MAX_REQUESTS_PER_MINUTE = 30; // Rate limit chống spam (hỗ trợ cả micro-batch OCR)
+export const MAX_CONCURRENT_REQUESTS = 3; // Tối đa 3 request xử lý đồng thời / tài khoản
 
 export interface AiTaskCreditConfig {
   endpoint: string;
@@ -34,6 +34,13 @@ export interface AiTaskCreditConfig {
 }
 
 export const AI_TASK_CREDITS: Record<string, AiTaskCreditConfig> = {
+  "/api/agent/ocr-pages": {
+    endpoint: "/api/agent/ocr-pages",
+    taskLabel: "Quét chữ OCR từ trang ảnh PDF",
+    credits: 0,
+    costTier: "Thấp",
+    description: "Trích xuất văn bản từ hình ảnh trang sách (hỗ trợ tiền xử lý miễn phí Credit)",
+  },
   "/api/agent/lookup-word": {
     endpoint: "/api/agent/lookup-word",
     taskLabel: "Tra từ điển 1 chạm",
@@ -75,6 +82,13 @@ export const AI_TASK_CREDITS: Record<string, AiTaskCreditConfig> = {
     credits: 3,
     costTier: "Trung bình",
     description: "Sinh câu hỏi trắc nghiệm, điền từ và tự luận theo chương",
+  },
+  "/api/agent/supplement-exercises": {
+    endpoint: "/api/agent/supplement-exercises",
+    taskLabel: "Tạo bổ sung bài tập Điền từ, Trắc nghiệm & Luyện dịch",
+    credits: 2,
+    costTier: "Trung bình",
+    description: "Bổ sung thêm câu hỏi Cloze, Trắc nghiệm và Luyện dịch vào chương hiện tại (không mất dữ liệu cũ)",
   },
   "/api/agent/evaluate-translation": {
     endpoint: "/api/agent/evaluate-translation",
@@ -677,18 +691,20 @@ export async function sendAndStoreApiKeyEmail(params: {
 
   try {
     const settings = getAppSettings();
-    const res = await fetch("/api/auth/send-key-email", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        ...params,
-        subject,
-        resendApiKey: settings.resendApiKey,
-      }),
-    });
-    if (res.ok) {
-      const data = await res.json();
-      realEmailSent = Boolean(data.sentViaProvider);
+    if (settings.resendApiKey && settings.resendApiKey.trim().length > 5) {
+      const res = await fetch("/api/auth/send-key-email", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          ...params,
+          subject,
+          resendApiKey: settings.resendApiKey,
+        }),
+      });
+      if (res.ok) {
+        const data = await res.json();
+        realEmailSent = Boolean(data.sentViaProvider);
+      }
     }
   } catch {
     // Fallback an toàn vào thông báo hệ thống
@@ -779,14 +795,24 @@ function computeIdempotencyKey(endpoint: string, payload: Record<string, unknown
  * Đồng bộ dữ liệu hạn mức từ bảng `public.user_quotas` trên Supabase Cloud
  * Chống việc học viên dùng F12 DevTools sửa `localStorage` để nâng gói hoặc xóa `usedCalls = 0`
  */
+const lastQuotaCloudSyncMap = new Map<string, number>();
+const QUOTA_CLOUD_SYNC_TTL_MS = 90_000;
+
 async function syncAccountFromSupabaseCloud(
-  account: UserQuotaAccount
+  account: UserQuotaAccount,
+  forceRefresh = false
 ): Promise<UserQuotaAccount> {
   const supabase = getSupabaseClient();
   if (!supabase || !account.email) return account;
 
+  const cleanEmail = account.email.trim().toLowerCase();
+  const lastSync = lastQuotaCloudSyncMap.get(cleanEmail) || 0;
+  if (!forceRefresh && Date.now() - lastSync < QUOTA_CLOUD_SYNC_TTL_MS) {
+    return account;
+  }
+  lastQuotaCloudSyncMap.set(cleanEmail, Date.now());
+
   try {
-    const cleanEmail = account.email.trim().toLowerCase();
     const { data, error } = await supabase
       .from("user_quotas")
       .select("*")
@@ -972,18 +998,18 @@ export async function fetchAiAgent(
     );
   }
 
-  // 6. Thực thi gọi AI kèm Timeout (35s) + Retry Exponential Backoff (tối đa 2 lần) + Auto-Refund nếu lỗi
+  // 6. Thực thi gọi AI kèm Timeout (120s) + Retry Exponential Backoff (tối đa 1 lần cho lỗi mạng) + Auto-Refund nếu lỗi
   const executeWithRetry = async (): Promise<Response> => {
     activeConcurrencyCount++;
     const startTime = Date.now();
     let attempt = 0;
-    const maxRetries = 2;
+    const maxRetries = 1;
     let lastErrorText = "Lỗi kết nối hoặc xử lý AI";
 
     try {
       while (attempt <= maxRetries) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 35_000);
+        const timeoutId = setTimeout(() => controller.abort(), 120_000);
 
         try {
           const authHeaders = await getSessionAuthHeaders();
@@ -997,7 +1023,14 @@ export async function fetchAiAgent(
             body: JSON.stringify({
               ...payload,
               apiKey: account.issuedApiKey,
-              masterApiKey: settings.masterGeminiApiKey || "",
+              masterApiKey: [
+                settings.masterGeminiApiKey,
+                settings.groqApiKey,
+                settings.openRouterApiKey,
+                settings.siliconFlowApiKey,
+              ]
+                .filter(Boolean)
+                .join(","),
               model: payload.model || settings.geminiModel,
             }),
             signal: controller.signal,
@@ -1078,7 +1111,9 @@ export async function fetchAiAgent(
         } catch (err: unknown) {
           clearTimeout(timeoutId);
           if (err instanceof Error && err.name === "AbortError") {
-            lastErrorText = "Yêu cầu xử lý AI vượt quá thời gian chờ (Timeout 35s)";
+            lastErrorText =
+              "Yêu cầu xử lý AI vượt quá thời gian chờ (Timeout 120s). Vui lòng thử lại hoặc rút ngắn nội dung văn bản gốc của chương.";
+            break;
           } else {
             lastErrorText =
               err instanceof Error ? err.message : "Mất kết nối mạng khi gọi AI";
@@ -1300,7 +1335,7 @@ export interface AdminRoleVerificationResult {
   reason: string;
 }
 
-const ADMIN_ROLE_CACHE_TTL_MS = 30_000;
+const ADMIN_ROLE_CACHE_TTL_MS = 300_000;
 let cachedAdminVerification: {
   userKey: string;
   fetchedAt: number;

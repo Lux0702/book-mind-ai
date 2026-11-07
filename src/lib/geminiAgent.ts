@@ -6,10 +6,34 @@ import {
 } from "@/types/course";
 import { verifyVirtualApiKey } from "@/lib/quotaManager";
 
-function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
+const DEFAULT_GROQ_KEY =
+  process.env.GROQ_API_KEY ||
+  process.env.NEXT_PUBLIC_GROQ_API_KEY ||
+  "";
+
+const DEFAULT_OPENROUTER_KEY =
+  process.env.OPENROUTER_API_KEY ||
+  process.env.NEXT_PUBLIC_OPENROUTER_API_KEY ||
+  "";
+
+const DEFAULT_SILICONFLOW_KEY =
+  process.env.SILICONFLOW_API_KEY ||
+  process.env.NEXT_PUBLIC_SILICONFLOW_API_KEY ||
+  "";
+
+interface ProviderKeysPool {
+  geminiKeys: string[];
+  groqKeys: string[];
+  openRouterKeys: string[];
+  siliconFlowKeys: string[];
+}
+
+function extractProviderKeysPool(
+  customApiKey?: string,
+  masterApiKey?: string
+): ProviderKeysPool {
   const inputKey = customApiKey?.trim() || "";
 
-  // Nếu người dùng truyền mã BookMind Virtual Key (BM-FREE-..., BM-PRO-..., BM-VIP-...)
   if (inputKey.toUpperCase().startsWith("BM-")) {
     const check = verifyVirtualApiKey(inputKey);
     if (!check.valid) {
@@ -17,38 +41,450 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
         "Mã BookMind API Key không hợp lệ hoặc bị sai chữ ký. Vui lòng kiểm tra lại mã Key trong Email của bạn!"
       );
     }
+  }
 
-    const resolvedMasterKey =
-      masterApiKey?.trim() ||
-      process.env.MASTER_GEMINI_API_KEY ||
-      process.env.GEMINI_API_KEY ||
-      process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
-      "";
+  const rawSources = [
+    !inputKey.toUpperCase().startsWith("BM-") ? inputKey : "",
+    masterApiKey?.trim() || "",
+    process.env.MASTER_GEMINI_API_KEY || "",
+    process.env.GEMINI_API_KEY || "",
+    process.env.NEXT_PUBLIC_GEMINI_API_KEY || "",
+    DEFAULT_GROQ_KEY,
+    DEFAULT_OPENROUTER_KEY,
+    DEFAULT_SILICONFLOW_KEY,
+  ];
 
-    if (!resolvedMasterKey) {
-      throw new Error(
-        "Hệ thống đã xác nhận Mã BookMind API Key hợp lệ, nhưng Chủ hệ thống (Admin) chưa nhập Master Google Gemini API Key (AIzaSy...). Hãy mở 'Cài đặt API & Cloud -> Mục Quản trị Chủ Web' để nhập Master Gemini Key hoặc cấu hình GEMINI_API_KEY trong .env!"
-      );
+  const geminiKeys: string[] = [];
+  const groqKeys: string[] = [];
+  const openRouterKeys: string[] = [];
+  const siliconFlowKeys: string[] = [];
+
+  for (const src of rawSources) {
+    if (!src) continue;
+    const parts = src
+      .split(/[,;\n\r]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 10 && !s.toUpperCase().startsWith("BM-"));
+
+    for (const p of parts) {
+      if (p.startsWith("AIza")) {
+        if (!geminiKeys.includes(p)) geminiKeys.push(p);
+      } else if (p.startsWith("gsk_")) {
+        if (!groqKeys.includes(p)) groqKeys.push(p);
+      } else if (p.startsWith("sk-or-")) {
+        if (!openRouterKeys.includes(p)) openRouterKeys.push(p);
+      } else if (p.startsWith("sk-")) {
+        if (!siliconFlowKeys.includes(p)) siliconFlowKeys.push(p);
+      }
+    }
+  }
+
+  return { geminiKeys, groqKeys, openRouterKeys, siliconFlowKeys };
+}
+
+function schemaToJsonBlueprint(schema?: Schema): unknown {
+  if (!schema) return {};
+  if (schema.type === Type.OBJECT && schema.properties) {
+    const obj: Record<string, unknown> = {};
+    for (const [k, propSchema] of Object.entries(schema.properties)) {
+      obj[k] = schemaToJsonBlueprint(propSchema);
+    }
+    return obj;
+  }
+  if (schema.type === Type.ARRAY && schema.items) {
+    return [schemaToJsonBlueprint(schema.items)];
+  }
+  if (schema.type === Type.INTEGER || schema.type === Type.NUMBER) {
+    return 1;
+  }
+  if (schema.type === Type.BOOLEAN) {
+    return true;
+  }
+  if (schema.enum && schema.enum.length > 0) {
+    return schema.enum[0];
+  }
+  return "string";
+}
+
+function extractPromptAndImagesFromContents(contents: unknown): {
+  promptText: string;
+  imagesBase64: string[];
+} {
+  if (typeof contents === "string") {
+    return { promptText: contents, imagesBase64: [] };
+  }
+  const textParts: string[] = [];
+  const imagesBase64: string[] = [];
+
+  if (Array.isArray(contents)) {
+    for (const item of contents) {
+      if (typeof item === "string") {
+        textParts.push(item);
+      } else if (item && typeof item === "object") {
+        const obj = item as Record<string, any>;
+        if (typeof obj.text === "string") {
+          textParts.push(obj.text);
+        } else if (obj.inlineData?.data && String(obj.inlineData?.mimeType || "").startsWith("image/")) {
+          imagesBase64.push(String(obj.inlineData.data));
+        } else if (Array.isArray(obj.parts)) {
+          for (const part of obj.parts) {
+            if (typeof part?.text === "string") textParts.push(part.text);
+            if (part?.inlineData?.data && String(part?.inlineData?.mimeType || "").startsWith("image/")) {
+              imagesBase64.push(String(part.inlineData.data));
+            }
+          }
+        }
+      }
+    }
+  }
+  return { promptText: textParts.join("\n\n"), imagesBase64 };
+}
+
+function cleanAiResponseText(raw: string, expectJson: boolean): string {
+  // Strip <think>...</think> reasoning blocks emitted by Qwen3 / QwQ
+  let cleaned = raw.replace(/<think>[\s\S]*?<\/think>/gi, "").trim();
+  if (!expectJson) return cleaned;
+
+  cleaned = cleaned
+    .replace(/^```(?:json)?\s*/i, "")
+    .replace(/\s*```$/i, "")
+    .trim();
+
+  const firstBrace = cleaned.indexOf("{");
+  const lastBrace = cleaned.lastIndexOf("}");
+  if (firstBrace !== -1 && lastBrace > firstBrace) {
+    cleaned = cleaned.slice(firstBrace, lastBrace + 1);
+  }
+  return cleaned;
+}
+
+async function callOpenAiCompatibleEndpoint(params: {
+  endpointUrl: string;
+  apiKey: string;
+  model: string;
+  promptText: string;
+  imagesBase64: string[];
+  responseSchema?: Schema;
+  temperature?: number;
+}): Promise<string> {
+  const expectJson = Boolean(params.responseSchema);
+  const isGroq = params.endpointUrl.includes("groq.com");
+  // Groq Free Tier enforces (prompt_tokens + max_tokens <= 8,000).
+  // Keeping prompt <= 7,500 chars (~2,000 tokens) + max_tokens = 3,800 (~5,800 total) guarantees Groq NEVER rejects with 413/429 TPM!
+  let fullUserPrompt = isGroq
+    ? params.promptText.slice(0, 7500)
+    : params.promptText.slice(0, 16000);
+
+  if (expectJson && params.responseSchema) {
+    const blueprint = JSON.stringify(
+      schemaToJsonBlueprint(params.responseSchema)
+    );
+    fullUserPrompt += `\n\n⚠️ YÊU CẦU ĐỊNH DẠNG JSON BẮT BUỘC:
+Trả về DUY NHẤT 1 đối tượng JSON hợp lệ (không dùng <think>, không markdown). BẮT BUỘC có đủ tất cả các trường và mảng (overview, contentAnalysis, grammarPoints, vocabulary, clozeExercises, quizExercises, translationExercises) theo mẫu:
+${blueprint}`;
+  }
+
+  const supportsVision =
+    params.model.toLowerCase().includes("vl") ||
+    params.model.toLowerCase().includes("vision") ||
+    params.model === "openrouter/free";
+
+  const userContent =
+    params.imagesBase64.length > 0 && supportsVision
+      ? [
+          { type: "text", text: fullUserPrompt },
+          ...params.imagesBase64.slice(0, 10).map((b64) => ({
+            type: "image_url",
+            image_url: { url: `data:image/jpeg;base64,${b64}` },
+          })),
+        ]
+      : fullUserPrompt;
+
+  const headers: Record<string, string> = {
+    "Content-Type": "application/json",
+    Authorization: `Bearer ${params.apiKey}`,
+  };
+
+  if (params.endpointUrl.includes("openrouter.ai")) {
+    headers["HTTP-Referer"] = "https://book-mind-ai-bice.vercel.app";
+    headers["X-Title"] = "BookMind AI";
+  }
+
+  const bodyPayload: Record<string, unknown> = {
+    model: params.model,
+    messages: [
+      {
+        role: "system",
+        content: expectJson
+          ? "You are a multilingual educational AI assistant. Respond ONLY with a valid, compact JSON object matching the requested schema. Keep explanations concise (1-2 sentences) so all arrays (including clozeExercises, quizExercises, translationExercises) are completely generated."
+          : "You are a helpful multilingual educational AI assistant.",
+      },
+      {
+        role: "user",
+        content: userContent,
+      },
+    ],
+    temperature: params.temperature ?? 0.25,
+  };
+
+  // IMPORTANT: Do NOT set max_tokens on Groq Free Tier because Groq checks (max_tokens <= 1000 OTPM) upfront when max_tokens is specified!
+  // Omitting max_tokens on Groq allows openai/gpt-oss-120b and gpt-oss-20b to stream 2,800+ tokens in 6 seconds without 429 OTPM errors.
+  if (!isGroq) {
+    bodyPayload.max_tokens = 4500;
+  }
+
+  if (isGroq && params.model.toLowerCase().includes("qwen")) {
+    bodyPayload.reasoning_effort = "none";
+  }
+
+  if (expectJson && isGroq && !supportsVision) {
+    bodyPayload.response_format = { type: "json_object" };
+  }
+
+  // Per-provider attempt timeout (18s) so a slow upstream never hangs the whole chain
+  const attemptController = new AbortController();
+  const attemptTimer = setTimeout(() => attemptController.abort(), 18_000);
+
+  let res: Response;
+  try {
+    res = await fetch(params.endpointUrl, {
+      method: "POST",
+      headers,
+      body: JSON.stringify(bodyPayload),
+      signal: attemptController.signal,
+    });
+  } finally {
+    clearTimeout(attemptTimer);
+  }
+
+  const rawBody = await res.text();
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${rawBody.slice(0, 300)}`);
+  }
+
+  const data = JSON.parse(rawBody);
+  const content = data?.choices?.[0]?.message?.content || "";
+  if (!content) {
+    throw new Error("Empty response from AI provider");
+  }
+
+  const cleaned = cleanAiResponseText(String(content), expectJson);
+  if (expectJson) {
+    // Validate JSON right here so if truncated/invalid, failover triggers automatically
+    JSON.parse(cleaned);
+  }
+  return cleaned;
+}
+
+const GEMINI_FALLBACK_MODELS = [
+  "gemini-2.5-flash",
+  "gemini-2.5-flash-lite",
+  "gemini-2.0-flash",
+];
+
+function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
+  const pool = extractProviderKeysPool(customApiKey, masterApiKey);
+  const dummyOrFirstGeminiKey =
+    pool.geminiKeys[0] || "AIzaSyDummyKeyForQwenFallbackMode";
+  const primaryClient = new GoogleGenAI({ apiKey: dummyOrFirstGeminiKey });
+
+  const originalGenerateContent = primaryClient.models.generateContent.bind(
+    primaryClient.models
+  );
+
+  // Unified 4-Provider AI Router (Google Gemini + Groq Qwen + OpenRouter Qwen + SiliconFlow Qwen)
+  primaryClient.models.generateContent = async (
+    params: Parameters<typeof originalGenerateContent>[0]
+  ) => {
+    const requestedModel = (params.model || "gemini-2.5-flash").trim();
+    const { promptText, imagesBase64 } = extractPromptAndImagesFromContents(
+      params.contents
+    );
+    const hasImages = imagesBase64.length > 0;
+    const responseSchema = params.config?.responseSchema as Schema | undefined;
+    const temperature = params.config?.temperature;
+
+    type ProviderAttempt = () => Promise<string>;
+    const attempts: ProviderAttempt[] = [];
+
+    const addGroqAttempts = () => {
+      for (const gKey of pool.groqKeys) {
+        // Put openai/gpt-oss-120b and openai/gpt-oss-20b first as they support 3,000+ output tokens in 6s on Groq Free Tier
+        const groqModels = [
+          "openai/gpt-oss-120b",
+          "openai/gpt-oss-20b",
+          "qwen/qwen3.8-27b",
+        ];
+        for (const m of groqModels) {
+          attempts.push(() =>
+            callOpenAiCompatibleEndpoint({
+              endpointUrl: "https://api.groq.com/openai/v1/chat/completions",
+              apiKey: gKey,
+              model: m,
+              promptText,
+              imagesBase64,
+              responseSchema,
+              temperature,
+            })
+          );
+        }
+      }
+    };
+
+    const addOpenRouterAttempts = () => {
+      for (const orKey of pool.openRouterKeys) {
+        const orModels = hasImages
+          ? ["nvidia/nemotron-3.5-super-vl:free", "openrouter/free"]
+          : ["openrouter/free", "nvidia/nemotron-3.5-super-vl:free"];
+        for (const m of orModels) {
+          attempts.push(() =>
+            callOpenAiCompatibleEndpoint({
+              endpointUrl: "https://openrouter.ai/api/v1/chat/completions",
+              apiKey: orKey,
+              model: m,
+              promptText,
+              imagesBase64,
+              responseSchema,
+              temperature,
+            })
+          );
+        }
+      }
+    };
+
+    const addSiliconFlowAttempts = () => {
+      for (const sfKey of pool.siliconFlowKeys) {
+        const sfModels = hasImages
+          ? ["Qwen/Qwen3-VL-8B-Instruct", "Qwen/Qwen3.8-27B"]
+          : ["Qwen/Qwen3.8-27B", "Qwen/Qwen2.5-7B-Instruct"];
+        for (const m of sfModels) {
+          attempts.push(() =>
+            callOpenAiCompatibleEndpoint({
+              endpointUrl: "https://api.siliconflow.com/v1/chat/completions",
+              apiKey: sfKey,
+              model: m,
+              promptText,
+              imagesBase64,
+              responseSchema,
+              temperature,
+            })
+          );
+        }
+      }
+    };
+
+    const addGeminiAttempts = (preferredGeminiModel?: string) => {
+      if (pool.geminiKeys.length === 0) return;
+      const startModel =
+        preferredGeminiModel && preferredGeminiModel.startsWith("gemini-")
+          ? preferredGeminiModel
+          : "gemini-2.5-flash";
+      const modelChain = [
+        startModel,
+        ...GEMINI_FALLBACK_MODELS.filter((m) => m !== startModel),
+      ];
+
+      for (const apiKey of pool.geminiKeys) {
+        const clientForKey =
+          apiKey === pool.geminiKeys[0]
+            ? primaryClient
+            : new GoogleGenAI({ apiKey });
+        const genFn =
+          apiKey === pool.geminiKeys[0]
+            ? originalGenerateContent
+            : clientForKey.models.generateContent.bind(clientForKey.models);
+
+        for (const candidateModel of modelChain) {
+          attempts.push(async () => {
+            const clonedConfig = params.config
+              ? { ...params.config }
+              : undefined;
+            if (
+              clonedConfig &&
+              "thinkingConfig" in clonedConfig &&
+              !candidateModel.startsWith("gemini-2.5")
+            ) {
+              delete (clonedConfig as Record<string, unknown>).thinkingConfig;
+            }
+            const res = await genFn({
+              ...params,
+              model: candidateModel,
+              config: clonedConfig,
+            });
+            if (!res.text) {
+              throw new Error("Empty response from Gemini");
+            }
+            return res.text;
+          });
+        }
+      }
+    };
+
+    // Order attempts based on whether the request requires Vision (hasImages) and the user's selected provider
+    // IMPORTANT: Groq models (gpt-oss-120b, gpt-oss-20b, qwen3.8-27b) are TEXT-ONLY.
+    // Whenever hasImages === true (e.g. TOC Vision scan, PDF page OCR, image lesson scan), we MUST prioritize Vision-capable providers (OpenRouter Nemotron-VL & Gemini Vision) first!
+    if (hasImages) {
+      if (
+        !requestedModel.startsWith("qwen-") &&
+        pool.geminiKeys.length > 0
+      ) {
+        addGeminiAttempts(requestedModel);
+        addOpenRouterAttempts();
+        addSiliconFlowAttempts();
+      } else {
+        addOpenRouterAttempts();
+        addGeminiAttempts(requestedModel);
+        addSiliconFlowAttempts();
+      }
+      // Only fall back to text-only Groq if promptText itself has substantial text (> 800 chars)
+      if (promptText.trim().length > 800) {
+        addGroqAttempts();
+      }
+    } else if (requestedModel.startsWith("qwen-groq")) {
+      addGroqAttempts();
+      addSiliconFlowAttempts();
+      addOpenRouterAttempts();
+      addGeminiAttempts();
+    } else if (requestedModel.startsWith("qwen-openrouter")) {
+      addOpenRouterAttempts();
+      addGroqAttempts();
+      addSiliconFlowAttempts();
+      addGeminiAttempts();
+    } else if (requestedModel.startsWith("qwen-siliconflow")) {
+      addSiliconFlowAttempts();
+      addGroqAttempts();
+      addOpenRouterAttempts();
+      addGeminiAttempts();
+    } else {
+      // User selected Gemini -> Run Gemini first, and if Quota Exceeded (429), automatically failover to Groq -> SiliconFlow -> OpenRouter!
+      addGeminiAttempts(requestedModel);
+      addGroqAttempts();
+      addSiliconFlowAttempts();
+      addOpenRouterAttempts();
     }
 
-    return new GoogleGenAI({ apiKey: resolvedMasterKey });
-  }
+    let lastError: unknown = null;
+    for (const attemptFn of attempts) {
+      try {
+        const resultText = await attemptFn();
+        return {
+          text: resultText,
+        } as Awaited<ReturnType<typeof originalGenerateContent>>;
+      } catch (err: unknown) {
+        lastError = err;
+        // Continue to next provider/model in the failover chain!
+      }
+    }
 
-  // Fallback nếu truyền trực tiếp key Google hoặc biến môi trường
-  const directKey =
-    inputKey ||
-    masterApiKey?.trim() ||
-    process.env.MASTER_GEMINI_API_KEY ||
-    process.env.GEMINI_API_KEY ||
-    process.env.NEXT_PUBLIC_GEMINI_API_KEY ||
-    "";
-
-  if (!directKey) {
-    throw new Error(
-      "Chưa kích hoạt BookMind API Key. Vui lòng kiểm tra Hộp thư Email (góc phải trên cùng) để lấy mã API Key được cấp khi đăng ký và nhập vào mục Kích hoạt API Key!"
+    throw (
+      lastError ||
+      new Error(
+        "Tất cả các cổng AI (Gemini, Groq, OpenRouter, SiliconFlow) đều đang bận. Vui lòng thử lại sau giây lát!"
+      )
     );
-  }
-  return new GoogleGenAI({ apiKey: directKey });
+  };
+
+  return primaryClient;
 }
 
 const CHAPTER_LESSON_SCHEMA: Schema = {
@@ -447,44 +883,46 @@ export async function generateChapterLessonWithAI(params: {
   const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
-  // Limit text per single chapter call to ~35,000 chars (~8,000 words) for fast & deep response
-  const trimmedText = params.chapterText.slice(0, 35000);
+  // Limit text per single chapter call to ~26,000 chars for fast response without timeout
+  const trimmedText = params.chapterText.slice(0, 26000);
+
+  const hasVisionImages =
+    Array.isArray(params.pageImagesBase64) &&
+    params.pageImagesBase64.length > 0;
 
   const prompt = `Bạn là một Giáo sư Ngôn ngữ học & Gia sư Đọc hiểu Sách chuyên sâu (Multilingual Book Tutor Agent - hỗ trợ sách Tiếng Anh, Tiếng Trung 繁體/簡體 Pinyin, Tiếng Nhật, Tiếng Hàn...).
 Hãy phân tích toàn diện chương sách dưới đây thuộc cuốn sách "${params.courseTitle}" và tạo ra bài học cực kỳ chi tiết bằng tiếng Việt để người học vừa nắm trọn vẹn nội dung cuốn sách, vừa giỏi từ vựng, ngữ pháp và kỹ năng dịch thuật.
-(Nếu có hình ảnh trang sách đính kèm do PDF dạng scan, hãy đọc kỹ toàn bộ chữ trên các trang ảnh đó để soạn bài).
+${
+  hasVisionImages
+    ? `\n⚠️ CHÚ Ý ĐẶC BIỆT (CHẾ ĐỘ HYBRID PDF - VỪA CÓ CHỮ VỪA CÓ ẢNH):
+File PDF này có phần NỘI DUNG CHÍNH nằm trong ${params.pageImagesBase64!.length} HÌNH ẢNH TRANG SÁCH đính kèm (trong khi phần văn bản thô bên dưới có thể chỉ là tiêu đề đầu trang, số trang hoặc một phần chữ).
+Bạn BẮT BUỘC phải nhìn và đọc kỹ TOÀN BỘ chữ, hội thoại, bảng từ vựng, chú thích ngữ pháp và bài đọc nằm bên trong các HÌNH ẢNH TRANG SÁCH đính kèm kết hợp với văn bản để trích xuất đầy đủ 100% nội dung bài học!\n`
+    : "(Nếu có hình ảnh trang sách đính kèm do PDF dạng scan, hãy đọc kỹ toàn bộ chữ trên các trang ảnh đó để soạn bài)."
+}
 
 TÊN CHƯƠNG: ${params.chapterTitle}
 
-NỘI DUNG VĂN BẢN CHƯƠNG SÁCH:
+NỘI DUNG VĂN BẢN CHƯƠNG SÁCH (LỚP TEXT TRÍCH XUẤT TỰ ĐỘNG):
 """
-${trimmedText}
+${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính kèm)"}
 """
 
-YÊU CẦU BẮT BUỘC:
-1. overview: Tóm tắt và diễn giải đầy đủ nội dung/luận điểm của chương sách, nêu các chủ đề chính và mục tiêu học tập.
-2. contentAnalysis: Chia nội dung chương thành các phần trọng tâm theo mạch sách (ví dụ Dialogue 1, Dialogue 2, Bài đọc...). Mỗi phần trích dẫn đoạn văn gốc (originalExcerpt), dịch sang tiếng Việt chuẩn xác (vietnameseTranslation), và giải thích sâu ý nghĩa nội dung, bối cảnh (deepExplanation & stylisticOrContextNotes).
-3. grammarPoints: Trích xuất ĐẦY ĐỦ tất cả các cấu trúc ngữ pháp xuất hiện trong chương (ví dụ cách dùng 嗎, 呢, 很, 不, 姓/叫, 要, 哪...). Giải thích công thức, cách dùng và cho thêm ví dụ.
-4. vocabulary: BẮT BUỘC LẤY ĐẦY ĐỦ 100% TẤT CẢ TỪ VỰNG XUẤT HIỆN TRONG BÀI (THƯỜNG CÓ TỪ 35 ĐẾN 50+ MỤC TỪ).
-ĐẶC BIỆT LƯU Ý: Giáo trình ngoại ngữ (như sách Tiếng Trung Đương Đại / HSK) có nhiều phần đối thoại (Dialogue I, Dialogue II...) và mỗi phần đều có các bảng từ vựng độc lập được đánh số:
-- Bảng "People in the dialogue" (Tên các nhân vật: VD 陳月美, 李明華, 王開文...)
-- Bảng "Vocabulary" của Dialogue I (Từ mới: VD 你, 來, 是, 小姐, 嗎, 接, 我們, 我, 這, 先生, 好, 姓, 叫, 你們...)
-- Bảng "Names" của Dialogue I (Địa danh, tên riêng: VD 臺灣...)
-- Bảng "Phrases" của Dialogue I (Mẫu câu giao tiếp: VD 歡迎, 請問, 是的, 謝謝, 不客氣, 你好...)
-- Bảng "Vocabulary" của Dialogue II (Đánh số lại: VD 請, 喝, 茶, 很, 好喝, 什麼, 人, 喜歡, 呢, 他, 不, 哪, 要, 咖啡...)
-- Bảng "Names" của Dialogue II (VD 烏龍茶, 日本, 美國...)
-- Bảng "Phrases" của Dialogue II (VD 對不起, 哪國...)
-BẠN PHẢI QUÉT HẾT TẤT CẢ CÁC BẢNG TRÊN CỦA CẢ DIALOGUE 1 VÀ DIALOGUE 2 ĐỂ LẤY ĐỦ TOÀN BỘ 35-50+ TỪ NÀY! TUYỆT ĐỐI KHÔNG CẮT BỚT CHỈ LẤY 10 TỪ! Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ, 1-2 collocations.
-5. clozeExercises: Tạo 6 đến 8 câu bài tập điền từ/ngữ pháp vào chỗ trống (dùng đúng ký hiệu "_____" tại vị trí từ bị khuyết).
-6. quizExercises: Tạo 8 đến 10 câu hỏi trắc nghiệm (4 lựa chọn) CHỈ KIỂM TRA TỪ VỰNG (nghĩa từ, cách dùng từ, phiên âm) VÀ NGỮ PHÁP (trật tự từ, chọn cấu trúc đúng, điền trợ từ). TUYỆT ĐỐI KHÔNG đặt câu hỏi về tình tiết câu chuyện/hội thoại (như nhân vật tên gì hay làm nghề gì).
-7. translationExercises: Chọn 4 đến 6 câu tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.`;
+YÊU CẦU BẮT BUỘC (Viết ngắn gọn, súc tích để đảm bảo xuất đủ 100% cả 7 phần dưới đây):
+1. overview: Tóm tắt nội dung/luận điểm của chương sách, nêu 3 chủ đề chính và 3 mục tiêu học tập.
+2. contentAnalysis: Chia nội dung chương thành 2-3 phần trọng tâm theo mạch sách (ví dụ Dialogue 1, Dialogue 2, Bài đọc...). Mỗi phần trích dẫn đoạn văn gốc (originalExcerpt), dịch sang tiếng Việt chuẩn xác (vietnameseTranslation), và giải thích sâu ý nghĩa nội dung, bối cảnh (deepExplanation & stylisticOrContextNotes).
+3. grammarPoints: Trích xuất 3-4 cấu trúc ngữ pháp trọng tâm xuất hiện trong chương. Giải thích công thức, cách dùng và cho 1-2 ví dụ.
+4. vocabulary: Trích xuất 12 đến 15 mục từ vựng quan trọng nhất xuất hiện trong bài (bao gồm từ mới Vocabulary, tên riêng Names, và cụm từ Phrases). Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ ngắn gọn, 1-2 collocations.
+5. clozeExercises: Tạo 5 câu bài tập điền từ/ngữ pháp vào chỗ trống (dùng đúng ký hiệu "_____" tại vị trí từ bị khuyết).
+6. quizExercises: Tạo 6 câu hỏi trắc nghiệm (4 lựa chọn) CHỈ KIỂM TRA TỪ VỰNG (nghĩa từ, cách dùng từ, phiên âm) VÀ NGỮ PHÁP (trật tự từ, chọn cấu trúc đúng, điền trợ từ).
+7. translationExercises: Chọn 4 câu tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.`;
 
   const contentsPayload: Array<
     string | { inlineData: { mimeType: string; data: string } }
   > = [prompt];
 
   if (params.pageImagesBase64 && params.pageImagesBase64.length > 0) {
-    for (const base64Img of params.pageImagesBase64) {
+    // Limit inline images in lesson generation to max 5 to prevent Gemini Vision + JSON Schema timeout
+    for (const base64Img of params.pageImagesBase64.slice(0, 5)) {
       contentsPayload.push({
         inlineData: {
           mimeType: "image/jpeg",
@@ -501,7 +939,8 @@ BẠN PHẢI QUÉT HẾT TẤT CẢ CÁC BẢNG TRÊN CỦA CẢ DIALOGUE 1 VÀ 
       responseMimeType: "application/json",
       responseSchema: CHAPTER_LESSON_SCHEMA,
       temperature: 0.25,
-      maxOutputTokens: 65536,
+      maxOutputTokens: 32768,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 
@@ -509,10 +948,359 @@ BẠN PHẢI QUÉT HẾT TẤT CẢ CÁC BẢNG TRÊN CỦA CẢ DIALOGUE 1 VÀ 
     throw new Error("AI không trả về dữ liệu bài học. Vui lòng thử lại.");
   }
 
-  const parsed = JSON.parse(response.text) as ChapterLesson;
-  return {
-    ...parsed,
+  const rawParsed = JSON.parse(response.text) as Record<string, any>;
+  const root =
+    rawParsed && typeof rawParsed.lesson === "object" && !rawParsed.overview
+      ? rawParsed.lesson
+      : rawParsed;
+
+  const normalizedLesson: ChapterLesson = {
+    chapterTitle: String(root?.chapterTitle || params.chapterTitle || "Bài học"),
+    overview: {
+      summary: String(
+        root?.overview?.summary ||
+          "Tổng quan nội dung trọng tâm của chương sách."
+      ),
+      keyThemes: Array.isArray(root?.overview?.keyThemes)
+        ? root.overview.keyThemes.map(String)
+        : [],
+      learningObjectives: Array.isArray(root?.overview?.learningObjectives)
+        ? root.overview.learningObjectives.map(String)
+        : [],
+    },
+    contentAnalysis: Array.isArray(root?.contentAnalysis)
+      ? root.contentAnalysis.map((sec: any, idx: number) => ({
+          id: String(sec?.id || `sec-${idx + 1}`),
+          sectionTitle: String(sec?.sectionTitle || `Phần ${idx + 1}`),
+          originalExcerpt: String(sec?.originalExcerpt || ""),
+          vietnameseTranslation: String(sec?.vietnameseTranslation || ""),
+          deepExplanation: String(sec?.deepExplanation || ""),
+          stylisticOrContextNotes: String(sec?.stylisticOrContextNotes || ""),
+        }))
+      : [],
+    grammarPoints: Array.isArray(root?.grammarPoints)
+      ? root.grammarPoints.map((gp: any, idx: number) => ({
+          id: String(gp?.id || `gp-${idx + 1}`),
+          title: String(gp?.title || `Điểm ngữ pháp ${idx + 1}`),
+          patternFormula: String(gp?.patternFormula || ""),
+          quoteFromBook: String(gp?.quoteFromBook || ""),
+          quoteTranslation: String(gp?.quoteTranslation || ""),
+          detailedExplanation: String(gp?.detailedExplanation || ""),
+          whyAuthorUsedIt: String(gp?.whyAuthorUsedIt || ""),
+          extraExamples: Array.isArray(gp?.extraExamples)
+            ? gp.extraExamples.map((ex: any) => ({
+                en: String(ex?.en || ""),
+                vi: String(ex?.vi || ""),
+              }))
+            : [],
+        }))
+      : [],
+    vocabulary: Array.isArray(root?.vocabulary)
+      ? root.vocabulary.map((v: any, idx: number) => ({
+          id: String(v?.id || `voc-${idx + 1}`),
+          word: String(v?.word || ""),
+          ipa: String(v?.ipa || ""),
+          partOfSpeech: String(v?.partOfSpeech || "word"),
+          cefrLevel: (["A1", "A2", "B1", "B2", "C1", "C2"].includes(
+            String(v?.cefrLevel)
+          )
+            ? v.cefrLevel
+            : "B1") as any,
+          vietnameseMeaning: String(v?.vietnameseMeaning || ""),
+          explanationInContext: String(v?.explanationInContext || ""),
+          quoteFromBook: String(v?.quoteFromBook || ""),
+          quoteTranslation: String(v?.quoteTranslation || ""),
+          collocations: Array.isArray(v?.collocations)
+            ? v.collocations.map(String)
+            : [],
+          synonyms: Array.isArray(v?.synonyms) ? v.synonyms.map(String) : [],
+        }))
+      : [],
+    clozeExercises: Array.isArray(root?.clozeExercises)
+      ? root.clozeExercises.map((cl: any, idx: number) => ({
+          id: String(cl?.id || `cloze-${idx + 1}`),
+          sentenceWithBlank: String(cl?.sentenceWithBlank || ""),
+          answer: String(cl?.answer || ""),
+          hint: String(cl?.hint || ""),
+          fullSentenceTranslation: String(cl?.fullSentenceTranslation || ""),
+          explanation: String(cl?.explanation || ""),
+        }))
+      : [],
+    quizExercises: Array.isArray(root?.quizExercises)
+      ? root.quizExercises.map((qz: any, idx: number) => ({
+          id: String(qz?.id || `quiz-${idx + 1}`),
+          question: String(qz?.question || ""),
+          category: (["comprehension", "vocabulary", "grammar", "inference"].includes(
+            String(qz?.category)
+          )
+            ? qz.category
+            : "vocabulary") as any,
+          options: Array.isArray(qz?.options)
+            ? qz.options.map(String)
+            : ["A", "B", "C", "D"],
+          correctIndex:
+            typeof qz?.correctIndex === "number" ? qz.correctIndex : 0,
+          explanation: String(qz?.explanation || ""),
+        }))
+      : [],
+    translationExercises: Array.isArray(root?.translationExercises)
+      ? root.translationExercises.map((tr: any, idx: number) => ({
+          id: String(tr?.id || `trans-${idx + 1}`),
+          originalSentence: String(tr?.originalSentence || ""),
+          direction: (tr?.direction === "VI_TO_EN"
+            ? "VI_TO_EN"
+            : "EN_TO_VI") as "EN_TO_VI" | "VI_TO_EN",
+          contextHint: String(tr?.contextHint || ""),
+          targetGrammarOrVocab: Array.isArray(tr?.targetGrammarOrVocab)
+            ? tr.targetGrammarOrVocab.map(String)
+            : [],
+          referenceTranslation: String(tr?.referenceTranslation || ""),
+        }))
+      : [],
     generatedAt: new Date().toISOString(),
+  };
+
+  // Nếu model dừng sớm khiến Tab 4 hoặc Tab 5 bị rỗng, tự động gọi bổ sung ngay
+  if (
+    normalizedLesson.clozeExercises.length === 0 ||
+    normalizedLesson.translationExercises.length === 0
+  ) {
+    try {
+      const vocabSummary = normalizedLesson.vocabulary
+        .map((v) => `${v.word} (${v.ipa}): ${v.vietnameseMeaning}`)
+        .join("; ");
+      const grammarSummary = normalizedLesson.grammarPoints
+        .map((g) => `${g.title} (${g.patternFormula}): ${g.quoteFromBook}`)
+        .join("; ");
+      const contentSummary = normalizedLesson.contentAnalysis
+        .map((c) => `${c.originalExcerpt} -> ${c.vietnameseTranslation}`)
+        .join("\n");
+
+      const supp = await generateSupplementalExercisesWithAI({
+        courseTitle: params.courseTitle,
+        chapterTitle: params.chapterTitle,
+        chapterText: params.chapterText,
+        existingLessonContext: `TỪ VỰNG ĐÃ TRÍCH XUẤT: ${vocabSummary}\nNGỮ PHÁP: ${grammarSummary}\nĐOẠN TRÍCH TRONG BÀI:\n${contentSummary}`,
+        apiKey: params.apiKey,
+        masterApiKey: params.masterApiKey,
+        model: params.model,
+      });
+
+      if (normalizedLesson.clozeExercises.length === 0) {
+        normalizedLesson.clozeExercises = supp.clozeExercises;
+      }
+      if (normalizedLesson.quizExercises.length === 0) {
+        normalizedLesson.quizExercises = supp.quizExercises;
+      }
+      if (normalizedLesson.translationExercises.length === 0) {
+        normalizedLesson.translationExercises = supp.translationExercises;
+      }
+    } catch (suppErr) {
+      console.warn("[Auto-Supplement Exercises Failed]:", suppErr);
+    }
+  }
+
+  return normalizedLesson;
+}
+
+const SUPPLEMENT_EXERCISES_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    clozeExercises: {
+      type: Type.ARRAY,
+      description:
+        "6 bài tập điền từ hoặc cấu trúc ngữ pháp vào chỗ trống (dùng ký hiệu _____ cho từ cần điền).",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          sentenceWithBlank: { type: Type.STRING },
+          answer: { type: Type.STRING },
+          hint: { type: Type.STRING },
+          fullSentenceTranslation: { type: Type.STRING },
+          explanation: { type: Type.STRING },
+        },
+        required: [
+          "id",
+          "sentenceWithBlank",
+          "answer",
+          "hint",
+          "fullSentenceTranslation",
+          "explanation",
+        ],
+      },
+    },
+    quizExercises: {
+      type: Type.ARRAY,
+      description:
+        "8 câu hỏi trắc nghiệm 4 lựa chọn kiểm tra từ vựng và ngữ pháp của chương.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          question: { type: Type.STRING },
+          category: { type: Type.STRING },
+          options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+          correctIndex: { type: Type.INTEGER },
+          explanation: { type: Type.STRING },
+        },
+        required: [
+          "id",
+          "question",
+          "category",
+          "options",
+          "correctIndex",
+          "explanation",
+        ],
+      },
+    },
+    translationExercises: {
+      type: Type.ARRAY,
+      description:
+        "5 câu văn tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          originalSentence: { type: Type.STRING },
+          direction: { type: Type.STRING },
+          contextHint: { type: Type.STRING },
+          targetGrammarOrVocab: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+          },
+          referenceTranslation: { type: Type.STRING },
+        },
+        required: [
+          "id",
+          "originalSentence",
+          "direction",
+          "contextHint",
+          "targetGrammarOrVocab",
+          "referenceTranslation",
+        ],
+      },
+    },
+  },
+  required: ["clozeExercises", "quizExercises", "translationExercises"],
+};
+
+export async function generateSupplementalExercisesWithAI(params: {
+  courseTitle: string;
+  chapterTitle: string;
+  chapterText: string;
+  existingLessonContext?: string;
+  existingClozeCount?: number;
+  existingQuizCount?: number;
+  existingTranslationCount?: number;
+  apiKey?: string;
+  masterApiKey?: string;
+  model?: string;
+}): Promise<{
+  clozeExercises: ChapterLesson["clozeExercises"];
+  quizExercises: ChapterLesson["quizExercises"];
+  translationExercises: ChapterLesson["translationExercises"];
+}> {
+  const ai = getClient(params.apiKey, params.masterApiKey);
+  const modelName = params.model || "gemini-2.5-flash";
+  const trimmedText = (params.chapterText || "").slice(0, 15000);
+  const contextBlock = (params.existingLessonContext || "").slice(0, 10000);
+
+  const prompt = `Bạn là Giáo sư Ngôn ngữ học & Gia sư Sách ngoại ngữ chuyên sâu.
+Nhiệm vụ của bạn là TẠO BỔ SUNG bộ bài tập thực hành cho Chương "${params.chapterTitle}" thuộc sách "${params.courseTitle}".
+(Lưu ý: Chỉ tập trung sinh 3 mảng bài tập dưới đây, KHÔNG sinh lại phần tóm tắt hay danh sách từ vựng).
+
+DỮ LIỆU BÀI HỌC ĐÃ CÓ (Từ vựng, Ngữ pháp & Nội dung Tab 1-2-3):
+"""
+${contextBlock || "(Chưa có dữ liệu tóm tắt)"}
+"""
+
+VĂN BẢN GỐC CỦA CHƯƠNG:
+"""
+${trimmedText || "(Sử dụng dữ liệu bài học phía trên)"}
+"""
+
+YÊU CẦU BẮT BUỘC (Trả về đúng định dạng JSON):
+1. clozeExercises: Tạo 6 câu bài tập điền từ hoặc cấu trúc ngữ pháp vào chỗ trống (dùng ký hiệu "_____" tại vị trí từ cần điền). Có gợi ý (hint), bản dịch câu đầy đủ (fullSentenceTranslation) và giải thích chi tiết (explanation).
+2. quizExercises: Tạo 8 câu hỏi trắc nghiệm (4 lựa chọn A, B, C, D) kiểm tra sâu Từ vựng (vocabulary) và Ngữ pháp (grammar) xuất hiện trong chương. Giải thích rõ vì sao đáp án đúng.
+3. translationExercises: Tạo 5 câu luyện dịch tiêu biểu sát với ngữ pháp và từ vựng của chương để người học dịch sang tiếng Việt và được AI chấm điểm (direction: "EN_TO_VI", có contextHint, targetGrammarOrVocab và referenceTranslation chuẩn xác).`;
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: SUPPLEMENT_EXERCISES_SCHEMA,
+      temperature: 0.35,
+      maxOutputTokens: 16384,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("AI không trả về dữ liệu bài tập bổ sung. Vui lòng thử lại.");
+  }
+
+  const rawParsed = JSON.parse(response.text) as Record<string, any>;
+  const stamp = Date.now();
+
+  const clozeExercises: ChapterLesson["clozeExercises"] = Array.isArray(
+    rawParsed?.clozeExercises
+  )
+    ? rawParsed.clozeExercises.map((cl: any, idx: number) => ({
+        id: `cloze-${stamp}-${idx + 1}`,
+        sentenceWithBlank: String(cl?.sentenceWithBlank || ""),
+        answer: String(cl?.answer || ""),
+        hint: String(cl?.hint || ""),
+        fullSentenceTranslation: String(cl?.fullSentenceTranslation || ""),
+        explanation: String(cl?.explanation || ""),
+      }))
+    : [];
+
+  const quizExercises: ChapterLesson["quizExercises"] = Array.isArray(
+    rawParsed?.quizExercises
+  )
+    ? rawParsed.quizExercises.map((qz: any, idx: number) => ({
+        id: `quiz-${stamp}-${idx + 1}`,
+        question: String(qz?.question || ""),
+        category: (["comprehension", "vocabulary", "grammar"].includes(
+          String(qz?.category)
+        )
+          ? qz.category
+          : "vocabulary") as "vocabulary" | "grammar" | "comprehension",
+        options:
+          Array.isArray(qz?.options) && qz.options.length >= 2
+            ? qz.options.map(String)
+            : ["A", "B", "C", "D"],
+        correctIndex:
+          typeof qz?.correctIndex === "number" ? qz.correctIndex : 0,
+        explanation: String(qz?.explanation || ""),
+      }))
+    : [];
+
+  const translationExercises: ChapterLesson["translationExercises"] =
+    Array.isArray(rawParsed?.translationExercises)
+      ? rawParsed.translationExercises.map((tr: any, idx: number) => ({
+          id: `trans-${stamp}-${idx + 1}`,
+          originalSentence: String(tr?.originalSentence || ""),
+          direction: (tr?.direction === "VI_TO_EN"
+            ? "VI_TO_EN"
+            : "EN_TO_VI") as "EN_TO_VI" | "VI_TO_EN",
+          contextHint: String(tr?.contextHint || ""),
+          targetGrammarOrVocab: Array.isArray(tr?.targetGrammarOrVocab)
+            ? tr.targetGrammarOrVocab.map(String)
+            : [],
+          referenceTranslation: String(tr?.referenceTranslation || ""),
+        }))
+      : [];
+
+  return {
+    clozeExercises,
+    quizExercises,
+    translationExercises,
   };
 }
 
@@ -637,6 +1425,7 @@ const TOC_SCHEMA: Schema = {
 
 export async function extractBookTocWithAI(params: {
   pageSummaries: string;
+  tocImagesBase64?: string[];
   totalPages: number;
   apiKey?: string;
   masterApiKey?: string;
@@ -645,27 +1434,54 @@ export async function extractBookTocWithAI(params: {
   const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
-  const prompt = `Bạn là Chuyên gia Phân tích Cấu trúc Sách & Mục lục (Table of Contents Analyzer).
-Dưới đây là dữ liệu trích xuất từ các trang của một cuốn sách PDF (Tổng cộng ${params.totalPages} trang PDF).
-Hãy đọc phần Mục lục (Table of Contents / 目錄 / Contents ở các trang đầu) KẾT HỢP với tiêu đề xuất hiện trên từng trang [Page X] để xác định chính xác danh sách các Bài học / Chương chính (Lessons / Chapters / Units) từ bài đầu tiên đến bài cuối cùng.
+  const hasTocImages =
+    Array.isArray(params.tocImagesBase64) && params.tocImagesBase64.length > 0;
 
-LƯU Ý QUAN TRỌNG:
-1. Loại bỏ các phần dẫn nhập không phải bài học (như Bìa, Lời nói đầu, Bản quyền, Mục lục).
-2. Chú ý độ lệch giữa "số trang in trong mục lục" và "số trang thực tế của file PDF [Page X]". Hãy ưu tiên khớp theo số trang thực tế [Page X] nơi bài học thực sự bắt đầu!
-3. Đảm bảo lấy đầy đủ tất cả các bài học từ Lesson 1 / Chapter 1 cho đến bài cuối cùng của cuốn sách.
+  const prompt = `Bạn là Chuyên gia Phân tích Cấu trúc Sách & Mục lục (Table of Contents Vision Analyzer).
+Cuốn sách PDF này có tổng cộng ${params.totalPages} trang PDF.
+${
+  hasTocImages
+    ? `⚠️ CHÚ Ý QUAN TRỌNG: Đây là sách PDF dạng Scan/Ảnh. Mình đã đính kèm ${params.tocImagesBase64!.length} hình ảnh của các trang đầu cuốn sách (từ Trang PDF số 2 đến Trang PDF số ${params.tocImagesBase64!.length + 1}).
+Hãy NHÌN TRỰC TIẾP VÀO CÁC HÌNH ẢNH ĐÍNH KÈM để tìm trang Mục lục (Table of Contents / 目錄 / Contents / 課次) và đọc danh sách toàn bộ các Bài học / Chương chính (ví dụ: Lesson 1 / 第一課 / Bài 1... cho đến bài cuối cùng).`
+    : `Hãy đọc phần Mục lục (Table of Contents / 目錄 / Contents) kết hợp với tiêu đề xuất hiện trên từng trang [Page X] để xác định danh sách các Bài học / Chương chính.`
+}
 
-DỮ LIỆU CÁC TRANG PDF:
+QUY TẮC BẮT BUỘC:
+1. Loại bỏ các phần dẫn nhập không phải bài học (như Bìa, Lời nói đầu, Hướng dẫn sử dụng, Mục lục). Chỉ lấy các Bài học / Chương chính (Lessons / Units / Chapters).
+2. TÍNH ĐỘ LỆCH SỐ TRANG (PAGE OFFSET):
+   - Trong sách scan, số trang in trong trang Mục lục (ví dụ Lesson 1 trang 1, Lesson 2 trang 17...) thường lệch khoảng +6 đến +14 trang so với số trang thực tế của file PDF (do file PDF có thêm các trang bìa, lời nói đầu, mục lục ở đầu).
+   - Hãy kiểm tra xem trong các ảnh đính kèm hoặc dữ liệu [Page X] bên dưới, Lesson 1 thực tế bắt đầu ở trang PDF số mấy (nếu không thấy trang bắt đầu của Lesson 1 trong ảnh thì cộng độ lệch ước tính khoảng +${hasTocImages ? "10" : "0"} trang vào số trang in trong mục lục), và đảm bảo trang kết thúc của bài cuối cùng không vượt quá ${params.totalPages}.
+   - endPage của bài trước phải bằng (startPage của bài kế tiếp - 1).
+3. Trả về đầy đủ tất cả các bài học tìm thấy trong Mục lục theo đúng định dạng JSON: { "chapters": [ { "title": "Lesson 1: ...", "startPage": 12, "endPage": 26 }, ... ] }. Tuyệt đối không trả về mảng rỗng!
+
+DỮ LIỆU TEXT TRÍCH XUẤT TỪ PDF (NẾU CÓ):
 """
-${params.pageSummaries.slice(0, 45000)}
+${params.pageSummaries.slice(0, 12000)}
 """`;
+
+  const contentsPayload: Array<
+    string | { inlineData: { mimeType: string; data: string } }
+  > = [prompt];
+
+  if (params.tocImagesBase64 && params.tocImagesBase64.length > 0) {
+    for (const base64Img of params.tocImagesBase64.slice(0, 10)) {
+      contentsPayload.push({
+        inlineData: {
+          mimeType: "image/jpeg",
+          data: base64Img,
+        },
+      });
+    }
+  }
 
   const response = await ai.models.generateContent({
     model: modelName,
-    contents: prompt,
+    contents: contentsPayload,
     config: {
       responseMimeType: "application/json",
       responseSchema: TOC_SCHEMA,
       temperature: 0.1,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 
@@ -674,7 +1490,26 @@ ${params.pageSummaries.slice(0, 45000)}
   }
 
   const parsed = JSON.parse(response.text);
-  return parsed.chapters || [];
+  const rawList = Array.isArray(parsed?.chapters)
+    ? parsed.chapters
+    : Array.isArray(parsed)
+    ? parsed
+    : [];
+
+  if (rawList.length === 0) {
+    throw new Error(
+      "AI không tìm thấy trang Mục lục rõ ràng trong các trang đầu của PDF."
+    );
+  }
+
+  return rawList.map((ch: any, idx: number) => ({
+    title: String(ch?.title || `Bài ${idx + 1}`),
+    startPage: Math.max(1, Math.min(Number(ch?.startPage) || 1, params.totalPages)),
+    endPage: Math.max(
+      1,
+      Math.min(Number(ch?.endPage) || params.totalPages, params.totalPages)
+    ),
+  }));
 }
 
 const CUSTOM_EXAM_SCHEMA: Schema = {
@@ -785,6 +1620,7 @@ ${params.scannedContentAndVocab.slice(0, 30000)}
       responseMimeType: "application/json",
       responseSchema: CUSTOM_EXAM_SCHEMA,
       temperature: 0.5,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 
@@ -854,7 +1690,8 @@ ${params.chapterText.slice(0, 35000)}
   > = [prompt];
 
   if (params.pageImagesBase64 && params.pageImagesBase64.length > 0) {
-    for (const base64Img of params.pageImagesBase64) {
+    // Limit inline images in lesson generation to max 5 to prevent Gemini Vision + JSON Schema timeout
+    for (const base64Img of params.pageImagesBase64.slice(0, 5)) {
       contentsPayload.push({
         inlineData: {
           mimeType: "image/jpeg",
@@ -871,7 +1708,8 @@ ${params.chapterText.slice(0, 35000)}
       responseMimeType: "application/json",
       responseSchema: FULL_VOCAB_SCHEMA,
       temperature: 0.2,
-      maxOutputTokens: 65536,
+      maxOutputTokens: 32768,
+      thinkingConfig: { thinkingBudget: 0 },
     },
   });
 
@@ -962,3 +1800,51 @@ YÊU CẦU ĐÁNH GIÁ CHUYÊN SÂU & TẬP TRUNG VÀO 3 YẾU TỐ:
     evaluatedAt: new Date().toISOString(),
   };
 }
+
+/**
+ * Lightweight, fast OCR transcription for a micro-batch of 1-3 page images.
+ * Uses plain text output (no complex JSON schema) so Gemini Vision never times out or crashes.
+ */
+export async function ocrPageImagesWithAI(params: {
+  pageImagesBase64: string[];
+  startPageNum?: number;
+  apiKey?: string;
+  masterApiKey?: string;
+  model?: string;
+}): Promise<string> {
+  const ai = getClient(params.apiKey, params.masterApiKey);
+  const modelName = params.model || "gemini-2.5-flash";
+  const startNum = params.startPageNum || 1;
+
+  const prompt = `Bạn là Công cụ OCR Chuyên Nghiệp (Optical Character Recognition) cho sách giáo trình đa ngôn ngữ (Tiếng Anh, Tiếng Trung Phồn/Giản thể + Pinyin, Tiếng Nhật, Tiếng Hàn, Tiếng Việt).
+Hãy đọc và trích xuất CHÍNH XÁC 100% TOÀN BỘ VĂN BẢN có trong ${params.pageImagesBase64.length} hình ảnh trang sách đính kèm (bắt đầu từ trang ${startNum}).
+YÊU CẦU:
+- Giữ nguyên mọi đoạn hội thoại (Dialogue), bài đọc, bảng từ vựng (Vocabulary, People, Names, Phrases), phiên âm IPA/Pinyin, nghĩa tiếng Anh/tiếng Việt, và ghi chú ngữ pháp (Grammar).
+- Phân tách mỗi trang bằng dòng: --- [OCR Trang X] ---
+- Trả về văn bản thuần (Plain Text) sạch đẹp, rõ ràng, tuyệt đối không bình luận thừa.`;
+
+  const contentsPayload: Array<
+    string | { inlineData: { mimeType: string; data: string } }
+  > = [prompt];
+
+  for (const base64Img of params.pageImagesBase64.slice(0, 4)) {
+    contentsPayload.push({
+      inlineData: {
+        mimeType: "image/jpeg",
+        data: base64Img,
+      },
+    });
+  }
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: contentsPayload,
+    config: {
+      temperature: 0.1,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  return (response.text || "").trim();
+}
+

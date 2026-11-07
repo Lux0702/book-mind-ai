@@ -246,6 +246,9 @@ export interface VirtualEmailItem {
 export interface AppSettings {
   geminiApiKey: string; // Mã BookMind Virtual Key (BM-FREE-..., BM-PRO-..., BM-VIP-...)
   masterGeminiApiKey?: string; // Master Google Gemini API Key (AIzaSy...) của chủ hệ thống
+  groqApiKey?: string; // Groq Cloud API Key (gsk_...)
+  openRouterApiKey?: string; // OpenRouter API Key (sk-or-v1-...)
+  siliconFlowApiKey?: string; // SiliconFlow API Key (sk-...)
   adminPasscode?: string; // Mật khẩu bảo vệ trang Quản trị /admin (mặc định: admin123)
   resendApiKey?: string; // Resend API Key (tùy chọn để gửi email thật)
   geminiModel: string;

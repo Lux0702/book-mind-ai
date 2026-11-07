@@ -81,13 +81,16 @@ export function buildChaptersFromRanges(
         .join("\n\n")
         .trim();
       const rawTextNoTags = slice.join("").trim();
+      const pageCount = Math.max(1, ep - sp + 1);
+      const avgCharsPerPage = rawTextNoTags.length / pageCount;
       return {
         index: idx + 1,
         title: r.title,
         startPage: sp,
         endPage: ep,
         rawText: combinedText,
-        isScannedPages: rawTextNoTags.length < 80,
+        // Nếu trung bình mỗi trang dưới 450 ký tự chữ -> PDF dạng Scan hoặc Hybrid (vừa có chữ tiêu đề vừa có ảnh nội dung chính)
+        isScannedPages: avgCharsPerPage < 450,
       };
     })
     .filter((c) => c.endPage >= c.startPage);
@@ -140,14 +143,15 @@ export async function parseHeavyPdfClientSide(
       .replace(/\s+/g, " ")
       .trim();
 
-    if (strings.length > 25) {
+    if (strings.length > 350) {
       nonEmptyPages++;
     }
     pageTexts.push(strings);
     page.cleanup();
   }
 
-  const isMostlyScanned = totalPages > 0 && nonEmptyPages / totalPages < 0.25;
+  // Phát hiện PDF Scan hoặc PDF Hybrid (có ít chữ tiêu đề/số trang nhưng nội dung chính nằm trong ảnh)
+  const isMostlyScanned = totalPages > 0 && nonEmptyPages / totalPages < 0.55;
 
   // Detect chapter/lesson headings:
   // 1. Standard Lesson / Chapter / Unit / Bài / Chương / 第X課
@@ -214,6 +218,8 @@ export async function parseHeavyPdfClientSide(
 
     const title =
       customTitle || `Trang ${startPage}–${endPage}: ${snippet}...`;
+    const pageCount = Math.max(1, endPage - startPage + 1);
+    const avgCharsPerPage = rawTextNoTags.length / pageCount;
 
     return {
       index: 0,
@@ -221,7 +227,7 @@ export async function parseHeavyPdfClientSide(
       startPage,
       endPage,
       rawText: combinedText,
-      isScannedPages: rawTextNoTags.length < 80,
+      isScannedPages: avgCharsPerPage < 450,
     };
   };
 
@@ -308,7 +314,7 @@ export async function parseHeavyPdfClientSide(
  * Render a specific range of PDF pages into compressed JPEG base64 images
  */
 export async function renderPdfPagesToImagesBase64(
-  file: File,
+  file: Blob | File,
   startPage: number,
   endPage: number,
   maxPagesToRender = 20
@@ -330,14 +336,17 @@ export async function renderPdfPagesToImagesBase64(
 
   for (let p = startPage; p <= safeEnd; p++) {
     const page = await pdf.getPage(p);
-    const viewport = page.getViewport({ scale: 1.3 });
+    const unscaledViewport = page.getViewport({ scale: 1 });
+    const maxDim = Math.max(unscaledViewport.width, unscaledViewport.height, 1);
+    const targetScale = Math.min(1.35, Math.max(0.85, 1150 / maxDim));
+    const viewport = page.getViewport({ scale: targetScale });
     const canvas = document.createElement("canvas");
     canvas.width = viewport.width;
     canvas.height = viewport.height;
     const ctx = canvas.getContext("2d");
     if (ctx) {
       await page.render({ canvasContext: ctx, viewport }).promise;
-      const dataUrl = canvas.toDataURL("image/jpeg", 0.75);
+      const dataUrl = canvas.toDataURL("image/jpeg", 0.68);
       images.push(dataUrl.replace(/^data:image\/jpeg;base64,/, ""));
     }
     page.cleanup();
@@ -345,6 +354,41 @@ export async function renderPdfPagesToImagesBase64(
 
   await pdf.destroy();
   return images;
+}
+
+/**
+ * Local Browser OCR using Tesseract.js (WebAssembly) — 100% client-side, never hits API limits or timeouts.
+ */
+export async function runLocalBrowserOcrOnImages(
+  imagesBase64: string[],
+  startPageNum = 1,
+  onProgress?: (statusText: string) => void
+): Promise<string> {
+  if (!imagesBase64 || imagesBase64.length === 0) return "";
+  const Tesseract = await import("tesseract.js");
+  onProgress?.("Đang khởi tạo bộ đọc OCR nội bộ trên trình duyệt (Tesseract.js)...");
+
+  const worker = await Tesseract.createWorker("eng+vie");
+  const pageTexts: string[] = [];
+
+  try {
+    for (let i = 0; i < imagesBase64.length; i++) {
+      const pageNo = startPageNum + i;
+      onProgress?.(
+        `Đang quét chữ từ ảnh (OCR Trình duyệt): Trang ${i + 1}/${imagesBase64.length} (Trang ${pageNo})...`
+      );
+      const dataUrl = `data:image/jpeg;base64,${imagesBase64[i]}`;
+      const ret = await worker.recognize(dataUrl);
+      const text = (ret.data?.text || "").trim();
+      if (text) {
+        pageTexts.push(`--- [OCR Trang ${pageNo}] ---\n${text}`);
+      }
+    }
+  } finally {
+    await worker.terminate();
+  }
+
+  return pageTexts.join("\n\n");
 }
 
 /**

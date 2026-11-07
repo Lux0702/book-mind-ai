@@ -24,15 +24,28 @@ export interface AppUser {
   };
 }
 
+export interface StoredPdfBlob {
+  courseId: string;
+  blob: Blob;
+  fileName?: string;
+  updatedAt: string;
+}
+
 class BookLearningDatabase extends Dexie {
   courses!: EntityTable<Course, "id">;
   flashcards!: EntityTable<FlashcardSRS, "id">;
+  pdfBlobs!: EntityTable<StoredPdfBlob, "courseId">;
 
   constructor() {
     super("BookLearningAgentDB");
     this.version(1).stores({
       courses: "id, title, updatedAt",
       flashcards: "id, courseId, chapterId, word, nextReviewDate",
+    });
+    this.version(2).stores({
+      courses: "id, title, updatedAt",
+      flashcards: "id, courseId, chapterId, word, nextReviewDate",
+      pdfBlobs: "courseId, updatedAt",
     });
   }
 }
@@ -52,9 +65,12 @@ export const SESSION_TTL_MS = 12 * 60 * 60 * 1000; // Phiên đăng nhập có h
 export const DEFAULT_SETTINGS: AppSettings = {
   geminiApiKey: "",
   masterGeminiApiKey: "",
+  groqApiKey: process.env.NEXT_PUBLIC_GROQ_API_KEY || "",
+  openRouterApiKey: process.env.NEXT_PUBLIC_OPENROUTER_API_KEY || "",
+  siliconFlowApiKey: process.env.NEXT_PUBLIC_SILICONFLOW_API_KEY || "",
   adminPasscode: "admin123",
   resendApiKey: "",
-  geminiModel: "gemini-2.5-flash",
+  geminiModel: "qwen-groq",
   supabaseUrl: process.env.NEXT_PUBLIC_SUPABASE_URL || "",
   supabaseAnonKey: process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "",
   autoSyncCloud: true,
@@ -66,6 +82,16 @@ export function getAppSettings(): AppSettings {
     const raw = localStorage.getItem(SETTINGS_KEY);
     if (!raw) return DEFAULT_SETTINGS;
     const parsed = { ...DEFAULT_SETTINGS, ...JSON.parse(raw) } as AppSettings;
+    parsed.supabaseUrl =
+      parsed.supabaseUrl?.trim() || DEFAULT_SETTINGS.supabaseUrl;
+    parsed.supabaseAnonKey =
+      parsed.supabaseAnonKey?.trim() || DEFAULT_SETTINGS.supabaseAnonKey;
+    parsed.groqApiKey =
+      parsed.groqApiKey?.trim() || DEFAULT_SETTINGS.groqApiKey;
+    parsed.openRouterApiKey =
+      parsed.openRouterApiKey?.trim() || DEFAULT_SETTINGS.openRouterApiKey;
+    parsed.siliconFlowApiKey =
+      parsed.siliconFlowApiKey?.trim() || DEFAULT_SETTINGS.siliconFlowApiKey;
     // Tự động chuyển key Google gốc (AIza...) đã lưu trước đó sang Master Key của hệ thống
     // để geminiApiKey đóng vai trò là BookMind Virtual API Key (BM-FREE / BM-PRO / BM-VIP) của User
     if (
@@ -201,14 +227,23 @@ export async function getSessionAuthHeaders(): Promise<Record<string, string>> {
   return headers;
 }
 
-// Bộ nhớ đệm ngắn hạn (20s) + Chống gọi trùng lặp đồng thời (In-flight Deduplication) cho getCurrentUser()
-const USER_CACHE_TTL_MS = 20_000;
-let cachedUserResult: { user: AppUser | null; fetchedAt: number } | null = null;
+// Bộ nhớ đệm (2 phút) + Chống gọi trùng lặp đồng thời (In-flight Deduplication) cho getCurrentUser()
+const USER_CACHE_TTL_MS = 120_000;
+let cachedUserResult: { user: AppUser; fetchedAt: number } | null = null;
 let inFlightGetCurrentUser: Promise<AppUser | null> | null = null;
 
 export function invalidateUserCache(): void {
   cachedUserResult = null;
   inFlightGetCurrentUser = null;
+}
+
+export function setCachedAuthenticatedUser(user: AppUser | null): void {
+  inFlightGetCurrentUser = null;
+  if (user) {
+    cachedUserResult = { user, fetchedAt: Date.now() };
+  } else {
+    cachedUserResult = null;
+  }
 }
 
 export async function getCurrentUser(forceRefresh = false): Promise<AppUser | null> {
@@ -228,80 +263,36 @@ export async function getCurrentUser(forceRefresh = false): Promise<AppUser | nu
     const supabase = getSupabaseClient();
     if (supabase) {
       try {
-        const { data: sessionData, error: sessionErr } =
-          await supabase.auth.getSession();
-        const session = sessionData?.session;
+        const { data: sessionData } = await supabase.auth.getSession();
+        let session = sessionData?.session || null;
 
         if (session) {
-          if (typeof window !== "undefined") {
-            localStorage.setItem(HAD_SUPABASE_SESSION_KEY, "1");
-          }
           const expiresAtMs = (session.expires_at || 0) * 1000;
           if (expiresAtMs > 0 && expiresAtMs <= Date.now()) {
-            // Thử refresh token 1 lần, nếu thất bại thì logout bắt đăng nhập lại
             const { data: refreshed, error: refreshErr } =
               await supabase.auth.refreshSession();
-            if (refreshErr || !refreshed.session) {
-              await triggerSessionExpiredLogout(
-                "Phiên đăng nhập Supabase đã hết hạn. Vui lòng đăng nhập lại!"
-              );
-              return null;
+            if (!refreshErr && refreshed?.session) {
+              session = refreshed.session;
+            } else {
+              session = null;
             }
           }
 
-          const { data: userData, error: userErr } =
-            await supabase.auth.getUser();
-          if (userErr || !userData?.user) {
-            await triggerSessionExpiredLogout(
-              "Phiên xác thực đã hết hạn hoặc không còn hợp lệ. Vui lòng đăng nhập lại!"
-            );
-            return null;
+          if (session?.user) {
+            const appUser = session.user as unknown as AppUser;
+            appUser.expiresAt =
+              (session.expires_at || 0) * 1000 || Date.now() + SESSION_TTL_MS;
+            cachedUserResult = { user: appUser, fetchedAt: Date.now() };
+            return appUser;
           }
-
-          const appUser = userData.user as unknown as AppUser;
-          appUser.expiresAt =
-            (session.expires_at || 0) * 1000 || Date.now() + SESSION_TTL_MS;
-          cachedUserResult = { user: appUser, fetchedAt: Date.now() };
-          return appUser;
-        } else if (
-          sessionErr ||
-          (typeof window !== "undefined" &&
-            localStorage.getItem(HAD_SUPABASE_SESSION_KEY) === "1")
-        ) {
-          await triggerSessionExpiredLogout(
-            "Phiên đăng nhập của bạn đã hết hạn. Vui lòng đăng nhập lại để tiếp tục!"
-          );
-          return null;
         }
       } catch {
-        // Supabase fetch failed or network offline
+        // Ignore network errors
       }
     }
 
-    // Fallback to local profile with strict session expiration check
-    if (typeof window !== "undefined") {
-      try {
-        const raw = localStorage.getItem(LOCAL_USER_KEY);
-        if (raw) {
-          const parsed = JSON.parse(raw) as AppUser;
-          if (!parsed.expiresAt) {
-            parsed.expiresAt = Date.now() + SESSION_TTL_MS;
-            localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(parsed));
-          } else if (Date.now() > parsed.expiresAt) {
-            await triggerSessionExpiredLogout(
-              "Phiên đăng nhập của bạn đã hết hạn (quá 12 giờ). Vui lòng đăng nhập lại để bảo mật tài khoản!"
-            );
-            return null;
-          }
-          cachedUserResult = { user: parsed, fetchedAt: Date.now() };
-          return parsed;
-        }
-      } catch {
-        return null;
-      }
-    }
-
-    cachedUserResult = { user: null, fetchedAt: Date.now() };
+    // Không cache kết quả null để tránh trường hợp Google OAuth đang xử lý mã code/hash trên URL
+    cachedUserResult = null;
     return null;
   })();
 
@@ -314,11 +305,16 @@ export async function getCurrentUser(forceRefresh = false): Promise<AppUser | nu
 }
 
 export async function signInWithGoogle(): Promise<{ error: Error | null }> {
+  invalidateUserCache();
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(LOCAL_USER_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+  }
   const supabase = getSupabaseClient();
   if (!supabase) {
     return {
       error: new Error(
-        "Chưa cấu hình Supabase URL hoặc Anon Key trong Cài đặt để dùng Google Auth."
+        "Chưa cấu hình kết nối Supabase / Google Auth trên hệ thống."
       ),
     };
   }
@@ -334,7 +330,7 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
         redirectTo: redirectUrl,
         queryParams: {
           access_type: "offline",
-          prompt: "consent",
+          prompt: "select_account",
         },
       },
     });
@@ -346,78 +342,12 @@ export async function signInWithGoogle(): Promise<{ error: Error | null }> {
   }
 }
 
-export async function signInWithEmailPassword(
-  email: string,
-  pass: string,
-  isSignUp = false
-): Promise<{ user: AppUser | null; error: Error | null }> {
-  invalidateUserCache();
-  lastCoursesCloudSyncAt = 0;
-  const supabase = getSupabaseClient();
-  if (supabase) {
-    try {
-      if (isSignUp) {
-        const { data, error } = await supabase.auth.signUp({
-          email,
-          password: pass,
-          options: {
-            data: {
-              full_name: email.split("@")[0],
-            },
-          },
-        });
-        if (error) return { user: null, error: new Error(error.message) };
-        const appUser = data.user as unknown as AppUser;
-        cachedUserResult = { user: appUser, fetchedAt: Date.now() };
-        return { user: appUser, error: null };
-      } else {
-        const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password: pass,
-        });
-        if (error) return { user: null, error: new Error(error.message) };
-        const appUser = data.user as unknown as AppUser;
-        cachedUserResult = { user: appUser, fetchedAt: Date.now() };
-        return { user: appUser, error: null };
-      }
-    } catch (err) {
-      return {
-        user: null,
-        error: err instanceof Error ? err : new Error("Lỗi xác thực Supabase"),
-      };
-    }
-  }
-
-  // If Supabase not connected, create a local session
-  const localUser = signInWithLocalProfile(email.split("@")[0], email);
-  return { user: localUser, error: null };
-}
-
-export function signInWithLocalProfile(
-  name: string,
-  email?: string
-): AppUser {
-  const cleanName = name.trim() || "Học viên BookMind";
-  const user: AppUser = {
-    id: `local-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
-    email: email?.trim() || `${cleanName.toLowerCase().replace(/\s+/g, "")}@local.user`,
-    expiresAt: Date.now() + SESSION_TTL_MS,
-    user_metadata: {
-      full_name: cleanName,
-      avatar_url: "",
-    },
-    app_metadata: {
-      provider: "local",
-    },
-  };
-  if (typeof window !== "undefined") {
-    localStorage.setItem(LOCAL_USER_KEY, JSON.stringify(user));
-  }
-  cachedUserResult = { user, fetchedAt: Date.now() };
-  return user;
-}
-
 export async function signOutUser(): Promise<void> {
+  if (typeof window !== "undefined") {
+    localStorage.removeItem(LOCAL_USER_KEY);
+    localStorage.removeItem(HAD_SUPABASE_SESSION_KEY);
+    sessionStorage.removeItem(SESSION_EXPIRED_NOTICE_KEY);
+  }
   cachedUserResult = null;
   inFlightGetCurrentUser = null;
   const supabase = getSupabaseClient();
@@ -428,10 +358,7 @@ export async function signOutUser(): Promise<void> {
       // Ignore
     }
   }
-  if (typeof window !== "undefined") {
-    localStorage.removeItem(LOCAL_USER_KEY);
-    localStorage.removeItem(HAD_SUPABASE_SESSION_KEY);
-  }
+  cachedUserResult = null;
 }
 
 // -------------------------------------------------------------
@@ -621,7 +548,7 @@ export async function ensureSeeded(): Promise<void> {
   }
 }
 
-const COURSES_SYNC_TTL_MS = 20_000;
+const COURSES_SYNC_TTL_MS = 180_000;
 let lastCoursesCloudSyncAt = 0;
 let lastSyncedCoursesUserId: string | null = null;
 let inFlightGetAllCourses: Promise<Course[]> | null = null;
@@ -711,7 +638,7 @@ export async function getAllCourses(forceRefresh = false): Promise<Course[]> {
 }
 
 // Bộ nhớ đệm ngắn hạn cho Thư viện sách cộng đồng
-const LIBRARY_SYNC_TTL_MS = 20_000;
+const LIBRARY_SYNC_TTL_MS = 180_000;
 let lastLibrarySyncAt = 0;
 let cachedLibraryCourses: Course[] | null = null;
 let inFlightGetLibraryCourses: Promise<Course[]> | null = null;
@@ -902,6 +829,22 @@ export async function applyLibraryCourseToUser(
   };
 
   await saveCourse(clonedCourse);
+  // Nếu máy có sẵn file PDF gốc trong IndexedDB, liên kết sang khóa học vừa Apply
+  if (db) {
+    try {
+      const existingPdf = await db.pdfBlobs.get(sourceId);
+      if (existingPdf) {
+        await db.pdfBlobs.put({
+          courseId: newCourseId,
+          blob: existingPdf.blob,
+          fileName: existingPdf.fileName,
+          updatedAt: nowIso,
+        });
+      }
+    } catch {
+      // Ignore
+    }
+  }
   await recordLearningActivity({
     type: "lesson_generated",
     title: `Thêm sách từ Thư viện: ${clonedCourse.title}`,
@@ -936,8 +879,14 @@ export async function saveCourse(course: Course): Promise<void> {
     updatedAt: new Date().toISOString(),
   };
   await db.courses.put(updated);
-  lastCoursesCloudSyncAt = 0;
-  cachedLibraryCourses = null;
+  if (cachedLibraryCourses && !updated.clonedFromCourseId) {
+    const idx = cachedLibraryCourses.findIndex((c) => c.id === updated.id);
+    if (idx !== -1) {
+      cachedLibraryCourses[idx] = updated;
+    } else {
+      cachedLibraryCourses = [updated, ...cachedLibraryCourses];
+    }
+  }
 
   // Sync flashcards from generated lessons (strictly scoped to userId)
   for (const ch of updated.chapters) {
@@ -1004,9 +953,42 @@ export async function saveCourse(course: Course): Promise<void> {
   }
 }
 
+export async function saveCoursePdfBlob(
+  courseId: string,
+  blob: Blob,
+  fileName?: string
+): Promise<void> {
+  if (!db) return;
+  try {
+    await db.pdfBlobs.put({
+      courseId,
+      blob,
+      fileName,
+      updatedAt: new Date().toISOString(),
+    });
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export async function getCoursePdfBlob(courseId: string): Promise<Blob | null> {
+  if (!db) return null;
+  try {
+    const entry = await db.pdfBlobs.get(courseId);
+    return entry?.blob || null;
+  } catch {
+    return null;
+  }
+}
+
 export async function deleteCourse(courseId: string): Promise<void> {
   if (!db) return;
   await db.courses.delete(courseId);
+  try {
+    await db.pdfBlobs.delete(courseId);
+  } catch {
+    // Ignore
+  }
   lastCoursesCloudSyncAt = 0;
   cachedLibraryCourses = null;
   const cards = await db.flashcards.where("courseId").equals(courseId).toArray();

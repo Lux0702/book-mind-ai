@@ -24,9 +24,10 @@ import {
   parseRawTextIntoChapters,
   buildTocPromptPayload,
   buildChaptersFromRanges,
+  renderPdfPagesToImagesBase64,
   ExtractedChapterRaw,
 } from "@/lib/pdfParser";
-import { getAppSettings } from "@/lib/storage";
+import { getAppSettings, saveCoursePdfBlob } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 
 interface CreateCourseModalProps {
@@ -58,6 +59,7 @@ export default function CreateCourseModal({
   const [pastedText, setPastedText] = useState("");
 
   const [selectedFile, setSelectedFile] = useState<File | null>(null);
+  const [isHybridVisionMode, setIsHybridVisionMode] = useState(false);
   const [isParsing, setIsParsing] = useState(false);
   const [isDetectingToc, setIsDetectingToc] = useState(false);
   const [parseProgress, setParseProgress] = useState<{
@@ -97,6 +99,9 @@ export default function CreateCourseModal({
         setAllPageTexts(res.pageTexts);
         setExtractedChapters(res.chapters);
         setTotalPages(res.totalPages);
+        const hasScannedOrHybrid =
+          res.isMostlyScanned || res.chapters.some((c) => c.isScannedPages);
+        setIsHybridVisionMode(hasScannedOrHybrid);
       } else {
         const text = await file.text();
         const chs = parseRawTextIntoChapters(
@@ -106,6 +111,7 @@ export default function CreateCourseModal({
         setAllPageTexts([]);
         setExtractedChapters(chs);
         setTotalPages(chs.length);
+        setIsHybridVisionMode(false);
       }
     } catch (err: unknown) {
       setErrorMsg(
@@ -125,8 +131,28 @@ export default function CreateCourseModal({
     try {
       const settings = getAppSettings();
       const pageSummaries = buildTocPromptPayload(allPageTexts);
+      let tocImagesBase64: string[] | undefined = undefined;
+
+      // Nếu là PDF Hybrid/Scan (mục lục có thể nằm trong ảnh), tự động render 10 trang đầu (từ trang 2-11, bỏ qua bìa trang 1) gửi kèm cho Vision AI
+      if (
+        selectedFile &&
+        selectedFile.name.toLowerCase().endsWith(".pdf") &&
+        (isHybridVisionMode ||
+          allPageTexts.slice(0, 12).join("").trim().length < 2500)
+      ) {
+        const startTocPage = allPageTexts.length > 2 ? 2 : 1;
+        const endTocPage = Math.min(startTocPage + 9, allPageTexts.length);
+        tocImagesBase64 = await renderPdfPagesToImagesBase64(
+          selectedFile,
+          startTocPage,
+          endTocPage,
+          10
+        );
+      }
+
       const res = await fetchAiAgent("/api/agent/detect-toc", {
         pageSummaries,
+        tocImagesBase64,
         totalPages: allPageTexts.length,
         apiKey: settings.geminiApiKey,
         model: settings.geminiModel,
@@ -139,6 +165,10 @@ export default function CreateCourseModal({
       if (Array.isArray(data.chapters) && data.chapters.length > 0) {
         const rebuilt = buildChaptersFromRanges(allPageTexts, data.chapters);
         setExtractedChapters(rebuilt);
+      } else {
+        throw new Error(
+          "AI không tìm thấy trang Mục lục trong 11 trang đầu của file PDF."
+        );
       }
     } catch (err: unknown) {
       setErrorMsg(
@@ -251,7 +281,7 @@ export default function CreateCourseModal({
       startPage: ch.startPage,
       endPage: ch.endPage,
       rawText: ch.rawText,
-      isScannedPages: ch.isScannedPages,
+      isScannedPages: Boolean(ch.isScannedPages || isHybridVisionMode),
       isGenerated: false,
       lesson: null,
       completedClozeIds: [],
@@ -280,6 +310,10 @@ export default function CreateCourseModal({
       createdAt: new Date().toISOString(),
       updatedAt: new Date().toISOString(),
     };
+
+    if (selectedFile && selectedFile.name.toLowerCase().endsWith(".pdf")) {
+      await saveCoursePdfBlob(courseId, selectedFile, selectedFile.name);
+    }
 
     await onCourseCreated(newCourse);
     onClose();
@@ -465,6 +499,31 @@ export default function CreateCourseModal({
                     />
                   </div>
                 </div>
+              )}
+
+              {/* Hybrid PDF (Text + Image) Vision Toggle */}
+              {selectedFile && selectedFile.name.toLowerCase().endsWith(".pdf") && (
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-950/20 p-3.5 text-xs transition hover:border-amber-500/70">
+                  <input
+                    type="checkbox"
+                    checked={isHybridVisionMode}
+                    onChange={(e) => setIsHybridVisionMode(e.target.checked)}
+                    className="mt-0.5 h-4 w-4 rounded border-amber-500/50 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                  />
+                  <div className="space-y-1">
+                    <div className="flex flex-wrap items-center gap-2 font-bold text-amber-300">
+                      <span>
+                        Chế độ Đọc Kết Hợp Chữ + Ảnh (Hybrid PDF / Gemini Vision)
+                      </span>
+                      <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-200 border border-amber-500/30">
+                        Khuyên bật khi PDF có nội dung chính là Ảnh
+                      </span>
+                    </div>
+                    <p className="text-[11px] leading-relaxed text-slate-300">
+                      Nếu file PDF của bạn chỉ lấy được vài dòng chữ tiêu đề/số trang còn <strong>nội dung chính (hội thoại, bảng từ vựng, bài đọc) nằm trong hình ảnh</strong>, hãy bật ô này. Hệ thống sẽ tự động chụp từng trang PDF gửi kèm cho <strong>Gemini Vision</strong> đọc 100% chữ trong ảnh khi tạo bài học!
+                    </p>
+                  </div>
+                </label>
               )}
 
               {/* Preview & Edit/Filter extracted chapters */}

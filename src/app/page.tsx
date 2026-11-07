@@ -44,6 +44,7 @@ import {
   deleteCourse,
   getAppSettings,
   getCurrentUser,
+  setCachedAuthenticatedUser,
   signInWithGoogle,
   signOutUser,
   getStudyStreak,
@@ -156,20 +157,35 @@ export default function HomePage() {
     // Stop speech when changing views or unmounting
     stopAllSpeech();
 
-    // Listen to Supabase auth events (ignore INITIAL_SESSION to prevent duplicate mount calls)
+    // Listen to Supabase auth events (handle Google OAuth redirect & sign-out cleanly without polling)
     const supabase = getSupabaseClient();
     if (supabase) {
       const {
         data: { subscription },
       } = supabase.auth.onAuthStateChange((event, session) => {
-        if (event === "INITIAL_SESSION") return;
-        if (session?.user) {
-          setCurrentUser(session.user as unknown as AppUser);
-        } else {
-          // Check if local user exists before nullifying
-          getCurrentUser().then((u) => setCurrentUser(u));
+        if (event === "TOKEN_REFRESHED") {
+          if (session?.user) {
+            setCachedAuthenticatedUser(session.user as unknown as AppUser);
+          }
+          return;
         }
-        refreshData();
+        if (event === "SIGNED_OUT") {
+          setCachedAuthenticatedUser(null);
+          setCurrentUser(null);
+          setQuotaAccount(null);
+          setCourses([]);
+          setFlashcards([]);
+          return;
+        }
+        if (session?.user) {
+          const authUser = session.user as unknown as AppUser;
+          setCachedAuthenticatedUser(authUser);
+          setCurrentUser((prev) => {
+            if (prev?.id === authUser.id) return prev;
+            void refreshData();
+            return authUser;
+          });
+        }
       });
       return () => subscription.unsubscribe();
     }
@@ -180,20 +196,32 @@ export default function HomePage() {
     stopAllSpeech();
   }, [viewMode, activeCourseId]);
 
-  // Listen to quota & virtual email events
+  // Listen to quota & virtual email events (lightweight local state updates ONLY — zero extra API/DB calls)
   useEffect(() => {
+    const syncLocalQuotaAndInbox = async () => {
+      const u = await getCurrentUser();
+      if (!u) return;
+      const qAcc = getUserQuotaAccount(u);
+      if (qAcc) {
+        setQuotaAccount({ ...qAcc });
+        setHasApiKey(Boolean(qAcc.isKeyActivated && qAcc.activatedApiKey));
+      }
+      const userEmails = getVirtualEmails(u.email);
+      setUnreadEmailCount(userEmails.filter((e) => !e.isRead).length);
+    };
+
     const handleQuotaUpdated = () => {
-      refreshData();
+      void syncLocalQuotaAndInbox();
     };
     const handleEmailUpdated = () => {
-      refreshData();
+      void syncLocalQuotaAndInbox();
     };
     const handleNewEmail = (e: Event) => {
       const customEvt = e as CustomEvent<VirtualEmailItem>;
       if (customEvt.detail) {
         setNewEmailToast(customEvt.detail);
       }
-      refreshData();
+      void syncLocalQuotaAndInbox();
     };
     const handleRequireKeyActivation = () => {
       setIsUpgradeModalOpen(true);
@@ -211,22 +239,6 @@ export default function HomePage() {
       setQuotaAccount(null);
     };
 
-    const checkSessionInterval = setInterval(() => {
-      getCurrentUser().then((u) => {
-        if (!u) {
-          setCurrentUser(null);
-        }
-      });
-    }, 60_000);
-
-    const handleWindowFocus = () => {
-      getCurrentUser().then((u) => {
-        if (!u) {
-          setCurrentUser(null);
-        }
-      });
-    };
-
     window.addEventListener("bookmind:quota-updated", handleQuotaUpdated);
     window.addEventListener("bookmind:email-updated", handleEmailUpdated);
     window.addEventListener("bookmind:new-email", handleNewEmail);
@@ -236,10 +248,8 @@ export default function HomePage() {
     );
     window.addEventListener("bookmind:quota-exceeded", handleQuotaExceeded);
     window.addEventListener("bookmind:session-expired", handleSessionExpired);
-    window.addEventListener("focus", handleWindowFocus);
 
     return () => {
-      clearInterval(checkSessionInterval);
       window.removeEventListener("bookmind:quota-updated", handleQuotaUpdated);
       window.removeEventListener("bookmind:email-updated", handleEmailUpdated);
       window.removeEventListener("bookmind:new-email", handleNewEmail);
@@ -255,9 +265,8 @@ export default function HomePage() {
         "bookmind:session-expired",
         handleSessionExpired
       );
-      window.removeEventListener("focus", handleWindowFocus);
     };
-  }, [refreshData]);
+  }, []);
 
   // Handle click outside to close user dropdown
   useEffect(() => {
@@ -275,10 +284,17 @@ export default function HomePage() {
 
   const handleLogout = async () => {
     if (confirm("Bạn có chắc chắn muốn đăng xuất tài khoản?")) {
+      stopAllSpeech();
+      setIsUserMenuOpen(false);
+      setActiveCourseId(null);
+      setIsSettingsOpen(false);
+      setIsUpgradeModalOpen(false);
+      setIsInboxModalOpen(false);
       await signOutUser();
       setCurrentUser(null);
-      setIsUserMenuOpen(false);
-      await refreshData();
+      setQuotaAccount(null);
+      setCourses([]);
+      setFlashcards([]);
     }
   };
 
@@ -316,23 +332,15 @@ export default function HomePage() {
     );
   }
 
-  // AUTH GATE: Bắt buộc đăng nhập trước khi vào trang
+  // AUTH GATE: Bắt buộc đăng nhập trước khi vào trang (Không hiển thị nút Cài đặt ở màn hình Login)
   if (!currentUser) {
     return (
-      <>
-        <LoginScreen
-          onLoginSuccess={(user) => {
-            setCurrentUser(user);
-            refreshData();
-          }}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-        />
-        <SettingsModal
-          isOpen={isSettingsOpen}
-          onClose={() => setIsSettingsOpen(false)}
-          onSettingsChanged={refreshData}
-        />
-      </>
+      <LoginScreen
+        onLoginSuccess={(user) => {
+          setCurrentUser(user);
+          refreshData();
+        }}
+      />
     );
   }
 

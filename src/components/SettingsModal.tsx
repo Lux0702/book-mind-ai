@@ -140,19 +140,37 @@ export default function SettingsModal({
                 options={[
                   {
                     value: "gemini-2.5-flash",
-                    label: "Gemini 2.5 Flash",
-                    subLabel: "Cân bằng hoàn hảo giữa tốc độ và độ chính xác",
-                    badge: "Khuyên dùng",
+                    label: "Google Gemini 2.5 Flash (+ Tự động chuyển sang Qwen khi hết Quota)",
+                    subLabel: "Ưu tiên Gemini, tự động nhảy sang Qwen (Groq/SiliconFlow/OpenRouter) nếu hết 20 lượt",
+                    badge: "Auto 4 Tầng",
+                  },
+                  {
+                    value: "qwen-groq",
+                    label: "⚡ Qwen 3 32B — Groq Cloud Siêu Tốc (Free)",
+                    subLabel: "Tốc độ tạo bài 2–3 giây, hạn mức 1.000+ lượt/ngày miễn phí",
+                    badge: "Siêu tốc Free",
+                  },
+                  {
+                    value: "qwen-openrouter",
+                    label: "🟢 Qwen 2.5 72B & Qwen VL Vision — OpenRouter (Free)",
+                    subLabel: "Bản 72B thông minh nhất + đọc trực tiếp ảnh trang sách (:free $0.00)",
+                    badge: "Qwen 72B Free",
+                  },
+                  {
+                    value: "qwen-siliconflow",
+                    label: "🔵 Qwen 2.5 7B & VL — SiliconFlow Cloud (Free)",
+                    subLabel: "Chính chủ hệ sinh thái Qwen, cực chuẩn tiếng Trung/Anh miễn phí",
+                    badge: "Qwen Cloud",
                   },
                   {
                     value: "gemini-2.0-flash",
-                    label: "Gemini 2.0 Flash",
+                    label: "Google Gemini 2.0 Flash",
                     subLabel: "Phản hồi nhanh cho dịch câu và phát âm",
                     badge: "Tốc độ cao",
                   },
                   {
                     value: "gemini-2.5-pro",
-                    label: "Gemini 2.5 Pro",
+                    label: "Google Gemini 2.5 Pro",
                     subLabel: "Phân tích ngữ pháp & diễn giải sách chuyên sâu nhất",
                     badge: "Chuyên sâu",
                   },
@@ -161,69 +179,10 @@ export default function SettingsModal({
             </div>
           </div>
 
-          {/* Section 2: Supabase Cloud Configuration */}
-          <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
-            <div className="flex items-center justify-between">
-              <h3 className="flex items-center gap-2 text-sm font-semibold text-emerald-300">
-                <Database className="h-4 w-4" />
-                2. Cấu hình Supabase Cloud (Google Auth & Đồng bộ)
-              </h3>
-              <a
-                href="https://supabase.com/dashboard"
-                target="_blank"
-                rel="noreferrer"
-                className="flex items-center gap-1 text-[11px] text-emerald-400 hover:text-emerald-300"
-              >
-                <span>Dashboard Supabase</span>
-                <ExternalLink className="h-3 w-3" />
-              </a>
-            </div>
-            <p className="text-xs text-slate-400">
-              Cần thiết để bật tính năng <strong>Đăng nhập Google</strong> và đồng bộ dữ liệu sách giữa các thiết bị.
-            </p>
-
-            <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">
-                  Supabase Project URL
-                </label>
-                <input
-                  type="text"
-                  value={settings.supabaseUrl}
-                  onChange={(e) =>
-                    setSettings({ ...settings, supabaseUrl: e.target.value.trim() })
-                  }
-                  placeholder="https://xyzcompany.supabase.co"
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-              <div>
-                <label className="mb-1 block text-xs text-slate-400">
-                  Supabase Anon Public Key
-                </label>
-                <input
-                  type="password"
-                  value={settings.supabaseAnonKey}
-                  onChange={(e) =>
-                    setSettings({
-                      ...settings,
-                      supabaseAnonKey: e.target.value.trim(),
-                    })
-                  }
-                  placeholder="eyJhbGciOiJIUzI1NiIsInR5cCI6..."
-                  className="w-full rounded-xl border border-slate-700 bg-slate-900 px-3.5 py-2 text-xs text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
-                />
-              </div>
-            </div>
-            <p className="text-[11px] text-slate-500 italic">
-              💡 Mẹo khi Deploy lên Vercel: Thêm 2 biến này vào <strong>Vercel Settings &rarr; Environment Variables</strong> (tên <code>NEXT_PUBLIC_SUPABASE_URL</code> và <code>NEXT_PUBLIC_SUPABASE_ANON_KEY</code>) để mọi người dùng đều có sẵn Google Auth tự động.
-            </p>
-          </div>
-
-          {/* Section 3: JSON Backup & Restore */}
+          {/* Section 2: JSON Backup & Restore */}
           <div className="space-y-3 rounded-xl border border-slate-800 bg-slate-950/60 p-4">
             <h3 className="text-sm font-semibold text-amber-300">
-              3. Sao lưu & Khôi phục toàn bộ Khóa học (File .JSON)
+              2. Sao lưu & Khôi phục toàn bộ Khóa học (File .JSON)
             </h3>
             <p className="text-xs text-slate-400">
               Xuất toàn bộ các Course, bài học AI đã tạo và tiến độ Flashcard ra file để cất giữ hoặc chuyển sang thiết bị khác bất kỳ lúc nào.

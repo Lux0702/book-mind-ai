@@ -194,9 +194,15 @@ export default function AdminDashboardPage() {
     setIsCheckingAuth(false);
   }, []);
 
+  const refreshLocalLists = useCallback(() => {
+    setUsers(getAllUsersForAdmin());
+    setTransactions(getAllPaymentTransactions());
+    setAiLogs(getAllAiUsageLogs());
+  }, []);
+
   useEffect(() => {
     loadAdminData();
-    const handleUpdate = () => loadAdminData();
+    const handleUpdate = () => refreshLocalLists();
     const handleSessionExpired = (e: Event) => {
       const evt = e as CustomEvent<{ reason?: string }>;
       setCurrentUser(null);
@@ -206,29 +212,17 @@ export default function AdminDashboardPage() {
           "Phiên đăng nhập đã hết hạn. Hệ thống đã tự động đăng xuất, vui lòng quay về trang chủ để đăng nhập lại!"
       );
     };
-    const checkSessionInterval = setInterval(() => {
-      getCurrentUser().then((u) => {
-        if (!u) {
-          setCurrentUser(null);
-          setIsAdminAuthorized(false);
-          setAuthReason(
-            "Phiên đăng nhập đã hết hạn. Vui lòng quay về trang chủ để đăng nhập lại!"
-          );
-        }
-      });
-    }, 60_000);
 
     window.addEventListener("bookmind:quota-updated", handleUpdate);
     window.addEventListener("bookmind:session-expired", handleSessionExpired);
     return () => {
-      clearInterval(checkSessionInterval);
       window.removeEventListener("bookmind:quota-updated", handleUpdate);
       window.removeEventListener(
         "bookmind:session-expired",
         handleSessionExpired
       );
     };
-  }, [loadAdminData]);
+  }, [loadAdminData, refreshLocalLists]);
 
   const handleSaveMasterSettings = (e: React.FormEvent) => {
     e.preventDefault();
@@ -1247,13 +1241,13 @@ SET role = 'admin',
           </div>
         )}
 
-        {/* TAB 3: MASTER GEMINI API KEY & SUPABASE CLOUD CONFIGURATION */}
+        {/* TAB 3: MASTER AI AGENT KEYS & SUPABASE CLOUD CONFIGURATION */}
         {activeTab === "master_key" && (
           <form
             onSubmit={handleSaveMasterSettings}
             className="max-w-4xl space-y-6"
           >
-            {/* Card 1: Master Google Gemini API Key */}
+            {/* Card 1: 4-Provider AI Agent Keys Cluster (Admin Only) */}
             <div className="rounded-3xl border border-amber-500/30 bg-slate-900/80 p-6 space-y-5 shadow-xl">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
@@ -1262,28 +1256,76 @@ SET role = 'admin',
                   </div>
                   <div>
                     <h3 className="text-base font-extrabold text-white">
-                      1. Cấu Hình Master Google Gemini API Key (Chủ Hệ Thống)
+                      1. Quản Lý Cụm 4 API Key Của Các AI Agent (Chỉ Hiển Thị Cho Admin)
                     </h3>
                     <p className="text-xs text-slate-400">
-                      Key gốc duy nhất của Admin dùng để xử lý toàn bộ yêu cầu AI từ các mã Key gián tiếp của học viên
+                      Cấu hình các API Key gốc của hệ thống (Groq, OpenRouter, SiliconFlow & Google Gemini). Tài khoản User thông thường sẽ không nhìn thấy các Key này.
                     </p>
                   </div>
                 </div>
-                <a
-                  href="https://aistudio.google.com/apikey"
-                  target="_blank"
-                  rel="noreferrer"
-                  className="flex items-center gap-1 text-xs font-semibold text-amber-400 hover:underline"
-                >
-                  Lấy Master Key tại Google AI Studio
-                  <ExternalLink className="h-3.5 w-3.5" />
-                </a>
+                <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-3 py-1 text-xs font-bold text-emerald-300">
+                  Bảo mật cấp Admin
+                </span>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
                   <label className="mb-1.5 block text-xs font-bold text-slate-300">
-                    Master Google Gemini API Key (AIzaSy...)
+                    1. Groq Cloud API Key (<code>gsk_...</code>)
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.groqApiKey || ""}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        groqApiKey: e.target.value.trim(),
+                      })
+                    }
+                    placeholder="gsk_..."
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                    2. OpenRouter API Key (<code>sk-or-v1-...</code>)
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.openRouterApiKey || ""}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        openRouterApiKey: e.target.value.trim(),
+                      })
+                    }
+                    placeholder="sk-or-v1-..."
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                    3. SiliconFlow API Key (<code>sk-...</code>)
+                  </label>
+                  <input
+                    type="password"
+                    value={settings.siliconFlowApiKey || ""}
+                    onChange={(e) =>
+                      setSettings({
+                        ...settings,
+                        siliconFlowApiKey: e.target.value.trim(),
+                      })
+                    }
+                    placeholder="sk-..."
+                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                    4. Master Google Gemini API Key (<code>AIzaSy...</code>)
                   </label>
                   <input
                     type="password"
@@ -1291,17 +1333,17 @@ SET role = 'admin',
                     onChange={(e) =>
                       setSettings({
                         ...settings,
-                        masterGeminiApiKey: e.target.value,
+                        masterGeminiApiKey: e.target.value.trim(),
                       })
                     }
-                    placeholder="AIzaSy... (Hoặc cấu hình biến GEMINI_API_KEY trong .env)"
+                    placeholder="AIzaSy... (Hoặc biến GEMINI_API_KEY trong .env)"
                     className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
                   />
                 </div>
 
-                <div>
+                <div className="md:col-span-2">
                   <label className="mb-1.5 block text-xs font-bold text-slate-300">
-                    Mô hình Gemini mặc định của hệ thống
+                    Mô hình AI mặc định của toàn hệ thống
                   </label>
                   <CustomSelect
                     value={settings.geminiModel}
@@ -1312,17 +1354,32 @@ SET role = 'admin',
                     icon={<Sparkles className="h-4 w-4" />}
                     options={[
                       {
+                        value: "qwen-groq",
+                        label: "⚡ Groq Cloud Siêu Tốc (GPT-OSS 120B / Qwen 3.8)",
+                        badge: "Mặc định Siêu tốc",
+                      },
+                      {
+                        value: "qwen-openrouter",
+                        label: "🟢 OpenRouter Free + Nemotron Vision VL",
+                        badge: "Đa năng & Vision",
+                      },
+                      {
+                        value: "qwen-siliconflow",
+                        label: "🔵 SiliconFlow Qwen Cloud",
+                        badge: "Dự phòng",
+                      },
+                      {
                         value: "gemini-2.5-flash",
-                        label: "Gemini 2.5 Flash (Nhanh & Chuẩn xác)",
-                        badge: "Khuyên dùng",
+                        label: "Google Gemini 2.5 Flash (+ Tự động Failover)",
+                        badge: "Google AI",
                       },
                       {
                         value: "gemini-2.0-flash",
-                        label: "Gemini 2.0 Flash (Tốc độ cao)",
+                        label: "Google Gemini 2.0 Flash",
                       },
                       {
                         value: "gemini-2.5-pro",
-                        label: "Gemini 2.5 Pro (Phân tích chuyên sâu)",
+                        label: "Google Gemini 2.5 Pro",
                       },
                     ]}
                   />
