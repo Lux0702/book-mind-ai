@@ -37,24 +37,26 @@ export function normalizePdfHeaderSample(text: string): string {
 }
 
 /**
- * Build a compact summary of the book's first 25 pages (where the Table of Contents lives)
- * plus the header of every page in the PDF so AI can map the exact lessons and page numbers.
+ * Build a compact summary of the book's first 15 pages (where the Table of Contents lives)
+ * plus the header of every page in the PDF so AI can map all lessons (e.g. Unit 1 -> Unit 15+) without getting truncated.
  */
 export function buildTocPromptPayload(pageTexts: string[]): string {
   const lines: string[] = [];
-  const tocLimit = Math.min(25, pageTexts.length);
+  const tocLimit = Math.min(15, pageTexts.length);
 
-  lines.push("=== NỘI DUNG CHI TIẾT 25 TRANG ĐẦU (CHỨA MỤC LỤC / TABLE OF CONTENTS) ===");
+  lines.push("=== NỘI DUNG 15 TRANG ĐẦU (CHỨA MỤC LỤC / TABLE OF CONTENTS) ===");
   for (let i = 0; i < tocLimit; i++) {
-    const t = pageTexts[i].trim();
+    const t = normalizePdfHeaderSample(pageTexts[i].trim());
     if (t.length > 0) {
-      lines.push(`[Page ${i + 1}] ${t.slice(0, 800)}`);
+      lines.push(`[Page ${i + 1}] ${t.slice(0, 350)}`);
     }
   }
 
-  lines.push("\n=== TIÊU ĐỀ ĐẦU TRANG CỦA TOÀN BỘ CÁC TRANG TRONG FILE PDF ===");
+  lines.push(
+    `\n=== TIÊU ĐỀ ĐẦU TRANG CỦA TOÀN BỘ ${pageTexts.length} TRANG TRONG FILE PDF (TỪ ĐẦU ĐẾN CUỐI SÁCH) ===`
+  );
   for (let i = 0; i < pageTexts.length; i++) {
-    const sample = normalizePdfHeaderSample(pageTexts[i].slice(0, 180).trim());
+    const sample = normalizePdfHeaderSample(pageTexts[i].slice(0, 90).trim());
     if (sample.length > 0) {
       lines.push(`[Page ${i + 1}] ${sample}`);
     }

@@ -42,6 +42,8 @@ import {
   saveCourse,
   getCoursePdfBlob,
   saveCoursePdfBlob,
+  fetchChapterRawPayloadFromStorage,
+  uploadCourseRawStorageToCloud,
 } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 import {
@@ -247,11 +249,41 @@ export default function ChapterWorkspace({
         10
       );
 
-      const pageSummaries = course.chapters
-        .slice(0, 3)
-        .map((c) => c.rawText)
-        .join("\n\n")
-        .slice(0, 8000);
+      // Gom toàn bộ các trang [Page X] từ tất cả các chương của cuốn sách (không cắt slice(0,3)) để AI thấy đủ từ Unit 1 đến Unit cuối cùng!
+      const pageTextMap = new Map<number, string>();
+      const allCombinedRaw = course.chapters.map((c) => c.rawText).join("\n\n");
+      const pageBlocks = allCombinedRaw.split(/(?=\[Page \d+\])/g);
+      for (const block of pageBlocks) {
+        const m = block.match(/^\[Page (\d+)\]\s*([\s\S]*)$/);
+        if (m) {
+          const pNum = parseInt(m[1], 10);
+          if (!pageTextMap.has(pNum)) {
+            pageTextMap.set(pNum, m[2].trim());
+          }
+        }
+      }
+
+      const summaryLines: string[] = [];
+      summaryLines.push("=== NỘI DUNG 15 TRANG ĐẦU (CHỨA MỤC LỤC) ===");
+      for (let p = 1; p <= Math.min(15, maxPage); p++) {
+        const txt = pageTextMap.get(p) || "";
+        if (txt) {
+          summaryLines.push(`[Page ${p}] ${txt.slice(0, 350)}`);
+        }
+      }
+      summaryLines.push(
+        `\n=== TIÊU ĐỀ ĐẦU TRANG TOÀN BỘ ${maxPage} TRANG SÁCH ===`
+      );
+      for (let p = 1; p <= maxPage; p++) {
+        const txt = pageTextMap.get(p) || "";
+        if (txt) {
+          summaryLines.push(`[Page ${p}] ${txt.slice(0, 90)}`);
+        }
+      }
+      const pageSummaries =
+        summaryLines.length > 2
+          ? summaryLines.join("\n").slice(0, 11000)
+          : allCombinedRaw.slice(0, 11000);
 
       const settings = getAppSettings();
       const res = await fetchAiAgent("/api/agent/detect-toc", {
@@ -278,6 +310,12 @@ export default function ChapterWorkspace({
               sp,
               Math.min(Number(ch.endPage) || sp + 10, maxPage)
             );
+            const slicePages: string[] = [];
+            for (let p = sp; p <= ep; p++) {
+              const pTxt = pageTextMap.get(p) || "";
+              slicePages.push(`[Page ${p}]\n${pTxt}`);
+            }
+            const builtRawText = slicePages.join("\n\n").trim();
             return {
               id: `${course.id}-toc-ch-${i + 1}-${Date.now()}`,
               courseId: course.id,
@@ -286,7 +324,7 @@ export default function ChapterWorkspace({
               summary: `Trang ${sp}–${ep}`,
               startPage: sp,
               endPage: ep,
-              rawText: "",
+              rawText: builtRawText,
               isScannedPages: true,
               isGenerated: false,
               lesson: null,
@@ -299,10 +337,12 @@ export default function ChapterWorkspace({
 
         const updatedCourse: Course = {
           ...course,
+          hasCloudPdf: pdfBlob.size <= 48 * 1024 * 1024,
           chapters: newChapterUnits,
           updatedAt: new Date().toISOString(),
         };
         await saveCourse(updatedCourse);
+        void uploadCourseRawStorageToCloud(updatedCourse, pdfBlob);
         await onCourseUpdated(updatedCourse);
         if (newChapterUnits[0]) {
           setSelectedChapterId(newChapterUnits[0].id);
@@ -340,12 +380,27 @@ export default function ChapterWorkspace({
     let images = providedImages;
 
     if (!images || images.length === 0) {
-      const pdfBlob = await getCoursePdfBlob(course.id);
-      if (pdfBlob) {
-        setOcrStatusMsg(
-          `Đang cắt các trang PDF (${startP}–${endP}) thành ảnh nhẹ...`
+      // 1. Ưu tiên lấy ảnh trang đã cắt sẵn của chương từ Kho A (Supabase Storage: chapter-{index}.json)
+      const cloudChapter = await fetchChapterRawPayloadFromStorage(
+        course,
+        chapter.index
+      );
+      if (cloudChapter?.pageImagesBase64?.length) {
+        images = cloudChapter.pageImagesBase64;
+      } else {
+        // 2. Nếu chưa có trong gói chương, cắt trực tiếp từ file PDF gốc
+        const pdfBlob = await getCoursePdfBlob(
+          course.id,
+          course.clonedFromCourseId
         );
-        images = await renderPdfPagesToImagesBase64(pdfBlob, startP, endP, 20);
+        if (pdfBlob) {
+          setOcrStatusMsg(
+            `Đang cắt các trang PDF (${startP}–${endP}) thành ảnh nhẹ...`
+          );
+          images = await renderPdfPagesToImagesBase64(pdfBlob, startP, endP, 20);
+        } else if (cloudChapter?.rawText && cloudChapter.rawText.length > 20) {
+          return cloudChapter.rawText;
+        }
       }
     }
 
@@ -447,18 +502,38 @@ export default function ChapterWorkspace({
           ? editableRawText
           : chapter.rawText;
 
+      let cloudImagesFallback = pageImagesBase64;
+      if (textToUse.trim().length < 20) {
+        setOcrStatusMsg(
+          "Đang tải dữ liệu chương từ Kho lưu trữ Cloud (Supabase Storage)..."
+        );
+        const cloudPayload = await fetchChapterRawPayloadFromStorage(
+          course,
+          chapter.index
+        );
+        if (cloudPayload?.rawText && cloudPayload.rawText.trim().length > 0) {
+          textToUse = cloudPayload.rawText;
+        }
+        if (
+          (!cloudImagesFallback || cloudImagesFallback.length === 0) &&
+          cloudPayload?.pageImagesBase64?.length
+        ) {
+          cloudImagesFallback = cloudPayload.pageImagesBase64;
+        }
+      }
+
       const alreadyHasOcr = textToUse.includes(
         "=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ==="
       );
 
       // Step 1: If Hybrid/Scanned mode is enabled or images were uploaded, convert images to text first!
       if (
-        (pageImagesBase64 && pageImagesBase64.length > 0) ||
+        (cloudImagesFallback && cloudImagesFallback.length > 0) ||
         ((useHybridVision || chapter.isScannedPages) && !alreadyHasOcr)
       ) {
         textToUse = await extractTextFromChapterImages(
           chapter,
-          pageImagesBase64
+          cloudImagesFallback
         );
       }
 

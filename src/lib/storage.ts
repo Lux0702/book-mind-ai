@@ -768,6 +768,193 @@ export async function getLibraryCourses(
   }
 }
 
+const BOOK_STORAGE_BUCKET = "book-chapters";
+let storageBucketChecked = false;
+
+async function ensureBookStorageBucket(): Promise<void> {
+  if (storageBucketChecked) return;
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  storageBucketChecked = true;
+  try {
+    await supabase.storage.createBucket(BOOK_STORAGE_BUCKET, {
+      public: true,
+    });
+  } catch {
+    // Bucket đã tồn tại hoặc được tạo qua SQL
+  }
+}
+
+export function getCanonicalSourceCourseId(course: Course): string {
+  return course.clonedFromCourseId || course.id;
+}
+
+export async function uploadCourseRawStorageToCloud(
+  course: Course,
+  pdfBlob?: Blob | null
+): Promise<boolean> {
+  const supabase = getSupabaseClient();
+  const settings = getAppSettings();
+  if (!supabase || !settings.autoSyncCloud) return false;
+
+  await ensureBookStorageBucket();
+  const sourceId = getCanonicalSourceCourseId(course);
+  let uploadedAny = false;
+
+  // 1. Đẩy nội dung thô đã trích xuất (bao gồm cả ảnh chụp từng trang nếu là PDF Scan) của từng chương chưa tạo bài học lên Kho A (Storage)
+  const { renderPdfPagesToImagesBase64 } = await import("@/lib/pdfParser");
+
+  for (const ch of course.chapters) {
+    if (ch.isGenerated && ch.lesson) continue;
+    try {
+      let chapterImages = ch.pageImagesBase64 || [];
+      const textWithoutTags = (ch.rawText || "")
+        .replace(/\[Page \d+\]/g, "")
+        .trim();
+
+      // Nếu là chương sách Scan (chưa có chữ trong rawText) và có file PDF gốc, tự động cắt trang startPage..endPage thành ảnh nén lưu vào chapter-{index}.json!
+      if (
+        pdfBlob &&
+        chapterImages.length === 0 &&
+        (ch.isScannedPages || textWithoutTags.length < 300)
+      ) {
+        const sp = ch.startPage || 1;
+        const ep = ch.endPage || sp + 14;
+        chapterImages = await renderPdfPagesToImagesBase64(
+          pdfBlob,
+          sp,
+          ep,
+          22
+        );
+      }
+
+      const payload = JSON.stringify({
+        courseId: sourceId,
+        chapterIndex: ch.index,
+        title: ch.title,
+        startPage: ch.startPage,
+        endPage: ch.endPage,
+        rawText: ch.rawText || "",
+        isScannedPages: Boolean(ch.isScannedPages),
+        pageImagesBase64: chapterImages,
+      });
+      const blob = new Blob([payload], { type: "application/json" });
+      const { error } = await supabase.storage
+        .from(BOOK_STORAGE_BUCKET)
+        .upload(`${sourceId}/chapter-${ch.index}.json`, blob, {
+          upsert: true,
+          contentType: "application/json",
+        });
+      if (!error) {
+        uploadedAny = true;
+      }
+    } catch {
+      // Ignore single chapter upload error
+    }
+  }
+
+  // 2. Nếu có file PDF gốc (<= 48MB), đẩy lên Kho A (Storage) để user khác máy có thể đọc Vision/OCR các chương chưa tạo
+  if (pdfBlob && pdfBlob.size <= 48 * 1024 * 1024) {
+    try {
+      const { error } = await supabase.storage
+        .from(BOOK_STORAGE_BUCKET)
+        .upload(`${sourceId}/source.pdf`, pdfBlob, {
+          upsert: true,
+          contentType: "application/pdf",
+        });
+      if (!error) {
+        uploadedAny = true;
+      }
+    } catch {
+      // Ignore PDF upload error
+    }
+  }
+
+  return uploadedAny;
+}
+
+export async function fetchChapterRawPayloadFromStorage(
+  course: Course,
+  chapterIndex: number
+): Promise<{
+  rawText?: string;
+  pageImagesBase64?: string[];
+  startPage?: number;
+  endPage?: number;
+  isScannedPages?: boolean;
+} | null> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return null;
+  const sourceId = getCanonicalSourceCourseId(course);
+  try {
+    const { data, error } = await supabase.storage
+      .from(BOOK_STORAGE_BUCKET)
+      .download(`${sourceId}/chapter-${chapterIndex}.json`);
+    if (error || !data) return null;
+    const text = await data.text();
+    return JSON.parse(text);
+  } catch {
+    return null;
+  }
+}
+
+export async function deleteSingleChapterFromStorage(
+  sourceCourseId: string,
+  chapterIndex: number
+): Promise<void> {
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+  try {
+    await supabase.storage
+      .from(BOOK_STORAGE_BUCKET)
+      .remove([`${sourceCourseId}/chapter-${chapterIndex}.json`]);
+  } catch {
+    // Ignore
+  }
+}
+
+export async function cleanupBookStorageOnAllChaptersGenerated(
+  sourceCourseId: string,
+  totalChapters: number
+): Promise<void> {
+  if (db) {
+    try {
+      await db.pdfBlobs.delete(sourceCourseId);
+    } catch {
+      // Ignore
+    }
+  }
+
+  const supabase = getSupabaseClient();
+  if (!supabase) return;
+
+  try {
+    const pathsToRemove = new Set<string>([`${sourceCourseId}/source.pdf`]);
+    for (let i = 1; i <= Math.max(totalChapters, 50); i++) {
+      pathsToRemove.add(`${sourceCourseId}/chapter-${i}.json`);
+    }
+
+    const { data: listData } = await supabase.storage
+      .from(BOOK_STORAGE_BUCKET)
+      .list(sourceCourseId, { limit: 200 });
+
+    if (Array.isArray(listData)) {
+      for (const item of listData) {
+        if (item.name) {
+          pathsToRemove.add(`${sourceCourseId}/${item.name}`);
+        }
+      }
+    }
+
+    const allPaths = Array.from(pathsToRemove);
+    if (allPaths.length > 0) {
+      await supabase.storage.from(BOOK_STORAGE_BUCKET).remove(allPaths);
+    }
+  } catch {
+    // Ignore cleanup errors
+  }
+}
+
 export async function applyLibraryCourseToUser(
   libraryCourse: Course
 ): Promise<Course> {
@@ -788,6 +975,32 @@ export async function applyLibraryCourseToUser(
         c.chapters.length === libraryCourse.chapters.length)
   );
   if (alreadyOwned) {
+    // Đồng bộ bổ sung các chương đã được cộng đồng tạo mới từ sách thư viện sang bản của user
+    let hasNewLessonMerged = false;
+    const mergedChapters = alreadyOwned.chapters.map((ch, idx) => {
+      if (ch.isGenerated && ch.lesson) return ch;
+      const libMatch =
+        libraryCourse.chapters.find((lch) => lch.index === ch.index) ||
+        libraryCourse.chapters[idx];
+      if (libMatch?.isGenerated && libMatch.lesson) {
+        hasNewLessonMerged = true;
+        return {
+          ...ch,
+          isGenerated: true,
+          lesson: JSON.parse(JSON.stringify(libMatch.lesson)),
+        };
+      }
+      return ch;
+    });
+    if (hasNewLessonMerged) {
+      const syncedCourse: Course = {
+        ...alreadyOwned,
+        chapters: mergedChapters,
+        updatedAt: new Date().toISOString(),
+      };
+      await saveCourse(syncedCourse);
+      return syncedCourse;
+    }
     return alreadyOwned;
   }
 
@@ -871,11 +1084,48 @@ export async function saveCourse(course: Course): Promise<void> {
     user?.email?.split("@")[0] ||
     "Học viên BookMind";
 
+  const sourceId = getCanonicalSourceCourseId(course);
+  const allChaptersGenerated =
+    course.chapters.length > 0 &&
+    course.chapters.every((ch) => Boolean(ch.isGenerated && ch.lesson));
+
+  // Nếu một chương vừa tạo xong bài học, xóa file nguyên liệu của chương đó trên Storage;
+  // Đặc biệt: Nếu TẤT CẢ các chương của sách đã tạo xong bài học -> tự động xóa toàn bộ file sách/chương khỏi Storage!
+  if (allChaptersGenerated && !course.storageCleanedUp) {
+    void cleanupBookStorageOnAllChaptersGenerated(
+      sourceId,
+      course.chapters.length
+    );
+    try {
+      await db.pdfBlobs.delete(course.id);
+    } catch {
+      // Ignore
+    }
+  } else {
+    for (const ch of course.chapters) {
+      if (ch.isGenerated && ch.lesson) {
+        void deleteSingleChapterFromStorage(sourceId, ch.index);
+      }
+    }
+  }
+
+  const cleanedChapters = course.chapters.map((ch) => {
+    if (ch.isGenerated && ch.lesson) {
+      // Khi chương đã tạo xong bài học hoàn chỉnh, gỡ bỏ mảng ảnh base64 nặng để Kho B (Database) luôn siêu nhẹ
+      const { pageImagesBase64: _unusedImages, ...restChapter } = ch;
+      void _unusedImages;
+      return restChapter;
+    }
+    return ch;
+  });
+
   const updated: Course = {
     ...course,
     userId,
     ownerEmail,
     ownerName,
+    storageCleanedUp: allChaptersGenerated ? true : course.storageCleanedUp,
+    chapters: cleanedChapters,
     updatedAt: new Date().toISOString(),
   };
   await db.courses.put(updated);
@@ -926,7 +1176,7 @@ export async function saveCourse(course: Course): Promise<void> {
     details: `Đã lưu tiến độ ${updated.chapters.length} chương sách.`,
   });
 
-  // Sync to Supabase Cloud with user_id
+  // Sync to Supabase Cloud (Kho B: Database)
   const supabase = getSupabaseClient();
   const settings = getAppSettings();
   if (supabase && settings.autoSyncCloud) {
@@ -946,6 +1196,80 @@ export async function saveCourse(course: Course): Promise<void> {
           data: updated,
           updated_at: updated.updatedAt,
         });
+      }
+
+      // ĐỒNG BỘ CHIA SẺ BÀI HỌC VỀ SÁCH GỐC TRÊN KHO B:
+      // Nếu đây là sách được User khác Apply (có clonedFromCourseId), khi User này tạo mới bài học ở chương bất kỳ,
+      // tự động cập nhật luôn bài học chương đó vào sách gốc trên Kho B để mọi User khác cùng hưởng và kiểm tra xóa Kho A!
+      if (
+        updated.clonedFromCourseId &&
+        updated.clonedFromCourseId !== updated.id &&
+        updated.chapters.some((ch) => ch.isGenerated && ch.lesson)
+      ) {
+        const { data: sourceRow } = await supabase
+          .from("courses")
+          .select("id, user_id, title, data")
+          .eq("id", updated.clonedFromCourseId)
+          .maybeSingle();
+
+        if (sourceRow?.data) {
+          const sourceCourse = sourceRow.data as Course;
+          let sourceChanged = false;
+          const mergedSourceChapters = sourceCourse.chapters.map((sch, idx) => {
+            const matchingCloneCh =
+              updated.chapters.find((uch) => uch.index === sch.index) ||
+              updated.chapters[idx];
+            if (
+              (!sch.isGenerated || !sch.lesson) &&
+              matchingCloneCh?.isGenerated &&
+              matchingCloneCh.lesson
+            ) {
+              sourceChanged = true;
+              const { pageImagesBase64: _unused, ...cleanSch } = sch;
+              void _unused;
+              return {
+                ...cleanSch,
+                rawText: matchingCloneCh.rawText || sch.rawText,
+                isGenerated: true,
+                lesson: JSON.parse(JSON.stringify(matchingCloneCh.lesson)),
+              };
+            }
+            return sch;
+          });
+
+          if (sourceChanged) {
+            const sourceAllGenerated =
+              mergedSourceChapters.length > 0 &&
+              mergedSourceChapters.every((ch) =>
+                Boolean(ch.isGenerated && ch.lesson)
+              );
+
+            if (sourceAllGenerated) {
+              void cleanupBookStorageOnAllChaptersGenerated(
+                sourceCourse.id,
+                mergedSourceChapters.length
+              );
+            }
+
+            const updatedSourceCourse: Course = {
+              ...sourceCourse,
+              storageCleanedUp: sourceAllGenerated
+                ? true
+                : sourceCourse.storageCleanedUp,
+              chapters: mergedSourceChapters,
+              updatedAt: new Date().toISOString(),
+            };
+
+            await supabase.from("courses").upsert({
+              id: updatedSourceCourse.id,
+              user_id: sourceRow.user_id || updatedSourceCourse.userId || null,
+              title: updatedSourceCourse.title,
+              data: updatedSourceCourse,
+              updated_at: updatedSourceCourse.updatedAt,
+            });
+            cachedLibraryCourses = null;
+          }
+        }
       }
     } catch {
       // Offline fallback
@@ -971,11 +1295,43 @@ export async function saveCoursePdfBlob(
   }
 }
 
-export async function getCoursePdfBlob(courseId: string): Promise<Blob | null> {
+export async function getCoursePdfBlob(
+  courseId: string,
+  fallbackSourceCourseId?: string
+): Promise<Blob | null> {
   if (!db) return null;
   try {
     const entry = await db.pdfBlobs.get(courseId);
-    return entry?.blob || null;
+    if (entry?.blob) return entry.blob;
+
+    let sourceId = fallbackSourceCourseId;
+    if (!sourceId) {
+      const courseObj = await db.courses.get(courseId);
+      sourceId = courseObj?.clonedFromCourseId || courseId;
+    }
+
+    if (sourceId && sourceId !== courseId) {
+      const sourceEntry = await db.pdfBlobs.get(sourceId);
+      if (sourceEntry?.blob) return sourceEntry.blob;
+    }
+
+    // Tự động tải file PDF từ Kho A (Supabase Storage) nếu User khác đang mở trên máy mới
+    const supabase = getSupabaseClient();
+    if (supabase && sourceId) {
+      const { data, error } = await supabase.storage
+        .from(BOOK_STORAGE_BUCKET)
+        .download(`${sourceId}/source.pdf`);
+      if (!error && data) {
+        await db.pdfBlobs.put({
+          courseId,
+          blob: data,
+          fileName: `${sourceId}.pdf`,
+          updatedAt: new Date().toISOString(),
+        });
+        return data;
+      }
+    }
+    return null;
   } catch {
     return null;
   }
@@ -983,6 +1339,7 @@ export async function getCoursePdfBlob(courseId: string): Promise<Blob | null> {
 
 export async function deleteCourse(courseId: string): Promise<void> {
   if (!db) return;
+  const existingCourse = await db.courses.get(courseId);
   await db.courses.delete(courseId);
   try {
     await db.pdfBlobs.delete(courseId);
@@ -993,6 +1350,14 @@ export async function deleteCourse(courseId: string): Promise<void> {
   cachedLibraryCourses = null;
   const cards = await db.flashcards.where("courseId").equals(courseId).toArray();
   await db.flashcards.bulkDelete(cards.map((c) => c.id));
+
+  // Nếu xóa sách gốc, dọn luôn Kho A (Storage) của sách đó
+  if (!existingCourse?.clonedFromCourseId) {
+    void cleanupBookStorageOnAllChaptersGenerated(
+      courseId,
+      existingCourse?.chapters.length || 30
+    );
+  }
 
   const supabase = getSupabaseClient();
   if (supabase) {

@@ -155,6 +155,8 @@ export interface Course {
   sourceFileName?: string;
   sourceFileSizeMB?: number;
   totalPages?: number;
+  hasCloudPdf?: boolean;
+  storageCleanedUp?: boolean;
   chapters: ChapterUnit[];
   createdAt: string;
   updatedAt: string;

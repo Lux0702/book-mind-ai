@@ -27,7 +27,11 @@ import {
   renderPdfPagesToImagesBase64,
   ExtractedChapterRaw,
 } from "@/lib/pdfParser";
-import { getAppSettings, saveCoursePdfBlob } from "@/lib/storage";
+import {
+  getAppSettings,
+  saveCoursePdfBlob,
+  uploadCourseRawStorageToCloud,
+} from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 
 interface CreateCourseModalProps {
@@ -311,9 +315,19 @@ export default function CreateCourseModal({
       updatedAt: new Date().toISOString(),
     };
 
-    if (selectedFile && selectedFile.name.toLowerCase().endsWith(".pdf")) {
+    const isPdfFile = Boolean(
+      selectedFile && selectedFile.name.toLowerCase().endsWith(".pdf")
+    );
+    if (isPdfFile && selectedFile) {
       await saveCoursePdfBlob(courseId, selectedFile, selectedFile.name);
+      newCourse.hasCloudPdf = selectedFile.size <= 48 * 1024 * 1024;
     }
+
+    // Đẩy gói nội dung từng chương (và file PDF gốc nếu <= 48MB) lên Kho A (Supabase Storage) ở chế độ nền
+    void uploadCourseRawStorageToCloud(
+      newCourse,
+      isPdfFile ? selectedFile : null
+    );
 
     await onCourseCreated(newCourse);
     onClose();

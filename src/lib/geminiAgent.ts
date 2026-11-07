@@ -169,36 +169,37 @@ async function callOpenAiCompatibleEndpoint(params: {
 }): Promise<string> {
   const expectJson = Boolean(params.responseSchema);
   const isGroq = params.endpointUrl.includes("groq.com");
-  // Groq Free Tier enforces (prompt_tokens + max_tokens <= 8,000).
-  // Keeping prompt <= 7,500 chars (~2,000 tokens) + max_tokens = 3,800 (~5,800 total) guarantees Groq NEVER rejects with 413/429 TPM!
   let fullUserPrompt = isGroq
-    ? params.promptText.slice(0, 7500)
-    : params.promptText.slice(0, 16000);
+    ? params.promptText.slice(0, 11500)
+    : params.promptText.slice(0, 18000);
 
   if (expectJson && params.responseSchema) {
     const blueprint = JSON.stringify(
       schemaToJsonBlueprint(params.responseSchema)
     );
     fullUserPrompt += `\n\n⚠️ YÊU CẦU ĐỊNH DẠNG JSON BẮT BUỘC:
-Trả về DUY NHẤT 1 đối tượng JSON hợp lệ (không dùng <think>, không markdown). BẮT BUỘC có đủ tất cả các trường và mảng (overview, contentAnalysis, grammarPoints, vocabulary, clozeExercises, quizExercises, translationExercises) theo mẫu:
+Trả về DUY NHẤT 1 đối tượng JSON hợp lệ (không dùng <think>, không markdown) khớp với mẫu:
 ${blueprint}`;
   }
 
+  const lowerModel = params.model.toLowerCase();
   const supportsVision =
-    params.model.toLowerCase().includes("vl") ||
-    params.model.toLowerCase().includes("vision") ||
+    lowerModel.includes("vl") ||
+    lowerModel.includes("vision") ||
+    lowerModel.includes("omni") ||
+    lowerModel.includes("gemma-4") ||
     params.model === "openrouter/free";
 
-  const userContent =
-    params.imagesBase64.length > 0 && supportsVision
-      ? [
-          { type: "text", text: fullUserPrompt },
-          ...params.imagesBase64.slice(0, 10).map((b64) => ({
-            type: "image_url",
-            image_url: { url: `data:image/jpeg;base64,${b64}` },
-          })),
-        ]
-      : fullUserPrompt;
+  const hasVisionPayload = params.imagesBase64.length > 0 && supportsVision;
+  const userContent = hasVisionPayload
+    ? [
+        { type: "text", text: fullUserPrompt },
+        ...params.imagesBase64.slice(0, 8).map((b64) => ({
+          type: "image_url",
+          image_url: { url: `data:image/jpeg;base64,${b64}` },
+        })),
+      ]
+    : fullUserPrompt;
 
   const headers: Record<string, string> = {
     "Content-Type": "application/json",
@@ -241,9 +242,10 @@ ${blueprint}`;
     bodyPayload.response_format = { type: "json_object" };
   }
 
-  // Per-provider attempt timeout (18s) so a slow upstream never hangs the whole chain
+  // Per-provider attempt timeout: allow 45s for multi-image Vision requests so Nemotron-VL finishes scanning all TOC pages without aborting early!
+  const timeoutMs = hasVisionPayload ? 45_000 : 20_000;
   const attemptController = new AbortController();
-  const attemptTimer = setTimeout(() => attemptController.abort(), 18_000);
+  const attemptTimer = setTimeout(() => attemptController.abort(), timeoutMs);
 
   let res: Response;
   try {
@@ -334,7 +336,12 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
     const addOpenRouterAttempts = () => {
       for (const orKey of pool.openRouterKeys) {
         const orModels = hasImages
-          ? ["nvidia/nemotron-3.5-super-vl:free", "openrouter/free"]
+          ? [
+              "nvidia/nemotron-3.5-super-vl:free",
+              "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
+              "google/gemma-4-31b-it:free",
+              "openrouter/free",
+            ]
           : ["openrouter/free", "nvidia/nemotron-3.5-super-vl:free"];
         for (const m of orModels) {
           attempts.push(() =>
@@ -1452,11 +1459,11 @@ QUY TẮC BẮT BUỘC:
    - Trong sách scan, số trang in trong trang Mục lục (ví dụ Lesson 1 trang 1, Lesson 2 trang 17...) thường lệch khoảng +6 đến +14 trang so với số trang thực tế của file PDF (do file PDF có thêm các trang bìa, lời nói đầu, mục lục ở đầu).
    - Hãy kiểm tra xem trong các ảnh đính kèm hoặc dữ liệu [Page X] bên dưới, Lesson 1 thực tế bắt đầu ở trang PDF số mấy (nếu không thấy trang bắt đầu của Lesson 1 trong ảnh thì cộng độ lệch ước tính khoảng +${hasTocImages ? "10" : "0"} trang vào số trang in trong mục lục), và đảm bảo trang kết thúc của bài cuối cùng không vượt quá ${params.totalPages}.
    - endPage của bài trước phải bằng (startPage của bài kế tiếp - 1).
-3. Trả về đầy đủ tất cả các bài học tìm thấy trong Mục lục theo đúng định dạng JSON: { "chapters": [ { "title": "Lesson 1: ...", "startPage": 12, "endPage": 26 }, ... ] }. Tuyệt đối không trả về mảng rỗng!
+3. BẮT BUỘC liệt kê ĐẦY ĐỦ TẤT CẢ các bài học / chương từ bài đầu tiên đến bài cuối cùng của cuốn sách (ví dụ nếu sách có 12 hoặc 15 Units/Lessons thì phải trả về đủ cả 12-15 bài cho tới trang ${params.totalPages}, TUYỆT ĐỐI KHÔNG dừng lại giữa chừng ở bài 4 hay bài 5!). Định dạng JSON: { "chapters": [ { "title": "Lesson 1: ...", "startPage": 12, "endPage": 26 }, ... ] }.
 
 DỮ LIỆU TEXT TRÍCH XUẤT TỪ PDF (NẾU CÓ):
 """
-${params.pageSummaries.slice(0, 12000)}
+${params.pageSummaries.slice(0, 11000)}
 """`;
 
   const contentsPayload: Array<
@@ -1464,7 +1471,7 @@ ${params.pageSummaries.slice(0, 12000)}
   > = [prompt];
 
   if (params.tocImagesBase64 && params.tocImagesBase64.length > 0) {
-    for (const base64Img of params.tocImagesBase64.slice(0, 10)) {
+    for (const base64Img of params.tocImagesBase64.slice(0, 8)) {
       contentsPayload.push({
         inlineData: {
           mimeType: "image/jpeg",

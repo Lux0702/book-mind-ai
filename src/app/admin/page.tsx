@@ -125,7 +125,20 @@ USING ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin')
 WITH CHECK ((auth.jwt() -> 'app_metadata' ->> 'role') = 'admin');
 
 -- =================================================================================
--- 2. CẤP QUYỀN ADMIN TRỰC TIẾP TRÊN SUPABASE (Thay email của bạn vào bên dưới):
+-- 2. TẠO KHO LƯU TRỮ STORAGE (KHO A: book-chapters) ĐỂ LƯU CHƯƠNG & TỰ ĐỘNG DỌN KHI TẠO XONG 100%:
+-- =================================================================================
+INSERT INTO storage.buckets (id, name, public)
+VALUES ('book-chapters', 'book-chapters', true)
+ON CONFLICT (id) DO NOTHING;
+
+DROP POLICY IF EXISTS "Allow public access book-chapters" ON storage.objects;
+CREATE POLICY "Allow public access book-chapters"
+ON storage.objects FOR ALL
+USING (bucket_id = 'book-chapters')
+WITH CHECK (bucket_id = 'book-chapters');
+
+-- =================================================================================
+-- 3. CẤP QUYỀN ADMIN TRỰC TIẾP TRÊN SUPABASE (Thay email của bạn vào bên dưới):
 -- =================================================================================
 UPDATE auth.users
 SET raw_app_meta_data = COALESCE(raw_app_meta_data, '{}'::jsonb) || '{"role": "admin"}'::jsonb
