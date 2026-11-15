@@ -1,15 +1,13 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useCallback } from "react";
 import {
   Flame,
-  Calendar,
   CheckCircle2,
   Clock,
   BookOpen,
   Award,
   Sparkles,
-  ArrowRight,
   GraduationCap,
   Layers,
   Languages,
@@ -17,6 +15,9 @@ import {
   Trophy,
   Zap,
   Rocket,
+  Cloud,
+  RefreshCw,
+  ArrowUpRight,
 } from "lucide-react";
 import {
   Course,
@@ -28,7 +29,9 @@ import {
   getStudyStreak,
   getLearningActivities,
   recordLearningActivity,
+  syncAttendanceWithSupabase,
 } from "@/lib/storage";
+import { runWithFeedback } from "@/lib/feedback";
 
 interface AttendanceDashboardProps {
   courses: Course[];
@@ -48,11 +51,64 @@ export default function AttendanceDashboard({
     getLearningActivities()
   );
   const [justCheckedIn, setJustCheckedIn] = useState(false);
+  const [isSyncingCloud, setIsSyncingCloud] = useState(false);
+  const [cloudSynced, setCloudSynced] = useState(false);
+  const [lastSyncedTime, setLastSyncedTime] = useState<string>("");
+
+  const handleSyncCloud = useCallback(async (force = false) => {
+    setIsSyncingCloud(true);
+    try {
+      const exec = async () => {
+        const res = await syncAttendanceWithSupabase(force);
+        setStreak(res.streak);
+        setActivities(res.activities);
+        setCloudSynced(res.syncedWithCloud);
+        setLastSyncedTime(
+          new Date().toLocaleTimeString("vi-VN", {
+            hour: "2-digit",
+            minute: "2-digit",
+          })
+        );
+      };
+      if (force) {
+        await runWithFeedback(
+          {
+            variant: "sync",
+            loadingTitle: "Đang đồng bộ chuỗi Điểm danh với Supabase...",
+            successTitle: "Đã đồng bộ dữ liệu Điểm danh!",
+          },
+          exec
+        );
+      } else {
+        await exec();
+      }
+    } finally {
+      setIsSyncingCloud(false);
+    }
+  }, []);
 
   useEffect(() => {
     setStreak(getStudyStreak());
     setActivities(getLearningActivities());
-  }, []);
+    void handleSyncCloud(false);
+
+    const onAttendanceUpdated = (e: Event) => {
+      const evt = e as CustomEvent<{
+        streak?: StudyStreak;
+        activities?: LearningActivity[];
+      }>;
+      setStreak(evt.detail?.streak || getStudyStreak());
+      setActivities(evt.detail?.activities || getLearningActivities());
+    };
+
+    window.addEventListener("bookmind:attendance-updated", onAttendanceUpdated);
+    return () => {
+      window.removeEventListener(
+        "bookmind:attendance-updated",
+        onAttendanceUpdated
+      );
+    };
+  }, [handleSyncCloud]);
 
   const todayStr = (() => {
     const now = new Date();
@@ -65,19 +121,30 @@ export default function AttendanceDashboard({
   const isCheckedInToday = streak.activeDates.includes(todayStr);
 
   const handleManualCheckIn = async () => {
-    if (isCheckedInToday) return;
-    const updated = await recordLearningActivity({
-      type: "check_in",
-      title: "Điểm danh hàng ngày",
-      details: "Đã điểm danh duy trì chuỗi ngày học thành công!",
-    });
-    setStreak(updated);
-    setActivities(getLearningActivities());
-    setJustCheckedIn(true);
-    setTimeout(() => setJustCheckedIn(false), 3000);
+    if (isCheckedInToday || isSyncingCloud) return;
+    setIsSyncingCloud(true);
+    try {
+      const updated = await recordLearningActivity({
+        type: "check_in",
+        title: "Điểm danh hàng ngày",
+        details: "Đã điểm danh duy trì chuỗi ngày học và đồng bộ lên Supabase Cloud.",
+      });
+      setStreak(updated);
+      setActivities(getLearningActivities());
+      setCloudSynced(true);
+      setLastSyncedTime(
+        new Date().toLocaleTimeString("vi-VN", {
+          hour: "2-digit",
+          minute: "2-digit",
+        })
+      );
+      setJustCheckedIn(true);
+      setTimeout(() => setJustCheckedIn(false), 3000);
+    } finally {
+      setIsSyncingCloud(false);
+    }
   };
 
-  // 7-day visual week calendar (Mon-Sun ending today or last 7 days)
   const last7Days = useMemoDays(7);
 
   // Statistics
@@ -88,6 +155,9 @@ export default function AttendanceDashboard({
   );
   const totalVocab = flashcards.length;
   const masteredVocab = flashcards.filter((f) => f.interval >= 3).length;
+  const dueVocab = flashcards.filter(
+    (f) => new Date(f.nextReviewDate) <= new Date()
+  ).length;
   const totalExercisesDone = courses.reduce(
     (sum, c) =>
       sum +
@@ -103,63 +173,99 @@ export default function AttendanceDashboard({
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 space-y-8">
-      {/* 1. TOP STREAK & ATTENDANCE HERO BANNER */}
-      <div className="relative overflow-hidden rounded-3xl border border-amber-500/30 bg-gradient-to-br from-amber-950/40 via-slate-900 to-slate-950 p-6 sm:p-8 shadow-2xl">
-        <div className="flex flex-col gap-6 md:flex-row md:items-center md:justify-between">
-          <div className="space-y-3">
-            <div className="inline-flex items-center gap-2 rounded-full border border-amber-500/30 bg-amber-500/10 px-3.5 py-1 text-xs font-extrabold text-amber-400">
-              <Flame className="h-4 w-4 animate-bounce text-amber-400" />
-              <span>CHUỖI HỌC TẬP MỖI NGÀY</span>
+    <div className="mx-auto w-full max-w-5xl flex-1 px-3.5 py-5 sm:px-6 sm:py-8 space-y-6 sm:space-y-8">
+      {/* 1. TOP STREAK & ATTENDANCE STUDIO CARD */}
+      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-7 shadow-xl">
+        {/* Subtle Warm Editorial Ambient Glow */}
+        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-amber-500/[0.07] blur-3xl" />
+
+        <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
+          <div className="space-y-2.5">
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold tracking-wide text-amber-300">
+                <Flame className="h-3.5 w-3.5 text-amber-400" />
+                <span>CHUỖI HỌC TẬP LIÊN TỤC</span>
+              </div>
+
+              <button
+                type="button"
+                onClick={() => void handleSyncCloud(true)}
+                disabled={isSyncingCloud}
+                title="Đồng bộ dữ liệu điểm danh 2 chiều với Supabase Cloud"
+                className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-slate-900/90 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-indigo-500/40 hover:text-white disabled:opacity-60"
+              >
+                {isSyncingCloud ? (
+                  <>
+                    <RefreshCw className="h-3 w-3 animate-spin text-indigo-400" />
+                    <span>Đang đồng bộ Supabase...</span>
+                  </>
+                ) : (
+                  <>
+                    <Cloud
+                      className={`h-3 w-3 ${
+                        cloudSynced ? "text-emerald-400" : "text-slate-400"
+                      }`}
+                    />
+                    <span>
+                      {cloudSynced
+                        ? `Cloud đã đồng bộ${lastSyncedTime ? ` (${lastSyncedTime})` : ""}`
+                        : "Đồng bộ Cloud"}
+                    </span>
+                    <RefreshCw className="h-2.5 w-2.5 text-slate-400" />
+                  </>
+                )}
+              </button>
             </div>
 
-            <div className="flex items-baseline gap-3">
-              <span className="text-5xl font-black text-white sm:text-6xl">
+            <div className="flex items-baseline gap-2.5 pt-1">
+              <span className="text-4xl font-black tracking-tight text-white sm:text-6xl">
                 {streak.currentStreak}
               </span>
-              <span className="flex items-center gap-1.5 text-xl font-bold text-amber-300">
-                <span>ngày liên tục</span>
-                <Flame className="h-5 w-5 text-amber-400" />
+              <span className="flex items-center gap-1.5 text-base sm:text-xl font-semibold text-amber-300/90">
+                <span>ngày liên tiếp</span>
+                <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-amber-400" />
               </span>
             </div>
 
-            <p className="max-w-md text-xs text-slate-300 leading-relaxed">
+            <p className="max-w-lg text-xs sm:text-sm text-slate-300/90 leading-relaxed">
               {isCheckedInToday
-                ? "Tuyệt vời! Bạn đã hoàn thành điểm danh hôm nay. Hãy học thêm một bài hoặc ôn Flashcard để giữ vững phong độ nhé!"
-                : "Hôm nay bạn chưa điểm danh. Hãy bấm nút điểm danh hoặc học một bài học bất kỳ để tiếp tục giữ chuỗi lửa!"}
+                ? "Bạn đã hoàn thành điểm danh hôm nay và lưu an toàn trên Supabase Cloud. Mọi thiết bị (Laptop & Điện thoại) đều được cập nhật tự động."
+                : "Hôm nay bạn chưa điểm danh. Bấm nút điểm danh bên dưới hoặc hoàn thành một bài ôn tập để duy trì chuỗi ngày học!"}
             </p>
           </div>
 
-          <div className="flex flex-col items-center gap-3">
+          <div className="flex flex-col sm:flex-row lg:flex-col items-stretch sm:items-center lg:items-end justify-between gap-3">
             <button
               type="button"
-              disabled={isCheckedInToday}
+              disabled={isCheckedInToday || isSyncingCloud}
               onClick={handleManualCheckIn}
-              className={`flex items-center gap-2 rounded-2xl px-6 py-3.5 text-sm font-black shadow-xl transition ${
+              className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs sm:text-sm font-bold transition ${
                 isCheckedInToday
-                  ? "bg-emerald-600/25 border border-emerald-500/40 text-emerald-300 cursor-default"
-                  : "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-amber-600/30 hover:scale-105 cursor-pointer"
+                  ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 cursor-default"
+                  : "bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-400 active:scale-[0.99] cursor-pointer"
               }`}
             >
-              <CheckCircle2 className="h-5 w-5" />
+              <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
               <span>
                 {isCheckedInToday
-                  ? "Đã Điểm Danh Hôm Nay"
+                  ? justCheckedIn
+                    ? "Đã Điểm Danh & Đồng Bộ Cloud!"
+                    : "Đã Điểm Danh Hôm Nay"
                   : "Điểm Danh Hôm Nay (+1 Ngày)"}
               </span>
             </button>
 
-            <div className="flex items-center gap-4 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-4 gap-y-1 text-xs text-slate-400">
               <span>
-                Kỷ lục chuỗi dài nhất:{" "}
-                <strong className="text-amber-300">
+                Kỷ lục:{" "}
+                <strong className="font-semibold text-amber-300">
                   {streak.longestStreak} ngày
                 </strong>
               </span>
-              <span>•</span>
+              <span className="text-slate-700">•</span>
               <span>
-                Tổng số ngày đã học:{" "}
-                <strong className="text-emerald-300">
+                Tổng tích lũy:{" "}
+                <strong className="font-semibold text-emerald-300">
                   {streak.activeDates.length} ngày
                 </strong>
               </span>
@@ -167,12 +273,17 @@ export default function AttendanceDashboard({
           </div>
         </div>
 
-        {/* 7-Day Visual Calendar Tracker */}
-        <div className="mt-8 border-t border-slate-800/80 pt-6">
-          <div className="mb-3 text-xs font-bold uppercase tracking-wider text-slate-400">
-            Lịch sử học tập 7 ngày gần đây:
+        {/* 7-Day Visual Calendar Tracker (Mobile Responsive 320px+) */}
+        <div className="mt-6 border-t border-white/[0.07] pt-5">
+          <div className="mb-3 flex items-center justify-between">
+            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+              Lịch sử 7 ngày gần nhất
+            </span>
+            <span className="text-[11px] text-slate-400">
+              Hôm nay: <strong className="text-slate-200">{todayStr}</strong>
+            </span>
           </div>
-          <div className="grid grid-cols-7 gap-2 sm:gap-3">
+          <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
             {last7Days.map((d, i) => {
               const active = streak.activeDates.includes(d.iso);
               const isToday = d.iso === todayStr;
@@ -180,27 +291,27 @@ export default function AttendanceDashboard({
               return (
                 <div
                   key={i}
-                  className={`flex flex-col items-center justify-center rounded-2xl border p-2.5 sm:p-3 text-center transition ${
+                  className={`flex flex-col items-center justify-center rounded-xl border py-2 px-1 sm:p-3 text-center transition ${
                     isToday
                       ? active
-                        ? "border-amber-500 bg-amber-500/20 text-white shadow-lg"
-                        : "border-amber-500/50 bg-slate-900 text-amber-300 ring-2 ring-amber-500/20"
+                        ? "border-amber-500/60 bg-amber-500/15 text-white"
+                        : "border-amber-500/40 bg-slate-900/90 text-amber-300"
                       : active
-                      ? "border-emerald-500/40 bg-emerald-950/30 text-emerald-300"
-                      : "border-slate-800 bg-slate-950/60 text-slate-500"
+                      ? "border-emerald-500/30 bg-emerald-950/25 text-emerald-300"
+                      : "border-white/[0.06] bg-slate-950/50 text-slate-500"
                   }`}
                 >
-                  <span className="text-[11px] font-bold uppercase">
+                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight">
                     {d.dayName}
                   </span>
-                  <span className="mt-1 text-sm font-extrabold sm:text-base">
+                  <span className="mt-0.5 text-xs sm:text-base font-bold">
                     {d.dayNumber}
                   </span>
-                  <div className="mt-1.5">
+                  <div className="mt-1 sm:mt-1.5">
                     {active ? (
-                      <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
                     ) : (
-                      <div className="h-4 w-4 rounded-full border border-slate-700 bg-slate-900" />
+                      <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full border border-slate-700/80 bg-slate-900" />
                     )}
                   </div>
                 </div>
@@ -210,139 +321,168 @@ export default function AttendanceDashboard({
         </div>
       </div>
 
-      {/* 2. STATS "ĐÃ HỌC ĐƯỢC GÌ" (WHAT HAS BEEN LEARNED) */}
-      <div className="space-y-4">
-        <div className="flex items-center gap-3">
-          <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-500/15 text-indigo-400 border border-indigo-500/25">
-            <BarChart3 className="h-5 w-5" />
+      {/* 2. STATS SUMMARY GRID */}
+      <div className="space-y-3.5">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+          <div className="flex items-center gap-2.5">
+            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+              <BarChart3 className="h-4 w-4" />
+            </div>
+            <div>
+              <h2 className="text-base sm:text-lg font-bold text-white">
+                Tổng Quan Năng Lực Tích Lũy
+              </h2>
+              <p className="text-xs text-slate-400">
+                Thống kê tiến độ thực tế từ tủ sách và kho thẻ từ SRS của bạn
+              </p>
+            </div>
           </div>
-          <div>
-            <h2 className="text-xl font-bold text-white">
-              Tổng Kết: Bạn Đã Học Được Những Gì?
-            </h2>
-            <p className="text-xs text-slate-400">
-              Báo cáo chi tiết khối lượng kiến thức đã tích lũy từ các cuốn sách của bạn
-            </p>
-          </div>
+
+          {dueVocab > 0 && (
+            <button
+              type="button"
+              onClick={onOpenSrs}
+              className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-2 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/20"
+            >
+              <span>Ôn ngay {dueVocab} từ đến hạn</span>
+              <ArrowUpRight className="h-3.5 w-3.5" />
+            </button>
+          )}
         </div>
 
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-2">
+        <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
+          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Kho Từ Vựng Đã Học</span>
-              <GraduationCap className="h-4 w-4 text-indigo-400" />
+              <span>Từ Vựng Đã Lưu</span>
+              <GraduationCap className="h-4 w-4 text-indigo-400 shrink-0" />
             </div>
-            <div className="text-3xl font-black text-white">
-              {totalVocab} <span className="text-xs text-slate-400">từ</span>
+            <div className="text-2xl sm:text-3xl font-bold text-white">
+              {totalVocab}{" "}
+              <span className="text-xs font-normal text-slate-400">từ</span>
             </div>
-            <p className="flex items-center gap-1.5 text-[11px] text-emerald-400">
-              <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
-              <span>Trong đó: {masteredVocab} từ đã thuộc vững (SRS)</span>
+            <p className="text-[11px] text-emerald-400/90">
+              {masteredVocab} từ đã thuộc vững (SRS)
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-2">
+          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Chương Sách Hoàn Thành</span>
-              <Layers className="h-4 w-4 text-emerald-400" />
+              <span>Chương Đã Phân Tích</span>
+              <Layers className="h-4 w-4 text-emerald-400 shrink-0" />
             </div>
-            <div className="text-3xl font-black text-white">
-              {totalChapters} <span className="text-xs text-slate-400">chương</span>
+            <div className="text-2xl sm:text-3xl font-bold text-white">
+              {totalChapters}{" "}
+              <span className="text-xs font-normal text-slate-400">chương</span>
             </div>
             <p className="text-[11px] text-slate-400">
-              Trích xuất từ {totalCourses} cuốn sách đã đọc
+              Từ {totalCourses} cuốn sách trong tủ
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-2">
+          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Bài Tập & Câu Dịch</span>
-              <Languages className="h-4 w-4 text-sky-400" />
+              <span>Bài Luyện Tập</span>
+              <Languages className="h-4 w-4 text-sky-400 shrink-0" />
             </div>
-            <div className="text-3xl font-black text-white">
-              {totalExercisesDone} <span className="text-xs text-slate-400">bài</span>
+            <div className="text-2xl sm:text-3xl font-bold text-white">
+              {totalExercisesDone}{" "}
+              <span className="text-xs font-normal text-slate-400">bài</span>
             </div>
-            <p className="text-[11px] text-sky-300">
-              Đã làm trắc nghiệm, điền từ & luyện dịch
+            <p className="text-[11px] text-sky-300/90">
+              Quiz, điền từ Cloze & luyện dịch
             </p>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-2">
+          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
             <div className="flex items-center justify-between text-xs text-slate-400">
-              <span>Đẳng Cấp Tự Học</span>
-              <Award className="h-4 w-4 text-amber-400" />
+              <span>Danh Hiệu Học Thuật</span>
+              <Award className="h-4 w-4 text-amber-400 shrink-0" />
             </div>
-            <div className="flex items-center gap-2 text-lg font-bold text-amber-300">
+            <div className="flex items-center gap-1.5 text-sm sm:text-base font-bold text-amber-300 pt-0.5">
               {streak.currentStreak >= 14 ? (
                 <>
-                  <Trophy className="h-5 w-5 text-amber-400 shrink-0" />
-                  <span>Bậc Thầy Chăm Chỉ</span>
+                  <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Học Giả Kiên Định</span>
                 </>
               ) : streak.currentStreak >= 7 ? (
                 <>
-                  <Zap className="h-5 w-5 text-amber-400 shrink-0" />
-                  <span>Chiến Thần Đọc Sách</span>
+                  <Zap className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Chiến Thần Đọc Sách</span>
                 </>
               ) : streak.currentStreak >= 3 ? (
                 <>
-                  <Rocket className="h-5 w-5 text-amber-400 shrink-0" />
-                  <span>Người Bắt Đầu Vững Vàng</span>
+                  <Rocket className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Người Đọc Bền Bỉ</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-5 w-5 text-amber-400 shrink-0" />
-                  <span>Mầm Mống Tri Thức</span>
+                  <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                  <span className="truncate">Khởi Đầu Tri Thức</span>
                 </>
               )}
             </div>
             <p className="text-[11px] text-slate-400">
-              Duy trì 7 ngày liên tục để mở khóa danh hiệu mới!
+              {courses[0] ? (
+                <button
+                  type="button"
+                  onClick={() => onOpenCourse(courses[0].id)}
+                  className="text-indigo-400 hover:underline"
+                >
+                  Đọc tiếp: {courses[0].title.slice(0, 22)}...
+                </button>
+              ) : (
+                "Duy trì 7 ngày để thăng hạng"
+              )}
             </p>
           </div>
         </div>
       </div>
 
-      {/* 3. RECENT ACTIVITY LOG / TIMELINE */}
-      <div className="rounded-3xl border border-slate-800 bg-slate-900/80 p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-slate-800 pb-4">
-          <div className="flex items-center gap-2 text-base font-bold text-white">
-            <Clock className="h-4 w-4 text-indigo-400" />
-            <span>Dòng Thời Gian Hoạt Động (Nhật Ký Học Gần Đây)</span>
+      {/* 3. RECENT ACTIVITY TIMELINE */}
+      <div className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#0F1523]/90 p-4 sm:p-6 space-y-4">
+        <div className="flex items-center justify-between border-b border-white/[0.07] pb-3.5">
+          <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-white">
+            <Clock className="h-4 w-4 text-indigo-400 shrink-0" />
+            <span>Nhật Ký Hoạt Động Gần Đây</span>
           </div>
           <span className="text-xs text-slate-400">
-            {activities.length} hoạt động được ghi lại
+            {activities.length} sự kiện
           </span>
         </div>
 
         {activities.length === 0 ? (
-          <div className="py-10 text-center text-xs text-slate-500">
-            Chưa có hoạt động nào được ghi lại. Hãy bắt đầu ôn thẻ Flashcard hoặc học một chương sách ngay!
+          <div className="py-10 text-center text-xs sm:text-sm text-slate-500">
+            Chưa có hoạt động nào được ghi nhận. Hãy bấm Điểm danh hoặc học một chương sách!
           </div>
         ) : (
-          <div className="space-y-3 max-h-96 overflow-y-auto pr-1">
+          <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
             {activities.map((act) => (
               <div
                 key={act.id}
-                className="flex items-center gap-3.5 rounded-2xl border border-slate-800/80 bg-slate-950/60 p-3.5 text-xs transition hover:border-slate-700"
+                className="flex items-start sm:items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 p-3 sm:p-3.5 text-xs transition hover:border-white/[0.12]"
               >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-300 leading-none">
+                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 border border-white/[0.07] text-indigo-300">
                   {act.type === "vocab_review" ? (
-                    <Sparkles className="h-3.5 w-3.5" />
+                    <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
                   ) : act.type === "check_in" ? (
                     <Flame className="h-3.5 w-3.5 text-amber-400" />
                   ) : (
-                    <BookOpen className="h-3.5 w-3.5" />
+                    <BookOpen className="h-3.5 w-3.5 text-emerald-400" />
                   )}
                 </div>
 
-                <div className="flex-1 space-y-0.5">
-                  <div className="flex items-center justify-between">
-                    <span className="font-bold text-white">{act.title}</span>
-                    <span className="text-[11px] text-slate-500">
+                <div className="min-w-0 flex-1 space-y-0.5">
+                  <div className="flex flex-wrap items-center justify-between gap-1">
+                    <span className="font-semibold text-slate-100 truncate">
+                      {act.title}
+                    </span>
+                    <span className="text-[11px] text-slate-500 shrink-0">
                       {formatTimeAgo(act.timestamp)}
                     </span>
                   </div>
-                  <p className="text-slate-300 leading-relaxed">{act.details}</p>
+                  <p className="text-slate-400 leading-relaxed break-words">
+                    {act.details}
+                  </p>
                 </div>
               </div>
             ))}

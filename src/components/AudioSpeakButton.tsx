@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from "react";
 import { Volume2, VolumeX } from "lucide-react";
-import { speakSmart } from "@/lib/tts";
+import { speakSmart, cleanTextForSpeech } from "@/lib/tts";
 
 interface AudioSpeakButtonProps {
   text: string;
@@ -29,8 +29,8 @@ export default function AudioSpeakButton({
           setIsPlaying(false);
         } else {
           // Compare cleaned text
-          const targetCleaned = text.replace(/[_*#]/g, " ").trim();
-          setIsPlaying(customEvent.detail.text === targetCleaned);
+          const targetCleaned = cleanTextForSpeech(text);
+          setIsPlaying(Boolean(targetCleaned) && customEvent.detail.text === targetCleaned);
         }
       }
     };

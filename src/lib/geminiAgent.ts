@@ -28,6 +28,124 @@ interface ProviderKeysPool {
   siliconFlowKeys: string[];
 }
 
+declare global {
+  // Bộ nhớ đệm phía Server lưu giữ các khóa AI hệ thống để phục vụ mọi thiết bị (đặc biệt là Mobile)
+  // eslint-disable-next-line no-var
+  var __bookMindServerKeysPool: ProviderKeysPool | undefined;
+}
+
+function getServerCachedPool(): ProviderKeysPool {
+  if (!globalThis.__bookMindServerKeysPool) {
+    globalThis.__bookMindServerKeysPool = {
+      geminiKeys: [],
+      groqKeys: [],
+      openRouterKeys: [],
+      siliconFlowKeys: [],
+    };
+  }
+  return globalThis.__bookMindServerKeysPool;
+}
+
+function parseRawKeyStringsIntoPool(
+  rawSources: string[],
+  targetPool: ProviderKeysPool
+): void {
+  const serverCache = getServerCachedPool();
+  for (const src of rawSources) {
+    if (!src) continue;
+    const parts = src
+      .split(/[,;\n\r]+/)
+      .map((s) => s.trim())
+      .filter((s) => s.length > 10 && !s.toUpperCase().startsWith("BM-"));
+
+    for (const p of parts) {
+      if (p.startsWith("AIza")) {
+        if (!targetPool.geminiKeys.includes(p)) targetPool.geminiKeys.push(p);
+        if (!serverCache.geminiKeys.includes(p)) serverCache.geminiKeys.push(p);
+      } else if (p.startsWith("gsk_")) {
+        if (!targetPool.groqKeys.includes(p)) targetPool.groqKeys.push(p);
+        if (!serverCache.groqKeys.includes(p)) serverCache.groqKeys.push(p);
+      } else if (p.startsWith("sk-or-")) {
+        if (!targetPool.openRouterKeys.includes(p))
+          targetPool.openRouterKeys.push(p);
+        if (!serverCache.openRouterKeys.includes(p))
+          serverCache.openRouterKeys.push(p);
+      } else if (p.startsWith("sk-")) {
+        if (!targetPool.siliconFlowKeys.includes(p))
+          targetPool.siliconFlowKeys.push(p);
+        if (!serverCache.siliconFlowKeys.includes(p))
+          serverCache.siliconFlowKeys.push(p);
+      }
+    }
+  }
+}
+
+async function hydratePoolFromSupabaseCloudOnServer(
+  targetPool: ProviderKeysPool
+): Promise<void> {
+  const sbUrl = (process.env.NEXT_PUBLIC_SUPABASE_URL || "").trim();
+  const sbKey = (process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY || "").trim();
+  if (!sbUrl || !sbKey) return;
+
+  // 1. Truy vấn bảng courses với id = __bookmind_system_config__
+  try {
+    const url = `${sbUrl.replace(/\/$/, "")}/rest/v1/courses?id=eq.__bookmind_system_config__&select=data`;
+    const res = await fetch(url, {
+      headers: {
+        apikey: sbKey,
+        Authorization: `Bearer ${sbKey}`,
+      },
+      cache: "no-store",
+    });
+    if (res.ok) {
+      const rows = await res.json();
+      const aiConfig = rows?.[0]?.data?.aiConfig;
+      if (aiConfig) {
+        parseRawKeyStringsIntoPool(
+          [
+            aiConfig.masterGeminiApiKey || "",
+            aiConfig.groqApiKey || "",
+            aiConfig.openRouterApiKey || "",
+            aiConfig.siliconFlowApiKey || "",
+          ],
+          targetPool
+        );
+      }
+    }
+  } catch {
+    // Ignore
+  }
+
+  // 2. Fallback truy vấn từ Storage Bucket book-chapters/__system_ai_config.json
+  if (
+    targetPool.geminiKeys.length === 0 &&
+    targetPool.groqKeys.length === 0 &&
+    targetPool.openRouterKeys.length === 0 &&
+    targetPool.siliconFlowKeys.length === 0
+  ) {
+    try {
+      const storageUrl = `${sbUrl.replace(/\/$/, "")}/storage/v1/object/public/book-chapters/__system_ai_config.json`;
+      const res = await fetch(storageUrl, { cache: "no-store" });
+      if (res.ok) {
+        const aiConfig = await res.json();
+        if (aiConfig) {
+          parseRawKeyStringsIntoPool(
+            [
+              aiConfig.masterGeminiApiKey || "",
+              aiConfig.groqApiKey || "",
+              aiConfig.openRouterApiKey || "",
+              aiConfig.siliconFlowApiKey || "",
+            ],
+            targetPool
+          );
+        }
+      }
+    } catch {
+      // Ignore
+    }
+  }
+}
+
 function extractProviderKeysPool(
   customApiKey?: string,
   masterApiKey?: string
@@ -43,6 +161,14 @@ function extractProviderKeysPool(
     }
   }
 
+  const serverCache = getServerCachedPool();
+  const pool: ProviderKeysPool = {
+    geminiKeys: [...serverCache.geminiKeys],
+    groqKeys: [...serverCache.groqKeys],
+    openRouterKeys: [...serverCache.openRouterKeys],
+    siliconFlowKeys: [...serverCache.siliconFlowKeys],
+  };
+
   const rawSources = [
     !inputKey.toUpperCase().startsWith("BM-") ? inputKey : "",
     masterApiKey?.trim() || "",
@@ -54,32 +180,8 @@ function extractProviderKeysPool(
     DEFAULT_SILICONFLOW_KEY,
   ];
 
-  const geminiKeys: string[] = [];
-  const groqKeys: string[] = [];
-  const openRouterKeys: string[] = [];
-  const siliconFlowKeys: string[] = [];
-
-  for (const src of rawSources) {
-    if (!src) continue;
-    const parts = src
-      .split(/[,;\n\r]+/)
-      .map((s) => s.trim())
-      .filter((s) => s.length > 10 && !s.toUpperCase().startsWith("BM-"));
-
-    for (const p of parts) {
-      if (p.startsWith("AIza")) {
-        if (!geminiKeys.includes(p)) geminiKeys.push(p);
-      } else if (p.startsWith("gsk_")) {
-        if (!groqKeys.includes(p)) groqKeys.push(p);
-      } else if (p.startsWith("sk-or-")) {
-        if (!openRouterKeys.includes(p)) openRouterKeys.push(p);
-      } else if (p.startsWith("sk-")) {
-        if (!siliconFlowKeys.includes(p)) siliconFlowKeys.push(p);
-      }
-    }
-  }
-
-  return { geminiKeys, groqKeys, openRouterKeys, siliconFlowKeys };
+  parseRawKeyStringsIntoPool(rawSources, pool);
+  return pool;
 }
 
 function schemaToJsonBlueprint(schema?: Schema): unknown {
@@ -169,9 +271,14 @@ async function callOpenAiCompatibleEndpoint(params: {
 }): Promise<string> {
   const expectJson = Boolean(params.responseSchema);
   const isGroq = params.endpointUrl.includes("groq.com");
-  let fullUserPrompt = isGroq
-    ? params.promptText.slice(0, 11500)
-    : params.promptText.slice(0, 18000);
+  // Groq Free/On-Demand Tier giới hạn cứng ITPM = 6,000 - 7,000 input tokens/request (~11,200 ký tự).
+  // Giữ mỗi request đơn lẻ gửi lên Groq <= 11,200 ký tự để KHÔNG BAO GIỜ bị lỗi HTTP 413 (Limit 7000),
+  // còn việc đọc hết 100% chương dài sẽ do bộ chia lát cắt (Sliding Chunks 7,500 ký tự/lát) ở extractAllChapterVocabWithAI xử lý!
+  const maxSingleCallChars = isGroq ? 11200 : 26000;
+  let fullUserPrompt =
+    params.promptText.length <= maxSingleCallChars
+      ? params.promptText
+      : params.promptText.slice(0, maxSingleCallChars);
 
   if (expectJson && params.responseSchema) {
     const blueprint = JSON.stringify(
@@ -187,14 +294,18 @@ ${blueprint}`;
     lowerModel.includes("vl") ||
     lowerModel.includes("vision") ||
     lowerModel.includes("omni") ||
+    lowerModel.includes("gemma-3") ||
     lowerModel.includes("gemma-4") ||
+    lowerModel.includes("llama-4") ||
+    lowerModel.includes("scout") ||
+    lowerModel.includes("maverick") ||
     params.model === "openrouter/free";
 
   const hasVisionPayload = params.imagesBase64.length > 0 && supportsVision;
   const userContent = hasVisionPayload
     ? [
         { type: "text", text: fullUserPrompt },
-        ...params.imagesBase64.slice(0, 8).map((b64) => ({
+        ...params.imagesBase64.slice(0, 6).map((b64) => ({
           type: "image_url",
           image_url: { url: `data:image/jpeg;base64,${b64}` },
         })),
@@ -217,7 +328,7 @@ ${blueprint}`;
       {
         role: "system",
         content: expectJson
-          ? "You are a multilingual educational AI assistant. Respond ONLY with a valid, compact JSON object matching the requested schema. Keep explanations concise (1-2 sentences) so all arrays (including clozeExercises, quizExercises, translationExercises) are completely generated."
+          ? "You are a multilingual educational AI assistant. Respond ONLY with a valid, compact JSON object matching the requested schema. Extract ALL vocabulary items thoroughly (do NOT truncate vocabulary to 5 items) while keeping per-item explanations concise (1 sentence) so all arrays (vocabulary, clozeExercises, quizExercises, translationExercises) are completely generated."
           : "You are a helpful multilingual educational AI assistant.",
       },
       {
@@ -229,9 +340,9 @@ ${blueprint}`;
   };
 
   // IMPORTANT: Do NOT set max_tokens on Groq Free Tier because Groq checks (max_tokens <= 1000 OTPM) upfront when max_tokens is specified!
-  // Omitting max_tokens on Groq allows openai/gpt-oss-120b and gpt-oss-20b to stream 2,800+ tokens in 6 seconds without 429 OTPM errors.
+  // Omitting max_tokens on Groq allows openai/gpt-oss-120b and gpt-oss-20b to stream 4,500+ tokens without 429 OTPM errors.
   if (!isGroq) {
-    bodyPayload.max_tokens = 4500;
+    bodyPayload.max_tokens = 8000;
   }
 
   if (isGroq && params.model.toLowerCase().includes("qwen")) {
@@ -298,6 +409,16 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
   primaryClient.models.generateContent = async (
     params: Parameters<typeof originalGenerateContent>[0]
   ) => {
+    // Nếu thiết bị (như Điện thoại) gửi request khi localStorage chưa có Key và bộ nhớ đệm Server cũng trống -> Tự động lấy từ Supabase Cloud
+    if (
+      pool.geminiKeys.length === 0 &&
+      pool.groqKeys.length === 0 &&
+      pool.openRouterKeys.length === 0 &&
+      pool.siliconFlowKeys.length === 0
+    ) {
+      await hydratePoolFromSupabaseCloudOnServer(pool);
+    }
+
     const requestedModel = (params.model || "gemini-2.5-flash").trim();
     const { promptText, imagesBase64 } = extractPromptAndImagesFromContents(
       params.contents
@@ -311,12 +432,18 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
 
     const addGroqAttempts = () => {
       for (const gKey of pool.groqKeys) {
-        // Put openai/gpt-oss-120b and openai/gpt-oss-20b first as they support 3,000+ output tokens in 6s on Groq Free Tier
-        const groqModels = [
-          "openai/gpt-oss-120b",
-          "openai/gpt-oss-20b",
-          "qwen/qwen3.8-27b",
-        ];
+        const groqModels = hasImages
+          ? [
+              "meta-llama/llama-4-scout-17b-16e-instruct",
+              "meta-llama/llama-4-maverick-17b-128e-instruct",
+            ]
+          : [
+              "openai/gpt-oss-120b",
+              "openai/gpt-oss-20b",
+              "llama-3.3-70b-versatile",
+              "qwen/qwen3-32b",
+              "qwen/qwen3.8-27b",
+            ];
         for (const m of groqModels) {
           attempts.push(() =>
             callOpenAiCompatibleEndpoint({
@@ -337,12 +464,12 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
       for (const orKey of pool.openRouterKeys) {
         const orModels = hasImages
           ? [
-              "nvidia/nemotron-3.5-super-vl:free",
-              "nvidia/nemotron-3-nano-omni-30b-a3b-reasoning:free",
-              "google/gemma-4-31b-it:free",
+              "qwen/qwen2.5-vl-72b-instruct:free",
+              "qwen/qwen2.5-vl-32b-instruct:free",
+              "google/gemma-3-27b-it:free",
               "openrouter/free",
             ]
-          : ["openrouter/free", "nvidia/nemotron-3.5-super-vl:free"];
+          : ["openrouter/free", "google/gemma-3-27b-it:free"];
         for (const m of orModels) {
           attempts.push(() =>
             callOpenAiCompatibleEndpoint({
@@ -393,11 +520,11 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
 
       for (const apiKey of pool.geminiKeys) {
         const clientForKey =
-          apiKey === pool.geminiKeys[0]
+          apiKey === dummyOrFirstGeminiKey
             ? primaryClient
             : new GoogleGenAI({ apiKey });
         const genFn =
-          apiKey === pool.geminiKeys[0]
+          apiKey === dummyOrFirstGeminiKey
             ? originalGenerateContent
             : clientForKey.models.generateContent.bind(clientForKey.models);
 
@@ -428,24 +555,21 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
     };
 
     // Order attempts based on whether the request requires Vision (hasImages) and the user's selected provider
-    // IMPORTANT: Groq models (gpt-oss-120b, gpt-oss-20b, qwen3.8-27b) are TEXT-ONLY.
-    // Whenever hasImages === true (e.g. TOC Vision scan, PDF page OCR, image lesson scan), we MUST prioritize Vision-capable providers (OpenRouter Nemotron-VL & Gemini Vision) first!
+    // Groq now supports ultra-fast multimodal Vision via meta-llama/llama-4-scout-17b-16e-instruct & llama-4-maverick!
     if (hasImages) {
       if (
         !requestedModel.startsWith("qwen-") &&
         pool.geminiKeys.length > 0
       ) {
         addGeminiAttempts(requestedModel);
-        addOpenRouterAttempts();
+        addGroqAttempts();
         addSiliconFlowAttempts();
-      } else {
         addOpenRouterAttempts();
+      } else {
+        addGroqAttempts();
         addGeminiAttempts(requestedModel);
         addSiliconFlowAttempts();
-      }
-      // Only fall back to text-only Groq if promptText itself has substantial text (> 800 chars)
-      if (promptText.trim().length > 800) {
-        addGroqAttempts();
+        addOpenRouterAttempts();
       }
     } else if (requestedModel.startsWith("qwen-groq")) {
       addGroqAttempts();
@@ -468,6 +592,12 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
       addGroqAttempts();
       addSiliconFlowAttempts();
       addOpenRouterAttempts();
+    }
+
+    if (attempts.length === 0) {
+      throw new Error(
+        "Thiết bị này chưa nhận được cấu hình Master AI Key từ đám mây. Hãy mở trang chủ hoặc trang /admin trên Laptop 1 lần để hệ thống tự động đồng bộ Key lên Supabase Cloud cho điện thoại!"
+      );
     }
 
     let lastError: unknown = null;
@@ -909,19 +1039,19 @@ Bạn BẮT BUỘC phải nhìn và đọc kỹ TOÀN BỘ chữ, hội thoại,
 
 TÊN CHƯƠNG: ${params.chapterTitle}
 
-NỘI DUNG VĂN BẢN CHƯƠNG SÁCH (LỚP TEXT TRÍCH XUẤT TỰ ĐỘNG):
-"""
-${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính kèm)"}
-"""
-
-YÊU CẦU BẮT BUỘC (Viết ngắn gọn, súc tích để đảm bảo xuất đủ 100% cả 7 phần dưới đây):
+YÊU CẦU BẮT BUỘC (Viết súc tích, rõ ràng để đảm bảo xuất đủ 100% cả 7 phần dưới đây):
 1. overview: Tóm tắt nội dung/luận điểm của chương sách, nêu 3 chủ đề chính và 3 mục tiêu học tập.
-2. contentAnalysis: Chia nội dung chương thành 2-3 phần trọng tâm theo mạch sách (ví dụ Dialogue 1, Dialogue 2, Bài đọc...). Mỗi phần trích dẫn đoạn văn gốc (originalExcerpt), dịch sang tiếng Việt chuẩn xác (vietnameseTranslation), và giải thích sâu ý nghĩa nội dung, bối cảnh (deepExplanation & stylisticOrContextNotes).
-3. grammarPoints: Trích xuất 3-4 cấu trúc ngữ pháp trọng tâm xuất hiện trong chương. Giải thích công thức, cách dùng và cho 1-2 ví dụ.
-4. vocabulary: Trích xuất 12 đến 15 mục từ vựng quan trọng nhất xuất hiện trong bài (bao gồm từ mới Vocabulary, tên riêng Names, và cụm từ Phrases). Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ ngắn gọn, 1-2 collocations.
+2. contentAnalysis: Chia nội dung chương thành 2-3 phần trọng tâm theo mạch sách (ví dụ Dialogue I, Dialogue II, Bài đọc...). Mỗi phần trích dẫn đoạn văn gốc (originalExcerpt), dịch sang tiếng Việt chuẩn xác (vietnameseTranslation), và giải thích sâu ý nghĩa nội dung, bối cảnh (deepExplanation & stylisticOrContextNotes).
+3. grammarPoints: Trích xuất 3-5 cấu trúc ngữ pháp trọng tâm xuất hiện trong chương. Giải thích công thức, cách dùng và cho 1-2 ví dụ.
+4. vocabulary: BẮT BUỘC trích xuất ĐẦY ĐỦ TẤT CẢ các mục từ vựng xuất hiện trong chương (tối thiểu 20 đến 35+ từ, bao gồm toàn bộ bảng Vocabulary I, Vocabulary II, People, Names, và Phrases — TUYỆT ĐỐI KHÔNG ĐƯỢC RÚT GỌN CHỈ CÒN 5 TỪ!). Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ ngắn gọn, 1-2 collocations.
 5. clozeExercises: Tạo 5 câu bài tập điền từ/ngữ pháp vào chỗ trống (dùng đúng ký hiệu "_____" tại vị trí từ bị khuyết).
 6. quizExercises: Tạo 6 câu hỏi trắc nghiệm (4 lựa chọn) CHỈ KIỂM TRA TỪ VỰNG (nghĩa từ, cách dùng từ, phiên âm) VÀ NGỮ PHÁP (trật tự từ, chọn cấu trúc đúng, điền trợ từ).
-7. translationExercises: Chọn 4 câu tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.`;
+7. translationExercises: Chọn 4 câu tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.
+
+NỘI DUNG VĂN BẢN CHƯƠNG SÁCH (LỚP TEXT & OCR TRÍCH XUẤT TỰ ĐỘNG):
+"""
+${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính kèm)"}
+"""`;
 
   const contentsPayload: Array<
     string | { inlineData: { mimeType: string; data: string } }
@@ -1066,6 +1196,46 @@ YÊU CẦU BẮT BUỘC (Viết ngắn gọn, súc tích để đảm bảo xu�
       : [],
     generatedAt: new Date().toISOString(),
   };
+
+  // Luôn tự động kích hoạt bộ quét chuyên biệt 100% Từ Vựng (chia nhiều chặng để vượt giới hạn 13-16 từ/request của LLM)
+  // nếu bước soạn bài 1-pass mới chỉ lấy được < 38 từ vựng!
+  if (
+    normalizedLesson.vocabulary.length < 38 &&
+    (params.chapterText.trim().length > 200 ||
+      (params.pageImagesBase64 && params.pageImagesBase64.length > 0))
+  ) {
+    try {
+      const fullVocab = await extractAllChapterVocabWithAI({
+        courseTitle: params.courseTitle,
+        chapterTitle: params.chapterTitle,
+        chapterText: params.chapterText,
+        pageImagesBase64: params.pageImagesBase64,
+        apiKey: params.apiKey,
+        masterApiKey: params.masterApiKey,
+        model: params.model,
+      });
+      if (Array.isArray(fullVocab) && fullVocab.length > 0) {
+        const seenWords = new Set<string>();
+        const mergedVocab: typeof normalizedLesson.vocabulary = [];
+        for (const item of [...fullVocab, ...normalizedLesson.vocabulary]) {
+          const cleanKey = String(item?.word || "")
+            .trim()
+            .toLowerCase();
+          if (!cleanKey || seenWords.has(cleanKey)) continue;
+          seenWords.add(cleanKey);
+          mergedVocab.push({
+            ...item,
+            id: `voc-${mergedVocab.length + 1}`,
+          });
+        }
+        if (mergedVocab.length > normalizedLesson.vocabulary.length) {
+          normalizedLesson.vocabulary = mergedVocab;
+        }
+      }
+    } catch (vocabErr) {
+      console.warn("[Auto-Extract Full Chapter Vocab Failed]:", vocabErr);
+    }
+  }
 
   // Nếu model dừng sớm khiến Tab 4 hoặc Tab 5 bị rỗng, tự động gọi bổ sung ngay
   if (
@@ -1658,47 +1828,105 @@ export async function extractAllChapterVocabWithAI(params: {
   const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
-  const prompt = `Bạn là Chuyên gia Từ điển & Ngôn ngữ học kiêm Giảng viên cao cấp.
-Nhiệm vụ của bạn là quét toàn bộ văn bản và TẤT CẢ HÌNH ẢNH TRANG SÁCH được cung cấp của bài học "${params.chapterTitle}" thuộc sách "${params.courseTitle}".
-BẮT BUỘC TRÍCH XUẤT ĐẦY ĐỦ 100% TẤT CẢ CÁC MỤC TỪ VỰNG XUẤT HIỆN TRONG TOÀN BỘ BÀI HỌC (THƯỜNG CÓ TỪ 35 ĐẾN 50+ MỤC TỪ).
+  const normalizeVocabItems = (rawItems: unknown[]) => {
+    const seen = new Set<string>();
+    const result: Array<{
+      id: string;
+      word: string;
+      ipa: string;
+      partOfSpeech: string;
+      cefrLevel: "A1" | "A2" | "B1" | "B2" | "C1" | "C2";
+      vietnameseMeaning: string;
+      explanationInContext: string;
+      quoteFromBook: string;
+      quoteTranslation: string;
+      collocations: string[];
+      synonyms: string[];
+    }> = [];
 
-ĐẶC BIỆT LƯU Ý VỀ CẤU TRÚC GIÁO TRÌNH TIẾNG NGOẠI NGỮ (ĐẶC BIỆT TIẾNG TRUNG NHƯ ĐƯƠNG ĐẠI / HSK):
-Mỗi bài học thường có nhiều phần đối thoại (Dialogue I, Dialogue II...) và mỗi phần đều có các bảng từ vựng độc lập được đánh số:
-1. Bảng "People in the dialogue" (Tên các nhân vật: VD 1. 陳月美 Chén Yuèměi, 2. 李明華 Lǐ Mínghuá, 3. 王開文 Wáng Kāiwén...)
-2. Bảng "Vocabulary" của Dialogue I (Từ mới đánh số từ 4..17...: VD 4. 你 nǐ, 5. 來 lái, 6. 是 shì, 7. 小姐 xiǎojiě, 8. 嗎 ma, 9. 接 jiē, 10. 我們 wǒmen, 11. 我 wǒ, 12. 這 zhè, 13. 先生 xiānshēng, 14. 好 hǎo, 15. 姓 xìng, 16. 叫 jiào, 17. 你們 nǐmen...)
-3. Bảng "Names" của Dialogue I (Địa danh, tên riêng: VD 18. 臺灣 Táiwān...)
-4. Bảng "Phrases" của Dialogue I (Cụm từ, mẫu câu: VD 19. 歡迎 huānyíng, 20. 請問 qǐngwèn, 21. 是的 shìde, 22. 謝謝 xièxie, 23. 不客氣 búkèqì, 24. 你好 nǐ hǎo...)
-5. Bảng "Vocabulary" của Dialogue II (Đánh số lại từ 1..14...: VD 1. 請 qǐng, 2. 喝 hē, 3. 茶 chá, 4. 很 hěn, 5. 好喝 hǎohē, 6. 什麼 shénme, 7. 人 rén, 8. 喜歡 xǐhuān, 9. 呢 ne, 10. 他 tā, 11. 不 bù, 12. 哪 nǎ, 13. 要 yào, 14. 咖啡 kāfēi...)
-6. Bảng "Names" của Dialogue II (VD 15. 烏龍茶 Wūlóng chá, 16. 日本 Rìběn, 17. 美國 Měiguó...)
-7. Bảng "Phrases" của Dialogue II (VD 18. 對不起 duìbùqǐ, 19. 哪國 nǎ guó...)
+    for (const v of rawItems) {
+      const item = (v || {}) as Record<string, any>;
+      const word = String(item.word || "").trim();
+      if (!word) continue;
+      const dedupeKey = word.toLowerCase();
+      if (seen.has(dedupeKey)) continue;
+      seen.add(dedupeKey);
 
-BẠN PHẢI QUÉT TOÀN BỘ CÁC TRANG ẢNH VÀ VĂN BẢN ĐỂ LẤY ĐỦ TẤT CẢ CÁC MỤC TRÊN (TỔNG CỘNG 35-50+ TỪ).
-TUYỆT ĐỐI KHÔNG ĐƯỢC CẮT BỚT CHỈ LẤY 10 TỪ!
+      result.push({
+        id: `voc-${result.length + 1}`,
+        word,
+        ipa: String(item.ipa || "").trim(),
+        partOfSpeech: String(item.partOfSpeech || "word").trim(),
+        cefrLevel: (["A1", "A2", "B1", "B2", "C1", "C2"].includes(
+          String(item.cefrLevel)
+        )
+          ? item.cefrLevel
+          : "A2") as "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
+        vietnameseMeaning: String(item.vietnameseMeaning || "").trim(),
+        explanationInContext: String(item.explanationInContext || "").trim(),
+        quoteFromBook: String(item.quoteFromBook || "").trim(),
+        quoteTranslation: String(item.quoteTranslation || "").trim(),
+        collocations: Array.isArray(item.collocations)
+          ? item.collocations.map(String).filter(Boolean).slice(0, 3)
+          : [],
+        synonyms: Array.isArray(item.synonyms)
+          ? item.synonyms.map(String).filter(Boolean).slice(0, 3)
+          : [],
+      });
+    }
+    return result;
+  };
+
+  const runVocabExtractionSlice = async (
+    textSlice: string,
+    imageSlice: string[],
+    partLabel: string,
+    excludeWords: string[] = []
+  ) => {
+    const excludeClause =
+      excludeWords.length > 0
+        ? `\n⚠️ DANH SÁCH ${excludeWords.length} TỪ ĐÃ LẤY Ở LƯỢT TRƯỚC (TUYỆT ĐỐI KHÔNG LẶP LẠI CÁC TỪ NÀY):\n[${excludeWords.join(", ")}]\n👉 Nhiệm vụ của bạn ở lượt này là RÀ SOÁT KỸ toàn bộ văn bản/trang sách bên dưới để LẤY HẾT 100% CÁC MỤC TỪ VỰNG CÒN SÓT LẠI (chưa nằm trong danh sách trên)!\n`
+        : "";
+
+    const prompt = `Bạn là Chuyên gia Từ điển & Ngôn ngữ học kiêm Giảng viên cao cấp.
+Nhiệm vụ của bạn là quét toàn bộ văn bản và HÌNH ẢNH TRANG SÁCH (${partLabel}) của bài học "${params.chapterTitle}" thuộc sách "${params.courseTitle}".
+BẮT BUỘC TRÍCH XUẤT ĐẦY ĐỦ 100% TẤT CẢ CÁC MỤC TỪ VỰNG XUẤT HIỆN TRONG PHẦN NÀY (MỖI CHƯƠNG THƯỜNG CÓ TỪ 35 ĐẾN 50+ MỤC TỪ).
+${excludeClause}
+ĐẶC BIỆT LƯU Ý VỀ CẤU TRÚC GIÁO TRÌNH TIẾNG NGOẠI NGỮ (TIẾNG TRUNG ĐƯƠNG ĐẠI / HSK / TIẾNG ANH / NHẬT / HÀN):
+Mỗi bài học thường có nhiều phần đối thoại (Dialogue I, Dialogue II, Bài đọc...) và mỗi phần đều có các bảng từ vựng độc lập được đánh số thứ tự (1, 2, 3...):
+1. Bảng "People in the dialogue" (Tên các nhân vật)
+2. Bảng "Vocabulary" của Dialogue I / Phần 1 (Tất cả các từ mới đánh số từ 1..25+)
+3. Bảng "Names" (Địa danh, tên riêng)
+4. Bảng "Phrases" / "Idioms" (Cụm từ, mẫu câu giao tiếp)
+5. Bảng "Vocabulary" của Dialogue II / Bài đọc Phần 2 (Đánh số lại từ 1..25+)
+6. Bảng "Names" & "Phrases" của Dialogue II / Bài đọc.
+7. Nếu văn bản không chia bảng sẵn, hãy trích xuất TOÀN BỘ các từ vựng mới, từ khóa quan trọng xuất hiện trong hội thoại và bài đọc.
+
+BẠN PHẢI LẤY ĐỦ TẤT CẢ CÁC MỤC TỪ TRONG PHẦN NÀY — KHÔNG ĐƯỢC BỎ SÓT BẤT KỲ MỤC ĐÁNH SỐ NÀO!
+(Lưu ý: Viết thật ngắn gọn, súc tích ở trường explanationInContext và quoteFromBook — mỗi trường chỉ 1 câu ngắn 6-10 chữ — để JSON nhẹ và chứa được nhiều từ vựng nhất trong 1 lần trả về!).
 
 Với mỗi từ, cung cấp:
-- word: Chữ Hán gốc (phồn thể/giản thể theo sách, VD: 請, 喝, 烏龍茶, 陳月美, 對不起, 臺灣...)
+- word: Từ gốc theo sách (Chữ Hán phồn/giản thể, hoặc từ Tiếng Anh/Nhật/Hàn)
 - ipa: Phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh)
-- partOfSpeech: Từ loại chuẩn theo sách (N, V, Vs, Vst, Adv, Ptc, Det, Vaux, Phrase, Name...)
+- partOfSpeech: Từ loại chuẩn theo sách (N, V, Vs, Vst, Adv, Ptc, Det, Vaux, M, Pron, Phrase, Name...)
 - cefrLevel: Cấp độ tương đương (A1, A2, B1, B2, C1, hoặc C2)
 - vietnameseMeaning: Nghĩa tiếng Việt đầy đủ, chính xác
-- explanationInContext: Giải thích ngắn gọn cách dùng từ trong câu (1-2 câu)
-- quoteFromBook: Câu ví dụ có chứa từ đó
+- explanationInContext: Giải thích cực ngắn gọn (1 cụm ngắn)
+- quoteFromBook: 1 câu ví dụ ngắn có chứa từ đó
 - quoteTranslation: Dịch nghĩa câu ví dụ sang tiếng Việt
-- collocations: 1-2 cụm từ kết hợp phổ biến
-- synonyms: Từ đồng nghĩa hoặc liên quan
+- collocations: 1 cụm từ kết hợp phổ biến
+- synonyms: 1 từ đồng nghĩa hoặc liên quan
 
-NỘI DUNG CHƯƠNG SÁCH:
+NỘI DUNG CHƯƠNG SÁCH (${partLabel}):
 """
-${params.chapterText.slice(0, 35000)}
+${textSlice}
 """`;
 
-  const contentsPayload: Array<
-    string | { inlineData: { mimeType: string; data: string } }
-  > = [prompt];
+    const contentsPayload: Array<
+      string | { inlineData: { mimeType: string; data: string } }
+    > = [prompt];
 
-  if (params.pageImagesBase64 && params.pageImagesBase64.length > 0) {
-    // Limit inline images in lesson generation to max 5 to prevent Gemini Vision + JSON Schema timeout
-    for (const base64Img of params.pageImagesBase64.slice(0, 5)) {
+    for (const base64Img of imageSlice.slice(0, 5)) {
       contentsPayload.push({
         inlineData: {
           mimeType: "image/jpeg",
@@ -1706,26 +1934,107 @@ ${params.chapterText.slice(0, 35000)}
         },
       });
     }
+
+    const response = await ai.models.generateContent({
+      model: modelName,
+      contents: contentsPayload,
+      config: {
+        responseMimeType: "application/json",
+        responseSchema: FULL_VOCAB_SCHEMA,
+        temperature: 0.2,
+        maxOutputTokens: 32768,
+        thinkingConfig: { thinkingBudget: 0 },
+      },
+    });
+
+    if (!response.text) return [];
+    const parsed = JSON.parse(response.text);
+    return Array.isArray(parsed?.vocabulary) ? parsed.vocabulary : [];
+  };
+
+  const cleanText = (params.chapterText || "").trim();
+  const images = Array.isArray(params.pageImagesBase64)
+    ? params.pageImagesBase64
+    : [];
+
+  // LÝ DO TRƯỚC ĐÂY CHỈ RA 13 HOẶC 16 TỪ:
+  // Mỗi đối tượng từ vựng có 10 trường (~160 output tokens/từ). Trong 1 lần gọi đơn lẻ (single call),
+  // LLM trên Groq/OpenRouter chỉ sinh được tối đa ~14-16 từ (~2,500 output tokens) là tự dừng để tránh đứt gãy JSON!
+  // GIẢI PHÁP TRIỆT ĐỂ ĐỂ LẤY ĐỦ 40-50+ TỪ:
+  // Bước 1: Luôn chia chương sách thành 3 phân đoạn (Đầu chương / Giữa chương / Cuối chương, mỗi đoạn <= 6,500 ký tự)
+  //         chạy song song để mỗi phân đoạn lấy 15-18 từ -> Tổng 3 phân đoạn đạt ngay 35-45+ từ!
+  // Bước 2: Chạy thêm 1 lượt "Vét cạn từ còn sót (Completeness Sweep)" kèm danh sách từ đã lấy (excludeWords)
+  //         để lấy nốt mọi từ đánh số còn sót lại cho đủ 100% (ví dụ đủ 43/43 từ trong bài)!
+  const numSegments = cleanText.length > 1200 ? 3 : 1;
+  const textChunks: string[] = [];
+
+  if (numSegments === 1) {
+    textChunks.push(cleanText.slice(0, 7500));
+  } else {
+    const targetChunkLen = Math.min(
+      6800,
+      Math.max(1200, Math.ceil(cleanText.length / numSegments))
+    );
+    let cursor = 0;
+    while (cursor < cleanText.length && textChunks.length < 4) {
+      let endIdx = Math.min(cursor + targetChunkLen, cleanText.length);
+      if (endIdx < cleanText.length) {
+        const nextNewline = cleanText.indexOf("\n", endIdx);
+        const prevNewline = cleanText.lastIndexOf("\n", endIdx);
+        if (prevNewline > cursor + 600) {
+          endIdx = prevNewline;
+        } else if (nextNewline !== -1 && nextNewline - endIdx < 400) {
+          endIdx = nextNewline;
+        }
+      }
+      const slice = cleanText.slice(cursor, endIdx).trim();
+      if (slice.length > 0) {
+        textChunks.push(slice);
+      }
+      cursor = endIdx;
+    }
   }
 
-  const response = await ai.models.generateContent({
-    model: modelName,
-    contents: contentsPayload,
-    config: {
-      responseMimeType: "application/json",
-      responseSchema: FULL_VOCAB_SCHEMA,
-      temperature: 0.2,
-      maxOutputTokens: 32768,
-      thinkingConfig: { thinkingBudget: 0 },
-    },
+  const chunkPromises = textChunks.map((chunkStr, idx) => {
+    const imgPerChunk = Math.ceil(images.length / textChunks.length);
+    const chunkImgs = images.slice(
+      idx * imgPerChunk,
+      (idx + 1) * imgPerChunk
+    );
+    return runVocabExtractionSlice(
+      chunkStr,
+      chunkImgs,
+      `Phân đoạn ${idx + 1}/${textChunks.length} của chương`
+    ).catch(() => []);
   });
 
-  if (!response.text) {
-    throw new Error("Không nhận được danh sách từ vựng từ AI.");
+  const stage1Nested = await Promise.all(chunkPromises);
+  let accumulated = normalizeVocabItems(stage1Nested.flat());
+
+  // Bước 2 (Completeness Sweep): Nếu tổng số từ sau Bước 1 vẫn < 42 từ,
+  // gửi danh sách từ đã lấy (excludeWords) để AI rà soát và nhặt nốt TẤT CẢ các từ còn sót trong chương!
+  if (accumulated.length < 42 && cleanText.length > 400) {
+    try {
+      const alreadyWords = accumulated.map((v) => v.word);
+      const sweepText =
+        cleanText.length <= 7500
+          ? cleanText
+          : `${cleanText.slice(0, 3800)}\n...\n${cleanText.slice(-3700)}`;
+      const sweepRaw = await runVocabExtractionSlice(
+        sweepText,
+        images.slice(0, 4),
+        "Lượt rà soát vét cạn 100% các từ vựng còn sót trong chương",
+        alreadyWords
+      );
+      if (Array.isArray(sweepRaw) && sweepRaw.length > 0) {
+        accumulated = normalizeVocabItems([...accumulated, ...sweepRaw]);
+      }
+    } catch {
+      // Ignore sweep error if stage 1 already succeeded
+    }
   }
 
-  const parsed = JSON.parse(response.text);
-  return parsed.vocabulary || [];
+  return accumulated;
 }
 
 export async function evaluatePronunciationWithAI(params: {

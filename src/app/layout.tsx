@@ -1,5 +1,6 @@
 import type { Metadata } from "next";
 import "./globals.css";
+import GlobalFeedbackOverlay from "@/components/ui/GlobalFeedbackOverlay";
 
 export const metadata: Metadata = {
   title: "BookMind AI — Gia Sư Đọc Sách & Tạo Lộ Trình Học Ngoại Ngữ",
@@ -18,6 +19,7 @@ export default function RootLayout({
         className="min-h-screen bg-slate-950 text-slate-100"
         suppressHydrationWarning
       >
+        <GlobalFeedbackOverlay />
         {children}
       </body>
     </html>

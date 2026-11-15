@@ -20,6 +20,7 @@ import {
 } from "lucide-react";
 import { Course } from "@/types/course";
 import { AppUser, isCourseOwnedByUser } from "@/lib/storage";
+import { runWithFeedback } from "@/lib/feedback";
 
 interface BookLibraryViewProps {
   libraryCourses: Course[];
@@ -110,11 +111,25 @@ export default function BookLibraryView({
 
     setApplyingCourseId(course.id);
     try {
-      const cloned = await onApplyCourse(course);
+      const cloned = await runWithFeedback(
+        {
+          variant: "sync",
+          loadingTitle: `Đang thêm "${course.title}" vào Tủ sách...`,
+          loadingSubtitle: "Đồng bộ bài giảng đã soạn và khởi tạo Flashcard SRS",
+          successTitle: "Đã thêm sách vào Tủ sách cá nhân!",
+          successMessage: course.title,
+        },
+        () => onApplyCourse(course)
+      );
       setAppliedSuccessBanner({
         title: cloned.title,
         newCourseId: cloned.id,
       });
+      setTimeout(() => {
+        setAppliedSuccessBanner((prev) =>
+          prev?.newCourseId === cloned.id ? null : prev
+        );
+      }, 2000);
     } finally {
       setApplyingCourseId(null);
     }
@@ -123,7 +138,15 @@ export default function BookLibraryView({
   const handleRefresh = async () => {
     setIsRefreshing(true);
     try {
-      await onRefreshLibrary();
+      await runWithFeedback(
+        {
+          variant: "sync",
+          loadingTitle: "Đang làm mới Thư viện Sách Cộng đồng...",
+          loadingSubtitle: "Đồng bộ các giáo trình & bài giảng mới nhất từ Supabase",
+          successTitle: "Đã cập nhật Thư viện Sách!",
+        },
+        () => onRefreshLibrary()
+      );
     } finally {
       setIsRefreshing(false);
     }
@@ -151,28 +174,28 @@ export default function BookLibraryView({
     null;
 
   return (
-    <div className="mx-auto w-full max-w-7xl flex-1 px-4 py-6 sm:px-6 sm:py-8 space-y-6">
+    <div className="mx-auto w-full max-w-7xl flex-1 px-3.5 py-5 sm:px-6 sm:py-8 space-y-6">
       {/* Top Hero Banner */}
-      <div className="relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-br from-indigo-950/60 via-slate-900 to-slate-900 p-5 sm:p-6 shadow-xl">
+      <div className="relative overflow-hidden rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-6 shadow-xl">
         <div className="flex flex-col gap-4 lg:flex-row lg:items-center lg:justify-between">
           <div className="space-y-2 max-w-2xl">
-            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/30 bg-indigo-500/15 px-3 py-1 text-xs font-bold text-indigo-300">
+            <div className="inline-flex items-center gap-2 rounded-full border border-indigo-500/25 bg-indigo-500/10 px-3 py-1 text-xs font-semibold text-indigo-300">
               <Library className="h-3.5 w-3.5 text-indigo-400" />
               <span>Kho Thư Viện Sách Cộng Đồng ({libraryCourses.length} đầu sách)</span>
             </div>
-            <h1 className="text-xl sm:text-2xl font-extrabold text-white">
-              Thư Viện Sách Chung — Xem Kiểm Tra & Apply Vào Tài Khoản
+            <h1 className="text-lg sm:text-2xl font-bold text-white">
+              Thư Viện Sách Chung — Đọc Thử &amp; Nạp Vào Tủ Cá Nhân
             </h1>
             <p className="text-xs sm:text-sm text-slate-300 leading-relaxed">
-              Mỗi tài khoản có <strong>Tủ sách cá nhân tách biệt hoàn toàn</strong>. Tại Thư viện này, bạn có thể xem tất cả sách do các thành viên đã tải lên, bấm{" "}
+              Mỗi tài khoản có <strong>Tủ sách cá nhân độc lập</strong>. Bạn có thể bấm{" "}
               <span className="text-indigo-300 font-semibold">
                 &ldquo;Xem &amp; Kiểm tra&rdquo;
               </span>{" "}
-              để đọc thử nội dung từng chương, và bấm{" "}
+              để đọc thử từng chương, hoặc bấm{" "}
               <span className="text-emerald-300 font-semibold">
                 &ldquo;Apply vào Tủ sách&rdquo;
               </span>{" "}
-              để tạo bản sao độc lập vào tài khoản của riêng bạn.
+              để lưu bản sao riêng vào tài khoản của bạn.
             </p>
           </div>
 
@@ -181,23 +204,23 @@ export default function BookLibraryView({
               type="button"
               onClick={handleRefresh}
               disabled={isRefreshing}
-              className="flex items-center gap-2 rounded-xl border border-slate-700 bg-slate-900/90 hover:bg-slate-800 px-3.5 py-2.5 text-xs font-bold text-slate-200 transition cursor-pointer disabled:opacity-50"
+              className="flex min-h-[40px] items-center gap-2 rounded-xl border border-white/[0.1] bg-slate-900/90 hover:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-200 transition cursor-pointer disabled:opacity-50"
             >
               <RefreshCw
                 className={`h-3.5 w-3.5 text-indigo-400 ${
                   isRefreshing ? "animate-spin" : ""
                 }`}
               />
-              <span>Làm mới Thư viện</span>
+              <span>Làm mới</span>
             </button>
 
             <button
               type="button"
               onClick={onOpenCreateModal}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/20 transition cursor-pointer"
+              className="flex min-h-[40px] items-center gap-2 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-semibold text-white shadow-sm transition cursor-pointer"
             >
               <PlusCircle className="h-4 w-4" />
-              <span>Đóng góp / Tải sách mới lên</span>
+              <span>Tải sách mới lên</span>
             </button>
           </div>
         </div>

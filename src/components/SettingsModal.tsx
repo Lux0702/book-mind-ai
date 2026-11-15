@@ -21,6 +21,7 @@ import {
   exportAllDataJSON,
   importAllDataJSON,
 } from "@/lib/storage";
+import { runWithFeedback, showToast } from "@/lib/feedback";
 
 interface SettingsModalProps {
   isOpen: boolean;
@@ -47,39 +48,73 @@ export default function SettingsModal({
 
   if (!isOpen) return null;
 
-  const handleSave = () => {
-    saveAppSettings(settings);
-    setSavedNotice(true);
-    onSettingsChanged();
+  const handleSave = async () => {
+    await runWithFeedback(
+      {
+        variant: "edit",
+        loadingTitle: "Đang lưu cấu hình học tập...",
+        successTitle: "Đã lưu cài đặt thành công!",
+      },
+      async () => {
+        saveAppSettings(settings);
+        setSavedNotice(true);
+        onSettingsChanged();
+      }
+    );
     setTimeout(() => {
       setSavedNotice(false);
       onClose();
-    }, 700);
+    }, 600);
   };
 
   const handleExport = async () => {
-    const json = await exportAllDataJSON();
-    const blob = new Blob([json], { type: "application/json" });
-    const url = URL.createObjectURL(blob);
-    const a = document.createElement("a");
-    a.href = url;
-    a.download = `book-learning-courses-backup-${new Date()
-      .toISOString()
-      .slice(0, 10)}.json`;
-    a.click();
-    URL.revokeObjectURL(url);
+    await runWithFeedback(
+      {
+        variant: "sync",
+        loadingTitle: "Đang đóng gói dữ liệu sao lưu JSON...",
+        successTitle: "Đã tải xuống bản sao lưu JSON!",
+      },
+      async () => {
+        const json = await exportAllDataJSON();
+        const blob = new Blob([json], { type: "application/json" });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = `book-learning-courses-backup-${new Date()
+          .toISOString()
+          .slice(0, 10)}.json`;
+        a.click();
+        URL.revokeObjectURL(url);
+      }
+    );
   };
 
   const handleImportFile = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (!file) return;
     try {
-      const text = await file.text();
-      const count = await importAllDataJSON(text);
+      const count = await runWithFeedback(
+        {
+          variant: "sync",
+          loadingTitle: "Đang khôi phục dữ liệu từ bản sao lưu...",
+          loadingSubtitle: "Đồng bộ khóa học & thẻ Flashcard vào bộ nhớ",
+        },
+        async () => {
+          const text = await file.text();
+          return await importAllDataJSON(text);
+        }
+      );
       setImportStatus(`Đã khôi phục thành công ${count} khóa học!`);
+      showToast({
+        type: "success",
+        title: `Đã khôi phục ${count} khóa học!`,
+        durationMs: 1800,
+      });
+      setTimeout(() => setImportStatus(null), 1800);
       onSettingsChanged();
     } catch {
       setImportStatus("Lỗi định dạng file JSON sao lưu.");
+      setTimeout(() => setImportStatus(null), 2000);
     }
   };
 

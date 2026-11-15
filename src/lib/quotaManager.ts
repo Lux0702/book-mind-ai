@@ -14,7 +14,15 @@ import {
   getSupabaseClient,
   getSessionAuthHeaders,
   triggerSessionExpiredLogout,
+  pullSystemAiKeysFromCloud,
+  getStudyStreak,
+  getLearningActivities,
 } from "./storage";
+import {
+  startActionLoading,
+  stopActionLoading,
+  showToast,
+} from "./feedback";
 
 const QUOTA_STORAGE_KEY = "book_agent_user_quotas_v1";
 const EMAIL_INBOX_STORAGE_KEY = "book_agent_virtual_emails_v1";
@@ -837,6 +845,12 @@ async function syncAccountFromSupabaseCloud(
         String(data.role || cloudData.role || "user").toLowerCase() === "admin"
           ? "admin"
           : "user";
+      if (cloudData.streakData) {
+        account.streakData = cloudData.streakData;
+      }
+      if (Array.isArray(cloudData.activityLogs)) {
+        account.activityLogs = cloudData.activityLogs;
+      }
 
       const all = getAllQuotaAccounts();
       all[cleanEmail] = account;
@@ -857,15 +871,31 @@ async function upsertAccountToSupabaseCloud(
 
   try {
     const cleanEmail = account.email.trim().toLowerCase();
+    // Bảo toàn dữ liệu Điểm danh (streakData & activityLogs) khi đồng bộ tài khoản lên user_quotas
+    const currentUser = await getCurrentUser();
+    const isSameUser =
+      currentUser &&
+      (currentUser.email?.toLowerCase() === cleanEmail ||
+        currentUser.id?.toLowerCase() === cleanEmail);
+
+    const payloadAccount: UserQuotaAccount = {
+      ...account,
+      streakData:
+        account.streakData || (isSameUser ? getStudyStreak() : undefined),
+      activityLogs:
+        account.activityLogs ||
+        (isSameUser ? getLearningActivities() : undefined),
+    };
+
     await supabase.from("user_quotas").upsert(
       {
         email: cleanEmail,
-        role: account.role || "user",
-        plan: account.plan,
-        issued_api_key: account.issuedApiKey,
-        used_calls: account.usedCalls,
-        max_calls: account.maxCalls,
-        data: account,
+        role: payloadAccount.role || "user",
+        plan: payloadAccount.plan,
+        issued_api_key: payloadAccount.issuedApiKey,
+        used_calls: payloadAccount.usedCalls,
+        max_calls: payloadAccount.maxCalls,
+        data: payloadAccount,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "email" }
@@ -880,7 +910,16 @@ export async function fetchAiAgent(
   payload: Record<string, unknown>
 ): Promise<Response> {
   const user = await getCurrentUser();
-  const settings = getAppSettings();
+  let settings = getAppSettings();
+  // Tự động tải bộ Master AI Keys từ Supabase Cloud nếu thiết bị hiện tại (như Điện thoại) chưa có key trong localStorage
+  if (
+    !settings.masterGeminiApiKey?.trim() &&
+    !settings.groqApiKey?.trim() &&
+    !settings.openRouterApiKey?.trim() &&
+    !settings.siliconFlowApiKey?.trim()
+  ) {
+    settings = await pullSystemAiKeysFromCloud(true);
+  }
   const taskInfo = getEndpointCreditInfo(endpoint);
   const requiredCredits = taskInfo.credits;
 
@@ -1001,6 +1040,11 @@ export async function fetchAiAgent(
   // 6. Thực thi gọi AI kèm Timeout (120s) + Retry Exponential Backoff (tối đa 1 lần cho lỗi mạng) + Auto-Refund nếu lỗi
   const executeWithRetry = async (): Promise<Response> => {
     activeConcurrencyCount++;
+    const loadingHudId = startActionLoading({
+      variant: "api",
+      title: taskInfo.taskLabel,
+      subtitle: taskInfo.description,
+    });
     const startTime = Date.now();
     let attempt = 0;
     const maxRetries = 1;
@@ -1048,6 +1092,7 @@ export async function fetchAiAgent(
 
           // Nếu hết hạn phiên đăng nhập (HTTP 401 / SESSION_EXPIRED) -> Tự động Logout ngay lập tức và yêu cầu đăng nhập lại
           if (res.status === 401 || parsedJson?.code === "SESSION_EXPIRED") {
+            stopActionLoading(loadingHudId);
             const expiredMsg =
               typeof parsedJson?.error === "string"
                 ? parsedJson.error
@@ -1063,6 +1108,7 @@ export async function fetchAiAgent(
           }
 
           if (res.ok && parsedJson && !parsedJson.error) {
+            stopActionLoading(loadingHudId);
             // THÀNH CÔNG: Trừ đúng số AI Credit của tác vụ, đồng bộ lên Supabase Cloud và lưu vào ai_usage_logs
             const all = getAllQuotaAccounts();
             const latest = all[userKey] || account;
@@ -1092,6 +1138,16 @@ export async function fetchAiAgent(
             if (typeof window !== "undefined") {
               window.dispatchEvent(new CustomEvent("bookmind:quota-updated"));
             }
+
+            showToast({
+              type: "success",
+              title: `Hoàn tất: ${taskInfo.taskLabel}`,
+              message:
+                requiredCredits > 0
+                  ? `Xử lý thành công trong ${((Date.now() - startTime) / 1000).toFixed(1)}s (-${requiredCredits} AI Credit)`
+                  : `Xử lý thành công trong ${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+              durationMs: 1800,
+            });
 
             return new Response(rawText, {
               status: 200,
@@ -1127,6 +1183,8 @@ export async function fetchAiAgent(
         }
       }
 
+      stopActionLoading(loadingHudId);
+
       // THẤT BẠI SAU KHI ĐÃ RETRY: HOÀN TRẢ 100% CREDIT (Không trừ bất kỳ Credit nào của user)
       appendAiUsageLog({
         id: `log-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`,
@@ -1143,6 +1201,13 @@ export async function fetchAiAgent(
         createdAt: new Date().toISOString(),
       });
 
+      showToast({
+        type: "error",
+        title: `Chưa hoàn tất: ${taskInfo.taskLabel}`,
+        message: lastErrorText,
+        durationMs: 2200,
+      });
+
       return new Response(
         JSON.stringify({
           error: `${lastErrorText} • [Bảo vệ tài khoản: Hệ thống đã tự động hoàn trả 100% (${requiredCredits} AI Credits) cho bạn]`,
@@ -1151,6 +1216,7 @@ export async function fetchAiAgent(
         { status: 502, headers: { "Content-Type": "application/json" } }
       );
     } finally {
+      stopActionLoading(loadingHudId);
       activeConcurrencyCount = Math.max(0, activeConcurrencyCount - 1);
       inFlightIdempotencyMap.delete(idempotencyKey);
     }

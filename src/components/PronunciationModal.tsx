@@ -21,7 +21,11 @@ import {
 import { PronunciationEvaluation } from "@/types/course";
 import { getAppSettings } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
-import { detectTextLang, stopAllSpeech } from "@/lib/tts";
+import {
+  detectTextLang,
+  stopAllSpeech,
+  extractCleanSpeechTranscript,
+} from "@/lib/tts";
 import AudioSpeakButton from "./AudioSpeakButton";
 
 interface PronunciationModalProps {
@@ -51,10 +55,14 @@ export default function PronunciationModal({
   const recognitionRef = useRef<any>(null);
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
   const mediaStreamRef = useRef<MediaStream | null>(null);
+  const spokenTranscriptRef = useRef("");
+  const audioBase64Ref = useRef("");
+  const audioMimeTypeRef = useRef("audio/webm");
+  const recorderReadyPromiseRef = useRef<Promise<void> | null>(null);
 
   const langCode = detectTextLang(targetText);
 
-  const stopRecording = useCallback(() => {
+  const stopRecording = useCallback(async () => {
     if (recognitionRef.current) {
       try {
         recognitionRef.current.stop();
@@ -71,6 +79,16 @@ export default function PronunciationModal({
       }
       mediaRecorderRef.current = null;
     }
+    if (recorderReadyPromiseRef.current) {
+      try {
+        await Promise.race([
+          recorderReadyPromiseRef.current,
+          new Promise<void>((r) => setTimeout(r, 800)),
+        ]);
+      } catch {
+        // ignore
+      }
+    }
     if (mediaStreamRef.current) {
       mediaStreamRef.current.getTracks().forEach((t) => t.stop());
       mediaStreamRef.current = null;
@@ -84,32 +102,58 @@ export default function PronunciationModal({
     setEvaluation(null);
     setSpokenTranscript("");
     setAudioBase64("");
+    spokenTranscriptRef.current = "";
+    audioBase64Ref.current = "";
+    recorderReadyPromiseRef.current = null;
 
     // 1. Thu sóng âm giọng nói thực tế bằng MediaRecorder để gửi cho Gemini Multimodal Audio
     if (typeof navigator !== "undefined" && navigator.mediaDevices?.getUserMedia) {
       try {
         const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
         mediaStreamRef.current = stream;
-        const mime = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "audio/webm";
-        setAudioMimeType(mime.split(";")[0]);
-        const recorder = new MediaRecorder(stream);
+        const candidates = [
+          "audio/webm;codecs=opus",
+          "audio/webm",
+          "audio/mp4",
+          "audio/aac",
+          "audio/ogg;codecs=opus",
+        ];
+        const supportedMime =
+          typeof MediaRecorder !== "undefined" &&
+          typeof MediaRecorder.isTypeSupported === "function"
+            ? candidates.find((c) => MediaRecorder.isTypeSupported(c)) || ""
+            : "";
+        const cleanMime = (supportedMime || "audio/mp4").split(";")[0];
+        setAudioMimeType(cleanMime);
+        audioMimeTypeRef.current = cleanMime;
+        const recorder = supportedMime
+          ? new MediaRecorder(stream, { mimeType: supportedMime })
+          : new MediaRecorder(stream);
         const chunks: BlobPart[] = [];
         recorder.ondataavailable = (e) => {
           if (e.data && e.data.size > 0) chunks.push(e.data);
         };
-        recorder.onstop = () => {
-          const blob = new Blob(chunks, { type: mime });
-          const reader = new FileReader();
-          reader.onloadend = () => {
-            const resStr = String(reader.result || "");
-            const b64 = resStr.includes(",") ? resStr.split(",")[1] : "";
-            if (b64) setAudioBase64(b64);
+        recorderReadyPromiseRef.current = new Promise<void>((resolve) => {
+          recorder.onstop = () => {
+            const finalMime = (recorder.mimeType || supportedMime || cleanMime).split(";")[0] || "audio/mp4";
+            setAudioMimeType(finalMime);
+            audioMimeTypeRef.current = finalMime;
+            const blob = new Blob(chunks, { type: finalMime });
+            const reader = new FileReader();
+            reader.onloadend = () => {
+              const resStr = String(reader.result || "");
+              const b64 = resStr.includes(",") ? resStr.split(",")[1] : "";
+              if (b64) {
+                audioBase64Ref.current = b64;
+                setAudioBase64(b64);
+              }
+              resolve();
+            };
+            reader.onerror = () => resolve();
+            reader.readAsDataURL(blob);
+            stream.getTracks().forEach((t) => t.stop());
           };
-          reader.readAsDataURL(blob);
-          stream.getTracks().forEach((t) => t.stop());
-        };
+        });
         mediaRecorderRef.current = recorder;
         recorder.start();
         setIsRecording(true);
@@ -128,7 +172,7 @@ export default function PronunciationModal({
     if (!SpeechRecognition) {
       if (!mediaRecorderRef.current) {
         setErrorMessage(
-          "Trình duyệt hiện tại chưa hỗ trợ thu âm trực tiếp. Vui lòng sử dụng Chrome hoặc Edge và cấp quyền Micro."
+          "Trình duyệt hiện tại chưa hỗ trợ thu âm trực tiếp. Vui lòng sử dụng Chrome, Safari hoặc Edge và cấp quyền Micro."
         );
       }
       return;
@@ -145,12 +189,10 @@ export default function PronunciationModal({
       };
 
       recognition.onresult = (event: any) => {
-        let transcript = "";
-        for (let i = 0; i < event.results.length; i++) {
-          transcript += event.results[i][0].transcript;
-        }
-        if (transcript.trim()) {
-          setSpokenTranscript(transcript.trim());
+        const cleanTranscript = extractCleanSpeechTranscript(event.results);
+        if (cleanTranscript) {
+          spokenTranscriptRef.current = cleanTranscript;
+          setSpokenTranscript(cleanTranscript);
         }
       };
 
@@ -180,16 +222,18 @@ export default function PronunciationModal({
     if (isOpen) {
       setSpokenTranscript("");
       setAudioBase64("");
+      spokenTranscriptRef.current = "";
+      audioBase64Ref.current = "";
       setEvaluation(null);
       setErrorMessage(null);
       setIsRecording(false);
       stopAllSpeech();
     } else {
-      stopRecording();
+      void stopRecording();
       stopAllSpeech();
     }
     return () => {
-      stopRecording();
+      void stopRecording();
       stopAllSpeech();
     };
   }, [isOpen, targetText, stopRecording]);
@@ -197,9 +241,12 @@ export default function PronunciationModal({
   if (!isOpen) return null;
 
   const handleEvaluate = async () => {
-    stopRecording();
-    await new Promise((r) => setTimeout(r, 250));
-    if (!spokenTranscript.trim() && !audioBase64) {
+    await stopRecording();
+    const finalTranscript = (spokenTranscriptRef.current || spokenTranscript).trim();
+    const finalAudioBase64 = audioBase64Ref.current || audioBase64;
+    const finalMimeType = audioMimeTypeRef.current || audioMimeType;
+
+    if (!finalTranscript && !finalAudioBase64) {
       setErrorMessage("Vui lòng bấm vào Microphone và đọc to rõ ràng trước khi chấm điểm.");
       return;
     }
@@ -211,9 +258,9 @@ export default function PronunciationModal({
     try {
       const res = await fetchAiAgent("/api/agent/evaluate-pronunciation", {
         expectedText: targetText,
-        spokenText: spokenTranscript,
-        audioBase64: audioBase64 || undefined,
-        audioMimeType,
+        spokenText: finalTranscript,
+        audioBase64: finalAudioBase64 || undefined,
+        audioMimeType: finalMimeType,
         language: langCode,
         pinyinOrIpa: phonetic,
         apiKey: s.geminiApiKey,

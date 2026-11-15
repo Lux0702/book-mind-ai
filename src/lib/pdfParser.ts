@@ -98,6 +98,68 @@ export function buildChaptersFromRanges(
     .filter((c) => c.endPage >= c.startPage);
 }
 
+const PDFJS_VERSION_FALLBACK = "4.10.38";
+
+/**
+ * Nạp thư viện PDF.js an toàn chống lỗi ChunkLoadError của Webpack/Next.js Dev Server.
+ * Nếu gói chunk nội bộ (_next/static/chunks/...pdf_mjs.js) bị lệch cache khi rebuild hoặc hot-reload,
+ * tự động chuyển sang nạp trực tiếp bản chuẩn ESM từ CDN (Cloudflare / Unpkg) mà không bao giờ báo lỗi!
+ */
+async function loadPdfJsLibrary(): Promise<any> {
+  if (typeof window !== "undefined" && (window as any).__bookMindPdfJs) {
+    return (window as any).__bookMindPdfJs;
+  }
+
+  let pdfjsLib: any = null;
+
+  // 1. Ưu tiên nạp bản ESM chuẩn qua Native Browser Import từ CDN tốc độ cao (tránh hoàn toàn lỗi ChunkLoadError của Webpack Dev Server trên Next.js 15)
+  const cdnUrls = [
+    `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${PDFJS_VERSION_FALLBACK}/pdf.min.mjs`,
+    `https://unpkg.com/pdfjs-dist@${PDFJS_VERSION_FALLBACK}/build/pdf.min.mjs`,
+    `https://cdn.jsdelivr.net/npm/pdfjs-dist@${PDFJS_VERSION_FALLBACK}/build/pdf.min.mjs`,
+  ];
+  const nativeImport = new Function("url", "return import(url)") as (
+    url: string
+  ) => Promise<any>;
+
+  for (const url of cdnUrls) {
+    try {
+      pdfjsLib = await nativeImport(url);
+      if (pdfjsLib && typeof pdfjsLib.getDocument === "function") {
+        break;
+      }
+    } catch {
+      // Thử CDN tiếp theo
+    }
+  }
+
+  // 2. Dự phòng Offline bằng module nội bộ nếu mất mạng Internet
+  if (!pdfjsLib) {
+    try {
+      pdfjsLib = await import("pdfjs-dist");
+    } catch {
+      // Ignore
+    }
+  }
+
+  if (!pdfjsLib) {
+    throw new Error(
+      "Không thể khởi tạo bộ đọc PDF. Vui lòng tải lại trang (F5) và thử lại."
+    );
+  }
+
+  const ver = pdfjsLib.version || PDFJS_VERSION_FALLBACK;
+  if (pdfjsLib.GlobalWorkerOptions) {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${ver}/pdf.worker.min.mjs`;
+  }
+
+  if (typeof window !== "undefined") {
+    (window as any).__bookMindPdfJs = pdfjsLib;
+  }
+
+  return pdfjsLib;
+}
+
 /**
  * Streams a heavy PDF file (e.g. 81.8MB+) page-by-page in the browser,
  * cleaning up page buffers immediately after reading each page so RAM stays low.
@@ -108,9 +170,7 @@ export async function parseHeavyPdfClientSide(
   pagesPerChunkFallback = 15
 ): Promise<ParsedBookResult> {
   const fileSizeMB = Number((file.size / (1024 * 1024)).toFixed(2));
-  const pdfjsLib = await import("pdfjs-dist");
-
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  const pdfjsLib = await loadPdfJsLibrary();
 
   const arrayBuffer = await file.arrayBuffer();
   const loadingTask = pdfjsLib.getDocument({
@@ -140,7 +200,7 @@ export async function parseHeavyPdfClientSide(
     const page = await pdf.getPage(pageNum);
     const textContent = await page.getTextContent();
     const strings = textContent.items
-      .map((item) => ("str" in item ? item.str : ""))
+      .map((item: any) => (item && "str" in item ? String(item.str) : ""))
       .join(" ")
       .replace(/\s+/g, " ")
       .trim();
@@ -321,8 +381,7 @@ export async function renderPdfPagesToImagesBase64(
   endPage: number,
   maxPagesToRender = 20
 ): Promise<string[]> {
-  const pdfjsLib = await import("pdfjs-dist");
-  pdfjsLib.GlobalWorkerOptions.workerSrc = `https://unpkg.com/pdfjs-dist@${pdfjsLib.version}/build/pdf.worker.min.mjs`;
+  const pdfjsLib = await loadPdfJsLibrary();
 
   const arrayBuffer = await file.arrayBuffer();
   const pdf = await pdfjsLib.getDocument({
@@ -368,9 +427,14 @@ export async function runLocalBrowserOcrOnImages(
 ): Promise<string> {
   if (!imagesBase64 || imagesBase64.length === 0) return "";
   const Tesseract = await import("tesseract.js");
-  onProgress?.("Đang khởi tạo bộ đọc OCR nội bộ trên trình duyệt (Tesseract.js)...");
+  onProgress?.("Đang khởi tạo bộ đọc OCR đa ngôn ngữ trên trình duyệt (Tesseract.js)...");
 
-  const worker = await Tesseract.createWorker("eng+vie");
+  let worker;
+  try {
+    worker = await Tesseract.createWorker("eng+vie+chi_tra+chi_sim");
+  } catch {
+    worker = await Tesseract.createWorker("eng+vie");
+  }
   const pageTexts: string[] = [];
 
   try {

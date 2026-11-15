@@ -52,10 +52,13 @@ import {
   DEFAULT_SETTINGS,
   getCurrentUser,
   AppUser,
+  syncSystemAiKeysToCloud,
+  pullSystemAiKeysFromCloud,
 } from "@/lib/storage";
 import CustomSelect from "@/components/ui/CustomSelect";
+import { runWithFeedback, showToast } from "@/lib/feedback";
 
-const SUPABASE_ADMIN_SQL_SCHEMA = `-- 1. Tạo đầy đủ các bảng đồng bộ Cloud & Phân quyền trên Supabase:
+const SUPABASE_ADMIN_SQL_SCHEMA = `-- 1. Tạo đầy đủ các bảng đồng bộ Cloud, Điểm danh & Phân quyền trên Supabase:
 CREATE TABLE IF NOT EXISTS public.courses (
   id TEXT PRIMARY KEY,
   user_id TEXT,
@@ -70,6 +73,13 @@ CREATE TABLE IF NOT EXISTS public.flashcards (
   course_id TEXT NOT NULL,
   data JSONB NOT NULL,
   next_review_date TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS public.user_progress (
+  user_id TEXT PRIMARY KEY,
+  streak_data JSONB NOT NULL DEFAULT '{}'::jsonb,
+  activity_logs JSONB NOT NULL DEFAULT '[]'::jsonb,
+  updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 ALTER TABLE public.courses ADD COLUMN IF NOT EXISTS user_id TEXT;
@@ -90,6 +100,7 @@ ALTER TABLE public.user_quotas ADD COLUMN IF NOT EXISTS role TEXT NOT NULL DEFAU
 
 ALTER TABLE public.courses ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.flashcards ENABLE ROW LEVEL SECURITY;
+ALTER TABLE public.user_progress ENABLE ROW LEVEL SECURITY;
 ALTER TABLE public.user_quotas ENABLE ROW LEVEL SECURITY;
 
 DROP POLICY IF EXISTS "Allow public access courses" ON public.courses;
@@ -97,6 +108,9 @@ CREATE POLICY "Allow public access courses" ON public.courses FOR ALL USING (tru
 
 DROP POLICY IF EXISTS "Allow public access flashcards" ON public.flashcards;
 CREATE POLICY "Allow public access flashcards" ON public.flashcards FOR ALL USING (true) WITH CHECK (true);
+
+DROP POLICY IF EXISTS "Allow public access user_progress" ON public.user_progress;
+CREATE POLICY "Allow public access user_progress" ON public.user_progress FOR ALL USING (true) WITH CHECK (true);
 
 DROP POLICY IF EXISTS "Allow public access user_quotas" ON public.user_quotas;
 DROP POLICY IF EXISTS "Select user_quotas" ON public.user_quotas;
@@ -189,7 +203,7 @@ export default function AdminDashboardPage() {
 
   const loadAdminData = useCallback(async (forceRefresh = false) => {
     setIsCheckingAuth(true);
-    const loadedSettings = getAppSettings();
+    const loadedSettings = await pullSystemAiKeysFromCloud(forceRefresh);
     setSettings(loadedSettings);
 
     const u = await getCurrentUser(forceRefresh);
@@ -237,27 +251,55 @@ export default function AdminDashboardPage() {
     };
   }, [loadAdminData, refreshLocalLists]);
 
-  const handleSaveMasterSettings = (e: React.FormEvent) => {
+  const handleSaveMasterSettings = async (e: React.FormEvent) => {
     e.preventDefault();
-    saveAppSettings(settings);
-    setSavedSettingsNotice(true);
-    setTimeout(() => setSavedSettingsNotice(false), 2500);
+    await runWithFeedback(
+      {
+        variant: "edit",
+        loadingTitle: "Đang lưu & đồng bộ Master AI Keys lên Cloud...",
+        loadingSubtitle: "Cập nhật cho toàn bộ thiết bị Laptop & Điện thoại",
+        successTitle: "Đã lưu & đồng bộ Master AI Keys!",
+      },
+      async () => {
+        saveAppSettings(settings);
+        await syncSystemAiKeysToCloud(settings);
+        setSavedSettingsNotice(true);
+        setTimeout(() => setSavedSettingsNotice(false), 1800);
+      }
+    );
   };
 
   const handleCopyKey = (key: string) => {
     navigator.clipboard.writeText(key);
     setCopiedKeyId(key);
-    setTimeout(() => setCopiedKeyId(null), 2000);
+    showToast({
+      type: "info",
+      title: "Đã sao chép mã API Key!",
+      durationMs: 1500,
+    });
+    setTimeout(() => setCopiedKeyId(null), 1500);
   };
 
   const handleChangeUserPlan = (email: string, newPlan: PlanTier) => {
     adminUpdateUserAccount(email, { plan: newPlan });
     loadAdminData();
+    showToast({
+      type: "success",
+      title: `Đã đổi gói cho ${email}`,
+      message: `Gói mới: ${PLAN_CONFIG[newPlan].name}`,
+      durationMs: 1800,
+    });
   };
 
   const handleResetUserDailyCalls = (email: string) => {
     adminUpdateUserAccount(email, { usedCalls: 0 });
     loadAdminData();
+    showToast({
+      type: "success",
+      title: "Đã làm mới lượt dùng hôm nay!",
+      message: email,
+      durationMs: 1800,
+    });
   };
 
   const handleSimulateQuotaExhausted = (user: UserQuotaAccount) => {
@@ -267,6 +309,12 @@ export default function AdminDashboardPage() {
         : user.maxCalls;
     adminUpdateUserAccount(user.email, { usedCalls: limit });
     loadAdminData();
+    showToast({
+      type: "info",
+      title: "Đã đặt chạm ngưỡng Credit hôm nay",
+      message: user.email,
+      durationMs: 1800,
+    });
   };
 
   const handleRegenerateUserKey = (email: string) => {
@@ -279,11 +327,24 @@ export default function AdminDashboardPage() {
     }
     adminUpdateUserAccount(email, { regenerateKey: true });
     loadAdminData();
+    showToast({
+      type: "success",
+      title: "Đã cấp mới mã API Key!",
+      message: email,
+      durationMs: 1800,
+    });
   };
 
   const handleToggleLockUser = (user: UserQuotaAccount) => {
     adminUpdateUserAccount(user.email, { isLocked: !user.isLocked });
     loadAdminData();
+    showToast({
+      type: user.isLocked ? "success" : "delete",
+      title: user.isLocked
+        ? `Đã mở khóa tài khoản ${user.email}`
+        : `Đã tạm khóa tài khoản ${user.email}`,
+      durationMs: 1800,
+    });
   };
 
   const handleDeleteUser = (email: string) => {
@@ -296,13 +357,23 @@ export default function AdminDashboardPage() {
     }
     adminDeleteUserAccount(email);
     loadAdminData();
+    showToast({
+      type: "delete",
+      title: `Đã xóa tài khoản ${email}`,
+      durationMs: 1800,
+    });
   };
 
   const handleSaveCustomQuota = (email: string) => {
     const parsed = parseInt(editingQuotaValue, 10);
-    if (!isNaN(parsed) && (parsed >= -1)) {
+    if (!isNaN(parsed) && parsed >= -1) {
       adminUpdateUserAccount(email, { maxCalls: parsed });
       loadAdminData();
+      showToast({
+        type: "success",
+        title: `Đã cập nhật hạn mức cho ${email}`,
+        durationMs: 1800,
+      });
     }
     setEditingQuotaEmail(null);
   };

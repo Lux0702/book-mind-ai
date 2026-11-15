@@ -56,28 +56,31 @@ export default function LoginScreen({}: LoginScreenProps) {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col justify-center items-center px-4 py-12 bg-slate-950 overflow-hidden select-none">
-      {/* Background Glow Orbs */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[700px] h-[500px] rounded-full bg-indigo-600/15 blur-[120px]" />
-      <div className="pointer-events-none absolute -bottom-40 left-1/3 w-[500px] h-[400px] rounded-full bg-purple-600/10 blur-[100px]" />
+    <div className="relative min-h-screen flex flex-col justify-center items-center px-4 py-12 bg-[#090D16] overflow-hidden select-none">
+      {/* Subtle Editorial Ambient Light */}
+      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[640px] h-[420px] rounded-full bg-indigo-500/[0.08] blur-[120px]" />
 
       <div className="relative z-10 w-full max-w-md mx-auto">
         {/* Brand Header */}
         <div className="text-center mb-6 relative">
-          <div className="inline-flex items-center justify-center h-14 w-14 rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 text-white shadow-xl shadow-indigo-500/25 ring-1 ring-white/20 mb-4 animate-in fade-in zoom-in duration-300">
-            <BookOpen className="h-7 w-7" />
+          <div className="inline-flex items-center justify-center h-13 w-13 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border border-white/15 mb-4">
+            <BookOpen className="h-6 w-6" />
           </div>
-          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white">
-            BookMind <span className="text-indigo-400">AI</span>
-          </h1>
-          <p className="mt-2 text-xs sm:text-sm text-slate-400 max-w-sm mx-auto">
-            Đăng nhập bằng tài khoản Google để vào không gian học tập thông minh
-            từ sách PDF & giáo trình chuyên sâu của bạn
+          <div className="flex items-center justify-center gap-2">
+            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+              BookMind
+            </h1>
+            <span className="rounded-md border border-white/[0.1] bg-white/[0.05] px-2 py-0.5 text-xs font-semibold tracking-wider text-indigo-300">
+              STUDIO
+            </span>
+          </div>
+          <p className="mt-2 text-xs sm:text-sm text-slate-400 max-w-sm mx-auto leading-relaxed">
+            Không gian đọc sách học thuật, bóc tách từ vựng &amp; luyện dịch chuyên sâu đồng bộ đa thiết bị
           </p>
         </div>
 
         {/* Auth Card */}
-        <div className="rounded-3xl border border-slate-800/90 bg-slate-900/80 p-6 sm:p-8 shadow-2xl backdrop-blur-xl">
+        <div className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#0F1523]/95 p-6 sm:p-8 shadow-2xl">
           {/* Session Expired Auto-Logout Banner */}
           {sessionExpiredMessage && (
             <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-950/50 p-3.5 text-xs text-amber-200 leading-relaxed shadow-lg">

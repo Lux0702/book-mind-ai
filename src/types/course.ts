@@ -197,6 +197,8 @@ export interface UserQuotaAccount {
   fupDailyLimit?: number; // Ngưỡng Fair Usage Policy cho gói VIP (mặc định 500 Credit/ngày)
   lastResetDate?: string; // YYYY-MM-DD để tự động reset Credit mỗi ngày
   isLocked?: boolean; // Admin có thể khóa/mở khóa quyền gọi AI của user
+  streakData?: StudyStreak; // Đồng bộ chuỗi ngày học (Điểm danh) qua Supabase user_quotas.data
+  activityLogs?: LearningActivity[]; // Đồng bộ lịch sử hoạt động học tập qua Supabase user_quotas.data
   createdAt: string;
   updatedAt: string;
 }

@@ -29,6 +29,8 @@ import {
   Tag,
   Wrench,
   Plus,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import {
   Course,
@@ -44,6 +46,7 @@ import {
   saveCoursePdfBlob,
   fetchChapterRawPayloadFromStorage,
   uploadCourseRawStorageToCloud,
+  syncCourseLessonsWithCommunity,
 } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 import {
@@ -52,6 +55,7 @@ import {
   runLocalBrowserOcrOnImages,
 } from "@/lib/pdfParser";
 import { speakSmart, stopAllSpeech } from "@/lib/tts";
+import { runWithFeedback, showToast } from "@/lib/feedback";
 import AudioSpeakButton from "./AudioSpeakButton";
 import LessonGeneratingLoader from "./loadings/LessonGeneratingLoader";
 import TutorThinkingLoader from "./loadings/TutorThinkingLoader";
@@ -88,6 +92,8 @@ export default function ChapterWorkspace({
     course.chapters[0]?.id || ""
   );
   const [activeTab, setActiveTab] = useState<ActiveTab>("content");
+  const [isMobileChapterDrawerOpen, setIsMobileChapterDrawerOpen] =
+    useState<boolean>(false);
   const [isGeneratingLesson, setIsGeneratingLesson] = useState(false);
   const [isExtractingFullVocab, setIsExtractingFullVocab] = useState(false);
   const [isSupplementingExercises, setIsSupplementingExercises] = useState(false);
@@ -145,16 +151,22 @@ export default function ChapterWorkspace({
   });
   const [ocrEngineMode, setOcrEngineMode] = useState<
     "local_tesseract" | "micro_batch_ai"
-  >("local_tesseract");
+  >("micro_batch_ai");
   const [ocrStatusMsg, setOcrStatusMsg] = useState<string | null>(null);
   const [isRunningStandaloneOcr, setIsRunningStandaloneOcr] =
     useState<boolean>(false);
 
   useEffect(() => {
     let mounted = true;
-    getCoursePdfBlob(course.id).then((pdfBlob) => {
+    getCoursePdfBlob(course.id, course.clonedFromCourseId).then((pdfBlob) => {
       if (mounted) {
         setHasCachedPdf(Boolean(pdfBlob));
+      }
+    });
+    // Tự động kiểm tra và đồng bộ các chương đã được User A / Cộng đồng soạn sẵn từ Thư viện
+    syncCourseLessonsWithCommunity(course).then((mergedCourse) => {
+      if (mounted && mergedCourse) {
+        void onCourseUpdated(mergedCourse);
       }
     });
     return () => {
@@ -165,9 +177,11 @@ export default function ChapterWorkspace({
   useEffect(() => {
     if (!currentChapter) return;
     const rawNoTags = currentChapter.rawText
-      .replace(/--- \[Page \d+\] ---/g, "")
+      .replace(/(?:---\s*)?\[(?:OCR\s+)?(?:Page|Trang)\s+\d+\](?:\s*---)?/gi, "")
       .trim();
-    // Only auto-enable OCR pre-scan if the chapter has almost no text (< 180 chars)
+    // Mặc định TẮT tự động OCR nếu chương đã có chữ (>= 180 ký tự).
+    // Chỉ tự bật gợi ý khi chương gần như trống rỗng hoàn toàn (< 180 ký tự - sách scan thuần ảnh),
+    // và bạn hoàn toàn có thể bật/tắt tùy ý theo từng cuốn sách!
     setUseHybridVision(rawNoTags.length < 180);
   }, [currentChapter?.id]);
 
@@ -206,23 +220,39 @@ export default function ChapterWorkspace({
   ) => {
     e.stopPropagation();
     if (course.chapters.length <= 1) {
-      window.alert("Khóa học cần có ít nhất 1 chương.");
+      showToast({
+        type: "error",
+        title: "Không thể xóa chương cuối cùng",
+        message: "Khóa học cần có ít nhất 1 chương.",
+      });
       return;
     }
-    const remaining = course.chapters
-      .filter((c) => c.id !== chapterIdToDelete)
-      .map((c, idx) => ({ ...c, index: idx + 1 }));
+    const deletedCh = course.chapters.find((c) => c.id === chapterIdToDelete);
+    await runWithFeedback(
+      {
+        variant: "delete",
+        loadingTitle: `Đang xóa "${deletedCh?.title || "chương sách"}"...`,
+        loadingSubtitle: "Cập nhật lại lộ trình chương và đồng bộ Cloud",
+        successTitle: "Đã xóa chương khỏi khóa học!",
+        successMessage: deletedCh?.title,
+      },
+      async () => {
+        const remaining = course.chapters
+          .filter((c) => c.id !== chapterIdToDelete)
+          .map((c, idx) => ({ ...c, index: idx + 1 }));
 
-    const updatedCourse: Course = {
-      ...course,
-      chapters: remaining,
-      updatedAt: new Date().toISOString(),
-    };
-    await saveCourse(updatedCourse);
-    await onCourseUpdated(updatedCourse);
-    if (selectedChapterId === chapterIdToDelete) {
-      setSelectedChapterId(remaining[0]?.id || "");
-    }
+        const updatedCourse: Course = {
+          ...course,
+          chapters: remaining,
+          updatedAt: new Date().toISOString(),
+        };
+        await saveCourse(updatedCourse);
+        await onCourseUpdated(updatedCourse);
+        if (selectedChapterId === chapterIdToDelete) {
+          setSelectedChapterId(remaining[0]?.id || "");
+        }
+      }
+    );
   };
 
   const handleRedetectCourseTocFromSidebar = async () => {
@@ -465,10 +495,15 @@ export default function ChapterWorkspace({
     }
 
     const baseRawWithoutOldOcr = chapter.rawText
-      .split("\n\n=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ===")[0]
+      .split(/\n\n=== \[NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH \([^\]]*\)\] ===/)[0]
       .trim();
 
-    const mergedRawText = `${baseRawWithoutOldOcr}\n\n=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ===\n${extractedOcrText.trim()}`;
+    const ocrHeaderTag =
+      modeToUse === "micro_batch_ai"
+        ? "=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (AI VISION OCR)] ==="
+        : "=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ===";
+
+    const mergedRawText = `${baseRawWithoutOldOcr}\n\n${ocrHeaderTag}\n${extractedOcrText.trim()}`;
 
     // Persist the OCR-enriched rawText into the chapter immediately so the user never has to re-OCR
     const updatedChapters = course.chapters.map((ch) =>
@@ -496,6 +531,21 @@ export default function ChapterWorkspace({
     setActiveTab("content");
     setIsGeneratingLesson(true);
     try {
+      // Kiểm tra nhanh xem chương này vừa được User khác trong cộng đồng soạn xong trên Cloud chưa (để nhận ngay miễn phí, không tốn Credit)
+      if (!chapter.isGenerated || !chapter.lesson) {
+        const communityMerged = await syncCourseLessonsWithCommunity(course);
+        if (communityMerged) {
+          const syncedCh = communityMerged.chapters.find(
+            (c) => c.index === chapter.index || c.id === chapter.id
+          );
+          if (syncedCh?.isGenerated && syncedCh.lesson) {
+            await onCourseUpdated(communityMerged);
+            setActiveTab("content");
+            return;
+          }
+        }
+      }
+
       const settings = getAppSettings();
       let textToUse =
         editableRawText.trim().length > 20
@@ -522,14 +572,17 @@ export default function ChapterWorkspace({
         }
       }
 
-      const alreadyHasOcr = textToUse.includes(
-        "=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ==="
-      );
+      const alreadyHasOcr =
+        textToUse.includes("=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ===") ||
+        textToUse.includes(
+          "=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (AI VISION OCR)] ==="
+        );
 
-      // Step 1: If Hybrid/Scanned mode is enabled or images were uploaded, convert images to text first!
+      // Step 1: CHỈ chạy đọc ảnh (OCR) khi người dùng CHỦ ĐỘNG bật tích chọn `useHybridVision` hoặc bấm tải ảnh lên!
+      // Nếu người dùng không bật `useHybridVision`, gửi thẳng văn bản chữ có sẵn mà không chạy OCR.
       if (
-        (cloudImagesFallback && cloudImagesFallback.length > 0) ||
-        ((useHybridVision || chapter.isScannedPages) && !alreadyHasOcr)
+        (pageImagesBase64 && pageImagesBase64.length > 0) ||
+        (useHybridVision && !alreadyHasOcr)
       ) {
         textToUse = await extractTextFromChapterImages(
           chapter,
@@ -538,7 +591,7 @@ export default function ChapterWorkspace({
       }
 
       setOcrStatusMsg(
-        "Bước 2/2: Đã lấy đủ chữ từ ảnh! AI đang soạn bài giảng chuyên sâu..."
+        "AI đang phân tích nội dung chương & trích xuất toàn bộ từ vựng..."
       );
 
       // Step 2: Send pure enriched text (no heavy 20-image payload!) so Gemini/Qwen never dies or times out
@@ -575,6 +628,11 @@ export default function ChapterWorkspace({
       await saveCourse(updatedCourse);
       await onCourseUpdated(updatedCourse);
       setActiveTab("content");
+      showToast({
+        type: "success",
+        title: "Đã soạn xong bài giảng chương!",
+        message: `Đã trích xuất ${data.lesson?.vocabulary?.length || 0} từ vựng, ${data.lesson?.grammarPoints?.length || 0} ngữ pháp & bộ bài tập.`,
+      });
     } catch (err: unknown) {
       setGenError(
         err instanceof Error
@@ -596,14 +654,22 @@ export default function ChapterWorkspace({
     setIsExtractingFullVocab(true);
     try {
       const settings = getAppSettings();
-      let textToUse = chapter.rawText;
-      const alreadyHasOcr = textToUse.includes(
-        "=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ==="
-      );
+      let textToUse =
+        editableRawText.trim().length > chapter.rawText.trim().length
+          ? editableRawText
+          : chapter.rawText;
 
+      const alreadyHasOcr =
+        textToUse.includes("=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (OCR)] ===") ||
+        textToUse.includes(
+          "=== [NỘI DUNG ĐỌC TỪ ẢNH TRANG SÁCH (AI VISION OCR)] ==="
+        );
+
+      // Chỉ chạy OCR khi bạn chủ động bấm nút "Quét từ Ảnh / PDF" (truyền pageImagesBase64)
+      // hoặc khi bạn đang bật tích chọn useHybridVision mà chương chưa có OCR.
       if (
         (pageImagesBase64 && pageImagesBase64.length > 0) ||
-        ((useHybridVision || chapter.isScannedPages) && !alreadyHasOcr)
+        (useHybridVision && !alreadyHasOcr)
       ) {
         textToUse = await extractTextFromChapterImages(
           chapter,
@@ -615,6 +681,7 @@ export default function ChapterWorkspace({
         courseTitle: course.title,
         chapterTitle: chapter.title,
         chapterText: textToUse,
+        pageImagesBase64,
         apiKey: settings.geminiApiKey,
         model: selectedAiModel || settings.geminiModel,
       });
@@ -624,13 +691,32 @@ export default function ChapterWorkspace({
       }
 
       if (Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
+        const existingVocab = Array.isArray(chapter.lesson.vocabulary)
+          ? chapter.lesson.vocabulary
+          : [];
+        const seenWords = new Set<string>();
+        const mergedVocab: typeof existingVocab = [];
+
+        for (const item of [...data.vocabulary, ...existingVocab]) {
+          const wKey = String(item?.word || "")
+            .trim()
+            .toLowerCase();
+          if (!wKey || seenWords.has(wKey)) continue;
+          seenWords.add(wKey);
+          mergedVocab.push({
+            ...item,
+            id: `voc-${mergedVocab.length + 1}`,
+          });
+        }
+
         const updatedChapters = course.chapters.map((ch) =>
           ch.id === chapter.id && ch.lesson
             ? {
                 ...ch,
+                rawText: textToUse,
                 lesson: {
                   ...ch.lesson,
-                  vocabulary: data.vocabulary,
+                  vocabulary: mergedVocab,
                 },
               }
             : ch
@@ -642,12 +728,111 @@ export default function ChapterWorkspace({
         };
         await saveCourse(updatedCourse);
         await onCourseUpdated(updatedCourse);
+        showToast({
+          type: "success",
+          title: `Đã trích xuất đủ ${mergedVocab.length} từ vựng!`,
+          message: `Chương "${chapter.title}" đã được cập nhật toàn bộ bảng từ vựng & Flashcard SRS.`,
+        });
       }
     } catch (err: unknown) {
       setGenError(
         err instanceof Error ? err.message : "Lỗi khi quét toàn bộ từ vựng."
       );
     } finally {
+      setOcrStatusMsg(null);
+      setIsExtractingFullVocab(false);
+    }
+  };
+
+  const handleBatchExtractVocabForAllGeneratedChapters = async () => {
+    const targetChapters = course.chapters.filter(
+      (ch) =>
+        ch.isGenerated &&
+        ch.lesson &&
+        Array.isArray(ch.lesson.vocabulary) &&
+        ch.lesson.vocabulary.length < 32
+    );
+    if (targetChapters.length === 0) {
+      showToast({
+        type: "info",
+        title: "Tất cả các chương đã có đủ từ vựng!",
+      });
+      return;
+    }
+
+    setGenError(null);
+    setIsExtractingFullVocab(true);
+    try {
+      const settings = getAppSettings();
+      let workingChapters = [...course.chapters];
+      let updatedCount = 0;
+
+      for (let i = 0; i < targetChapters.length; i++) {
+        const ch = targetChapters[i];
+        setOcrStatusMsg(
+          `Đang quét đủ 100% từ vựng cho chương ${i + 1}/${targetChapters.length}: "${ch.title}"...`
+        );
+        const res = await fetchAiAgent("/api/agent/extract-vocab", {
+          courseTitle: course.title,
+          chapterTitle: ch.title,
+          chapterText: ch.rawText,
+          apiKey: settings.geminiApiKey,
+          model: selectedAiModel || settings.geminiModel,
+        });
+        const data = await res.json();
+        if (res.ok && Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
+          const existingVocab = ch.lesson?.vocabulary || [];
+          const seenWords = new Set<string>();
+          const mergedVocab: typeof existingVocab = [];
+          for (const item of [...data.vocabulary, ...existingVocab]) {
+            const wKey = String(item?.word || "")
+              .trim()
+              .toLowerCase();
+            if (!wKey || seenWords.has(wKey)) continue;
+            seenWords.add(wKey);
+            mergedVocab.push({
+              ...item,
+              id: `voc-${mergedVocab.length + 1}`,
+            });
+          }
+
+          workingChapters = workingChapters.map((item) =>
+            item.id === ch.id && item.lesson
+              ? {
+                  ...item,
+                  lesson: {
+                    ...item.lesson,
+                    vocabulary: mergedVocab,
+                  },
+                }
+              : item
+          );
+          updatedCount++;
+        }
+      }
+
+      if (updatedCount > 0) {
+        const updatedCourse: Course = {
+          ...course,
+          chapters: workingChapters,
+          updatedAt: new Date().toISOString(),
+        };
+        await saveCourse(updatedCourse);
+        await onCourseUpdated(updatedCourse);
+        showToast({
+          type: "success",
+          title: `Đã nâng cấp từ vựng cho ${updatedCount} chương!`,
+          message: "Toàn bộ các bài học đã được bổ sung đầy đủ danh sách từ vựng.",
+        });
+      }
+    } catch (err: unknown) {
+      setGenError(
+        err instanceof Error
+          ? err.message
+          : "Lỗi khi quét hàng loạt từ vựng cho các chương."
+      );
+    } finally {
+      setOcrStatusMsg(null);
       setIsExtractingFullVocab(false);
     }
   };
@@ -980,30 +1165,52 @@ export default function ChapterWorkspace({
 
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row">
-      {/* LEFT SIDEBAR: Course Roadmap & Chapters */}
-      <aside className="w-full shrink-0 border-b border-slate-800 bg-slate-900/70 lg:w-80 lg:border-b-0 lg:border-r">
-        <div className="border-b border-slate-800 p-4">
-          <button
-            type="button"
-            onClick={() => {
-              stopAllSpeech();
-              onBackToDashboard();
-            }}
-            className="mb-3 flex items-center gap-1.5 text-xs font-semibold text-indigo-400 hover:text-indigo-300"
-          >
-            <ArrowLeft className="h-3.5 w-3.5" />
-            Quay lại Danh sách Khóa học (Courses)
-          </button>
-          <h2 className="line-clamp-2 text-base font-bold text-white">
+      {/* LEFT SIDEBAR: Course Roadmap & Chapters (Collapsible Drawer on Mobile, Sticky Sidebar on Desktop) */}
+      <aside className="w-full shrink-0 border-b border-white/[0.08] bg-[#0F1523]/95 lg:w-80 lg:border-b-0 lg:border-r">
+        <div className="border-b border-white/[0.07] p-3.5 sm:p-4">
+          <div className="flex items-center justify-between gap-2">
+            <button
+              type="button"
+              onClick={() => {
+                stopAllSpeech();
+                onBackToDashboard();
+              }}
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-white/[0.08] bg-slate-900/80 px-2.5 py-1.5 text-xs font-semibold text-indigo-300 hover:border-indigo-500/40 hover:text-white transition"
+            >
+              <ArrowLeft className="h-3.5 w-3.5" />
+              <span>Quay lại Tủ sách</span>
+            </button>
+
+            {/* Mobile Collapsible Chapter Drawer Toggle */}
+            <button
+              type="button"
+              onClick={() =>
+                setIsMobileChapterDrawerOpen(!isMobileChapterDrawerOpen)
+              }
+              className="inline-flex lg:hidden min-h-[36px] items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/20"
+            >
+              <Layers className="h-3.5 w-3.5 text-indigo-400" />
+              <span>
+                Mục lục ({currentChapter.index}/{course.chapters.length})
+              </span>
+              {isMobileChapterDrawerOpen ? (
+                <ChevronUp className="h-3.5 w-3.5" />
+              ) : (
+                <ChevronDown className="h-3.5 w-3.5" />
+              )}
+            </button>
+          </div>
+
+          <h2 className="mt-2.5 line-clamp-1 sm:line-clamp-2 text-sm sm:text-base font-bold text-white">
             {course.title}
           </h2>
           <p className="mt-0.5 text-xs text-slate-400">
-            {course.author} • Cấp độ {course.level}
+            {course.author} • CEFR {course.level}
           </p>
           {course.sourceFileName && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg bg-slate-800/90 px-2.5 py-1 text-[11px] text-slate-300">
+            <div className="mt-2 hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-slate-950/60 px-2.5 py-1 text-[11px] text-slate-300">
               <FileText className="h-3 w-3 text-indigo-400" />
-              <span className="max-w-[200px] truncate">
+              <span className="max-w-[180px] truncate">
                 {course.sourceFileName}
               </span>
               {course.sourceFileSizeMB && (
@@ -1015,37 +1222,41 @@ export default function ChapterWorkspace({
           )}
         </div>
 
-        {/* Chapters Roadmap List */}
-        <div className="p-3">
+        {/* Chapters Roadmap List (Hidden on mobile unless drawer is toggled open; always visible on lg+) */}
+        <div
+          className={`${
+            isMobileChapterDrawerOpen ? "block" : "hidden"
+          } lg:block p-3`}
+        >
           {hasCachedPdf && (
             <button
               type="button"
               disabled={isRedetectingToc}
               onClick={handleRedetectCourseTocFromSidebar}
-              className="mb-3 flex w-full items-center justify-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-3 py-2 text-xs font-bold text-white shadow-md shadow-amber-600/20 transition hover:from-amber-400 hover:to-orange-500 disabled:opacity-50 cursor-pointer"
+              className="mb-3 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 disabled:opacity-50 cursor-pointer"
               title="Dùng Vision AI đọc ảnh 10 trang đầu PDF để chia lại danh sách Bài học theo đúng Mục lục sách"
             >
               {isRedetectingToc ? (
                 <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0" />
+                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-400" />
                   <span>Vision AI đang đọc ảnh Mục lục...</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-3.5 w-3.5 shrink-0" />
-                  <span>AI Đọc Mục Lục (TOC) & Chia Lại Bài</span>
+                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+                  <span>AI Đọc Mục Lục (TOC) &amp; Chia Lại Bài</span>
                 </>
               )}
             </button>
           )}
-          <div className="mb-2 flex items-center justify-between px-2 text-xs font-semibold uppercase tracking-wider text-slate-400">
+          <div className="mb-2 flex items-center justify-between px-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
             <span>Lộ trình Chương ({course.chapters.length})</span>
             <span>
               {course.chapters.filter((c) => c.isGenerated).length}/
               {course.chapters.length} đã soạn
             </span>
           </div>
-          <div className="max-h-[38vh] space-y-1.5 overflow-y-auto pr-1 lg:max-h-[calc(100vh-15rem)]">
+          <div className="max-h-[45vh] space-y-1.5 overflow-y-auto pr-1 lg:max-h-[calc(100vh-15rem)]">
             {course.chapters.map((ch) => {
               const isSelected = ch.id === currentChapter.id;
               const doneExercisesCount =
@@ -1062,11 +1273,12 @@ export default function ChapterWorkspace({
                     setActiveTab("content");
                     setGenError(null);
                     setTutorAnswer(null);
+                    setIsMobileChapterDrawerOpen(false);
                   }}
                   className={`w-full rounded-xl border p-3 text-left transition ${
                     isSelected
-                      ? "border-indigo-500 bg-indigo-950/40 text-white shadow"
-                      : "border-slate-800/80 bg-slate-950/40 text-slate-300 hover:border-slate-700 hover:bg-slate-900"
+                      ? "border-indigo-500/60 bg-indigo-500/15 text-white shadow-sm"
+                      : "border-white/[0.06] bg-slate-950/50 text-slate-300 hover:border-white/[0.14] hover:bg-slate-900"
                   }`}
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -1116,25 +1328,25 @@ export default function ChapterWorkspace({
       </aside>
 
       {/* MAIN CHAPTER WORKSPACE */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-6 lg:p-8">
+      <main className="flex-1 min-w-0 overflow-y-auto p-3.5 sm:p-5 md:p-6 lg:p-8">
         {/* Chapter Header */}
-        <div className="mb-6 flex flex-wrap items-center justify-between gap-4 rounded-2xl border border-slate-800 bg-slate-900/80 p-5">
-          <div>
-            <div className="flex items-center gap-2 text-xs font-semibold uppercase tracking-wider text-indigo-400">
-              <Layers className="h-3.5 w-3.5" />
+        <div className="mb-5 sm:mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-5">
+          <div className="min-w-0">
+            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-indigo-400">
+              <Layers className="h-3.5 w-3.5 shrink-0" />
               <span>
                 Chương {currentChapter.index} / {course.chapters.length}
                 {currentChapter.startPage && currentChapter.endPage
-                  ? ` • Trang ${currentChapter.startPage} – ${currentChapter.endPage}`
+                  ? ` • Trang ${currentChapter.startPage}–${currentChapter.endPage}`
                   : ""}
               </span>
             </div>
-            <h1 className="mt-1 text-xl font-bold text-white md:text-2xl">
+            <h1 className="mt-1 text-lg sm:text-xl font-bold text-white md:text-2xl break-words">
               {currentChapter.title}
             </h1>
           </div>
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2.5 sm:gap-3 w-full sm:w-auto">
+          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
             <select
               value={selectedAiModel}
               onChange={(e) => {
@@ -1144,22 +1356,22 @@ export default function ChapterWorkspace({
                 saveAppSettings({ ...cur, geminiModel: val });
               }}
               title="Chọn nguồn AI tạo bài học (Tự động xoay vòng dự phòng nếu hết hạn mức)"
-              className="rounded-xl border border-indigo-500/40 bg-slate-950 px-3 py-2 text-xs font-semibold text-indigo-200 focus:border-indigo-500 focus:outline-none"
+              className="min-h-[40px] rounded-xl border border-white/[0.1] bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 focus:border-indigo-500 focus:outline-none"
             >
               <option value="qwen-groq">
-                ⚡ Qwen 3 32B (Groq Cloud Siêu Tốc - Free)
+                Qwen 3 / Llama 3.3 (Groq Siêu Tốc)
               </option>
               <option value="qwen-openrouter">
-                🟢 Qwen 2.5 72B / VL (OpenRouter - Free)
+                Qwen 2.5 / Nemotron VL (OpenRouter)
               </option>
               <option value="qwen-siliconflow">
-                🔵 Qwen 2.5 (SiliconFlow Cloud - Free)
+                Qwen 2.5 (SiliconFlow Cloud)
               </option>
               <option value="gemini-2.5-flash">
-                🟣 Google Gemini 2.5 Flash (+ Auto Qwen)
+                Google Gemini 2.5 Flash (+ Auto Failover)
               </option>
               <option value="gemini-2.0-flash">
-                🟣 Google Gemini 2.0 Flash
+                Google Gemini 2.0 Flash
               </option>
             </select>
             <button
@@ -1168,41 +1380,82 @@ export default function ChapterWorkspace({
                 setShowRawText(!showRawText);
                 setEditableRawText(currentChapter.rawText);
               }}
-              className="rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 text-center"
+              className="min-h-[40px] rounded-xl border border-white/[0.1] bg-slate-950 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 text-center transition"
             >
-              {showRawText ? "Ẩn văn bản gốc" : "Xem / Sửa văn bản gốc chương"}
+              {showRawText ? "Ẩn văn bản gốc" : "Văn bản gốc"}
             </button>
-            <button
-              type="button"
-              disabled={isGeneratingLesson}
-              onClick={() => handleGenerateChapterLesson(currentChapter)}
-              className="flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2.5 text-xs font-semibold text-white shadow-lg shadow-indigo-600/20 transition hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
-            >
-              {isGeneratingLesson ? (
-                <>
-                  <Loader2 className="h-4 w-4 animate-spin" />
-                  AI đang phân tích chương sách (10-15s)...
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-4 w-4" />
-                  {lesson ? "Tạo lại Bài học bằng AI" : "AI Soạn Bài Học Chương Này"}
-                </>
-              )}
-            </button>
+            {!lesson ? (
+              <button
+                type="button"
+                disabled={isGeneratingLesson}
+                onClick={() => handleGenerateChapterLesson(currentChapter)}
+                className="flex min-h-[40px] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
+              >
+                {isGeneratingLesson ? (
+                  <>
+                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                    <span>AI đang phân tích (10-15s)...</span>
+                  </>
+                ) : (
+                  <>
+                    <Sparkles className="h-4 w-4 shrink-0" />
+                    <span>AI Soạn Bài Chương Này</span>
+                  </>
+                )}
+              </button>
+            ) : (
+              <div className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-300">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+                <span>Đã soạn bài giảng</span>
+              </div>
+            )}
           </div>
         </div>
 
         {/* Raw Text Drawer */}
         {showRawText && (
           <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-            <div className="mb-2 flex items-center justify-between">
+            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
               <span className="text-xs font-semibold text-indigo-300">
-                Văn bản gốc trích xuất từ Sách ({currentChapter.rawText.length.toLocaleString()} ký tự)
+                Văn bản gốc trích xuất từ Sách ({editableRawText.length.toLocaleString()} ký tự)
               </span>
-              <span className="text-xs text-slate-400">
-                Bạn có thể chỉnh sửa hoặc dán bổ sung nội dung trước khi bấm &ldquo;AI Soạn Bài Học&rdquo;
-              </span>
+              <div className="flex items-center gap-2">
+                <span className="hidden sm:inline text-xs text-slate-400">
+                  Chỉnh sửa hoặc dán bổ sung nội dung chương
+                </span>
+                <button
+                  type="button"
+                  onClick={async () => {
+                    await runWithFeedback(
+                      {
+                        variant: "edit",
+                        loadingTitle: "Đang lưu văn bản gốc chương...",
+                        loadingSubtitle: "Đồng bộ nội dung chương vào bộ nhớ & Cloud",
+                        successTitle: "Đã lưu văn bản chương!",
+                      },
+                      async () => {
+                        const updatedChapters = course.chapters.map((ch) =>
+                          ch.id === currentChapter.id
+                            ? { ...ch, rawText: editableRawText }
+                            : ch
+                        );
+                        const updatedCourse: Course = {
+                          ...course,
+                          chapters: updatedChapters,
+                          updatedAt: new Date().toISOString(),
+                        };
+                        await saveCourse(updatedCourse);
+                        await onCourseUpdated(updatedCourse);
+                        setShowRawText(false);
+                      }
+                    );
+                  }}
+                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 transition cursor-pointer"
+                >
+                  <Check className="h-3.5 w-3.5" />
+                  <span>Lưu văn bản</span>
+                </button>
+              </div>
             </div>
             <textarea
               rows={7}
@@ -1510,6 +1763,62 @@ export default function ChapterWorkspace({
                 <span>6. Phòng Thi & Ôn Tập Đa Dạng (Exam Arena)</span>
               </button>
             </div>
+
+            {/* Smart Banner when a previously generated chapter has fewer than 35 vocabulary words (e.g. 13 or 16 words from old single-pass prompt) */}
+            {lesson.vocabulary.length < 35 && activeTab !== "vocabulary" && (
+              <div className="mb-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-950/35 via-slate-900 to-indigo-950/35 p-4">
+                <div className="space-y-0.5 text-xs">
+                  <div className="font-bold text-amber-300">
+                    Chương này hiện mới có {lesson.vocabulary.length} từ vựng (do bản soạn rút gọn 12–16 từ trước đó)
+                  </div>
+                  <p className="text-slate-300">
+                    Bấm nút bên cạnh để AI chia 3 phân đoạn + vét cạn 100% các mục từ vựng trong bài (lấy đủ 35–50+ từ cho chương này hoặc toàn bộ các chương đã soạn)!
+                  </p>
+                </div>
+                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    disabled={isExtractingFullVocab}
+                    onClick={() => {
+                      setActiveTab("vocabulary");
+                      void handleExtractFullVocab(currentChapter);
+                    }}
+                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:from-amber-400 hover:to-indigo-500 disabled:opacity-50 cursor-pointer"
+                  >
+                    {isExtractingFullVocab ? (
+                      <>
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                        <span>Đang quét đủ 100% từ vựng...</span>
+                      </>
+                    ) : (
+                      <>
+                        <Sparkles className="h-4 w-4" />
+                        <span>+ Quét Đủ Từ Vựng Chương Này</span>
+                      </>
+                    )}
+                  </button>
+                  {course.chapters.filter(
+                    (c) =>
+                      c.isGenerated &&
+                      c.lesson &&
+                      (c.lesson.vocabulary?.length || 0) < 32
+                  ).length > 1 && (
+                    <button
+                      type="button"
+                      disabled={isExtractingFullVocab}
+                      onClick={() => {
+                        setActiveTab("vocabulary");
+                        void handleBatchExtractVocabForAllGeneratedChapters();
+                      }}
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-400/40 bg-indigo-950/60 px-3.5 py-2 text-xs font-bold text-indigo-200 hover:bg-indigo-900/70 disabled:opacity-50 cursor-pointer"
+                    >
+                      <Layers className="h-3.5 w-3.5 text-indigo-300" />
+                      <span>Quét Đủ Cho Tất Cả Chương Đã Soạn</span>
+                    </button>
+                  )}
+                </div>
+              </div>
+            )}
 
             {/* TAB 6: EXAM & REVIEW ARENA */}
             {activeTab === "exam_arena" && (

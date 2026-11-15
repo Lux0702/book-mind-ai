@@ -1,215 +1,294 @@
-"use client";
+/**
+ * Smart Text-to-Speech (TTS) & Speech Recognition Utility
+ * Đồng bộ 100% giọng đọc chuẩn xác giữa Laptop (Windows/Mac) và Điện thoại (iOS/Android)
+ * bằng cách ưu tiên luồng Cloud Neural TTS (/api/tts) thống nhất trên mọi thiết bị,
+ * và chỉ dùng Web Speech API của hệ điều hành làm phương án dự phòng khi mất mạng.
+ */
 
-let currentAudio: HTMLAudioElement | null = null;
-let currentSessionId = 0;
-let currentlyPlayingText: string | null = null;
+const VIETNAMESE_DIACRITIC_REGEX =
+  /[ăâđêôơưáàảãạấầẩẫậắằẳẵặéèẻẽẹếềểễệíìỉĩịóòỏõọốồổỗộớờởỡợúùủũụứừửữựýỳỷỹỵ]/i;
 
 /**
- * Automatically detects the language of the text (Chinese, Japanese, Korean, Vietnamese, or English)
+ * Nhận diện ngôn ngữ thông minh từ văn bản cần đọc:
+ * - Tiếng Nhật (Hiragana / Katakana) -> ja-JP
+ * - Tiếng Hàn (Hangul) -> ko-KR
+ * - Tiếng Trung (Hán tự CJK) -> zh-CN (Phổ thông chuẩn)
+ * - Tiếng Việt (có dấu thanh/chữ cái tiếng Việt) -> vi-VN
+ * - Mặc định -> en-US (Tiếng Anh chuẩn)
  */
 export function detectTextLang(text: string): string {
-  if (/[\u4e00-\u9fff]/.test(text)) {
-    return "zh-TW"; // Traditional/Simplified Mandarin Chinese
-  }
-  if (/[\u3040-\u30ff]/.test(text)) {
-    return "ja-JP";
-  }
-  if (/[\uac00-\ud7af]/.test(text)) {
-    return "ko-KR";
-  }
+  if (!text) return "en-US";
+  // Japanese Hiragana / Katakana
+  if (/[\u3040-\u30ff]/.test(text)) return "ja-JP";
+  // Korean Hangul
+  if (/[\uac00-\ud7af\u1100-\u11ff]/.test(text)) return "ko-KR";
+  // Chinese Hanzi (CJK Unified Ideographs)
+  if (/[\u4e00-\u9fff]/.test(text)) return "zh-CN";
+  // Vietnamese diacritics check
+  if (VIETNAMESE_DIACRITIC_REGEX.test(text)) return "vi-VN";
+  // Default English
   return "en-US";
 }
 
 /**
- * Strips Pinyin or English annotations in parentheses if speaking pure Chinese vocab,
- * or cleans up symbols so TTS reads clearly.
+ * Làm sạch văn bản trước khi đọc:
+ * - Loại bỏ ký tự Markdown (_ * # ` ~)
+ * - Nếu chuỗi vừa có từ vựng vừa kèm phiên âm IPA trong cặp dấu gạch chéo /.../ (ví dụ: "abandon /əˈbændən/"),
+ *   tự động lược bỏ phần /.../ để máy không đọc đánh vần từng ký hiệu phiên âm.
  */
-function cleanTextForSpeech(text: string): string {
-  return text.replace(/[_*#]/g, " ").trim();
+export function cleanTextForSpeech(text: string): string {
+  if (!text) return "";
+  let cleaned = text
+    // Xóa phiên âm IPA dạng /.../ nếu phía trước hoặc sau vẫn còn chữ cái
+    .replace(/(?<=\S\s+)\/[^/\n]{1,40}\//g, " ")
+    .replace(/[_*#`~]/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+
+  if (!cleaned) {
+    cleaned = text.replace(/[_*#`~]/g, " ").replace(/\s+/g, " ").trim();
+  }
+  return cleaned;
 }
 
 /**
- * Completely stops all audio & speech synthesis immediately.
+ * Khử lỗi lặp chữ cộng dồn (cumulative duplicate transcript) của Web Speech API trên Chrome Android.
+ * Trên điện thoại Android, `event.results[i][0].transcript` thường chứa lại toàn bộ câu của các đoạn trước đó
+ * (ví dụ: results[0]="hello", results[1]="hello world" -> nếu cộng chuỗi thường sẽ thành "hellohello world").
  */
-export function stopAllSpeech(): void {
-  currentSessionId++;
-  currentlyPlayingText = null;
+export function extractCleanSpeechTranscript(results: any): string {
+  if (!results || typeof results.length !== "number") return "";
+  const pieces: string[] = [];
 
+  for (let i = 0; i < results.length; i++) {
+    const rawPiece = String(results[i]?.[0]?.transcript || "").trim();
+    if (!rawPiece) continue;
+
+    if (pieces.length === 0) {
+      pieces.push(rawPiece);
+      continue;
+    }
+
+    const prev = pieces[pieces.length - 1];
+    const prevLower = prev.toLowerCase();
+    const rawLower = rawPiece.toLowerCase();
+
+    // Trường hợp 1: Đoạn mới đã bao hàm toàn bộ đoạn trước đó (Android Chrome cumulative bug)
+    if (rawLower.startsWith(prevLower)) {
+      pieces[pieces.length - 1] = rawPiece;
+      continue;
+    }
+
+    // Trường hợp 2: Đoạn mới trùng hệt đoạn trước
+    if (rawLower === prevLower) {
+      continue;
+    }
+
+    // Trường hợp 3: Đoạn trước đã bao hàm đoạn mới (interim ngắn hơn) -> bỏ qua nếu không phải kết quả cuối
+    if (prevLower.startsWith(rawLower) && !results[i]?.isFinal) {
+      continue;
+    }
+
+    pieces.push(rawPiece);
+  }
+
+  return pieces.join(" ").replace(/\s+/g, " ").trim();
+}
+
+let activeAudioElement: HTMLAudioElement | null = null;
+let currentPlayingText: string = "";
+let currentPlaySessionId = 0;
+
+function emitTtsStatus(isPlaying: boolean, text: string = "") {
+  currentPlayingText = isPlaying ? text : "";
   if (typeof window !== "undefined") {
-    // 1. Cancel native browser SpeechSynthesis
-    if ("speechSynthesis" in window) {
-      try {
-        window.speechSynthesis.cancel();
-      } catch {
-        // Ignore
-      }
-    }
-
-    // 2. Pause and completely unload HTML5 Audio element
-    if (currentAudio) {
-      try {
-        currentAudio.pause();
-        currentAudio.currentTime = 0;
-        currentAudio.src = "";
-        currentAudio.load();
-      } catch {
-        // Ignore
-      }
-      currentAudio = null;
-    }
-
-    // Notify UI components
     window.dispatchEvent(
       new CustomEvent("bookmind-tts-status", {
-        detail: { isPlaying: false, text: "" },
+        detail: { isPlaying, text: currentPlayingText },
       })
     );
   }
 }
 
-// Automatically terminate audio whenever user switches browser tabs or hides page
-if (typeof window !== "undefined") {
-  document.addEventListener("visibilitychange", () => {
-    if (document.hidden) {
-      stopAllSpeech();
-    }
-  });
-  window.addEventListener("pagehide", () => {
-    stopAllSpeech();
-  });
-}
-
 /**
- * Returns whether speech is currently playing, and for what text.
+ * Dừng toàn bộ âm thanh TTS đang phát (cả Cloud Audio lẫn Browser SpeechSynthesis).
  */
-export function getSpeechStatus(): { isPlaying: boolean; text: string | null } {
-  return {
-    isPlaying: Boolean(currentlyPlayingText),
-    text: currentlyPlayingText,
-  };
-}
-
-/**
- * Plays speech audio reliably across Windows/Mac/Chrome/Edge.
- * Fixed behavior:
- * - When clicking a second time, immediately terminates the 1st playback and restarts cleanly.
- * - Prevents SpeechSynthesis cancellation from mistakenly triggering fallback audio, eliminating overlapping voices.
- */
-export function speakSmart(text: string, e?: React.MouseEvent): void {
-  if (e) {
-    e.stopPropagation();
-  }
-  if (typeof window === "undefined" || !text.trim()) return;
-
-  const cleaned = cleanTextForSpeech(text);
-  const lang = detectTextLang(cleaned);
-
-  // Stop any ongoing speech immediately before starting new one
-  stopAllSpeech();
-
-  // Create unique session token for this playback request
-  const sessionId = ++currentSessionId;
-  currentlyPlayingText = cleaned;
-
-  // Broadcast that speech has started
-  window.dispatchEvent(
-    new CustomEvent("bookmind-tts-status", {
-      detail: { isPlaying: true, text: cleaned },
-    })
-  );
-
-  const notifyStopped = () => {
-    if (sessionId === currentSessionId) {
-      currentlyPlayingText = null;
-      window.dispatchEvent(
-        new CustomEvent("bookmind-tts-status", {
-          detail: { isPlaying: false, text: "" },
-        })
-      );
-    }
-  };
-
-  const playOnlineFallback = () => {
-    if (sessionId !== currentSessionId) return; // Superseded by a newer click
-
-    try {
-      const encoded = encodeURIComponent(cleaned.slice(0, 200));
-      const url = `/api/tts?text=${encoded}&lang=${encodeURIComponent(lang)}`;
-      const audio = new Audio(url);
-      currentAudio = audio;
-
-      audio.onended = () => {
-        if (sessionId === currentSessionId) {
-          notifyStopped();
-          currentAudio = null;
-        }
-      };
-
-      audio.onerror = () => {
-        if (sessionId === currentSessionId) {
-          notifyStopped();
-          currentAudio = null;
-        }
-      };
-
-      audio.play().catch(() => {
-        if (sessionId === currentSessionId) {
-          notifyStopped();
-          currentAudio = null;
-        }
-      });
-    } catch {
-      notifyStopped();
-    }
-  };
-
-  if (!("speechSynthesis" in window)) {
-    playOnlineFallback();
-    return;
-  }
-
-  const voices = window.speechSynthesis.getVoices();
-  const langPrefix = lang.split("-")[0].toLowerCase(); // e.g., "zh", "en", "ja"
-  const matchedVoice =
-    voices.find((v) => v.lang.toLowerCase() === lang.toLowerCase()) ||
-    voices.find((v) => v.lang.toLowerCase().startsWith(langPrefix));
-
-  // If text is Chinese/Japanese/Korean and OS has NO voice installed for it,
-  // native speechSynthesis will stay completely silent on Windows, so stream online TTS immediately.
-  if (langPrefix !== "en" && !matchedVoice) {
-    playOnlineFallback();
-    return;
-  }
+export function stopAllSpeech(): void {
+  currentPlaySessionId += 1;
+  if (typeof window === "undefined") return;
 
   try {
-    const utterance = new SpeechSynthesisUtterance(cleaned);
-    utterance.lang = matchedVoice ? matchedVoice.lang : lang;
-    if (matchedVoice) {
-      utterance.voice = matchedVoice;
+    if ("speechSynthesis" in window) {
+      window.speechSynthesis.cancel();
     }
-    utterance.rate = 0.9;
-
-    utterance.onend = () => {
-      if (sessionId === currentSessionId) {
-        notifyStopped();
-      }
-    };
-
-    utterance.onerror = (ev) => {
-      // CRITICAL FIX: If cancelled/interrupted by a second user click, DO NOT trigger fallback!
-      // This was the exact bug causing audio to overlap and play on top of each other.
-      if (
-        ev.error === "canceled" ||
-        ev.error === "interrupted" ||
-        sessionId !== currentSessionId
-      ) {
-        return;
-      }
-      playOnlineFallback();
-    };
-
-    window.speechSynthesis.speak(utterance);
   } catch {
-    playOnlineFallback();
+    // ignore
+  }
+
+  if (activeAudioElement) {
+    try {
+      activeAudioElement.onended = null;
+      activeAudioElement.onerror = null;
+      activeAudioElement.pause();
+      activeAudioElement.currentTime = 0;
+      activeAudioElement.removeAttribute("src");
+    } catch {
+      // ignore
+    }
+    activeAudioElement = null;
+  }
+
+  emitTtsStatus(false, "");
+}
+
+/**
+ * Phương án dự phòng Offline bằng giọng đọc của trình duyệt (chỉ kích hoạt khi mất kết nối tới /api/tts).
+ */
+function playBrowserOfflineFallback(
+  text: string,
+  lang: string,
+  sessionId: number
+): void {
+  if (typeof window === "undefined" || !("speechSynthesis" in window)) {
+    emitTtsStatus(false, "");
+    return;
+  }
+
+  const runSynthesis = () => {
+    if (sessionId !== currentPlaySessionId) return;
+    try {
+      window.speechSynthesis.cancel();
+      const utterance = new SpeechSynthesisUtterance(text);
+      utterance.lang = lang;
+      utterance.rate = lang.startsWith("zh") || lang.startsWith("ja") ? 0.92 : 0.96;
+
+      const voices = window.speechSynthesis.getVoices() || [];
+      const prefix = lang.split("-")[0].toLowerCase();
+      const matchingVoices = voices.filter((v) =>
+        v.lang.toLowerCase().replace("_", "-").startsWith(prefix)
+      );
+
+      // Ưu tiên giọng Google / Natural / Online / Microsoft / Apple đúng ngôn ngữ
+      const preferredVoice =
+        matchingVoices.find((v) =>
+          /natural|online|google|siri|samantha|aria|jenny|guy|xiaoxiao|yunxi|hoaimy|namminh/i.test(
+            v.name
+          )
+        ) || matchingVoices[0];
+
+      if (preferredVoice) {
+        utterance.voice = preferredVoice;
+        utterance.lang = preferredVoice.lang;
+      }
+
+      utterance.onstart = () => {
+        if (sessionId === currentPlaySessionId) {
+          emitTtsStatus(true, text);
+        }
+      };
+
+      utterance.onend = () => {
+        if (sessionId === currentPlaySessionId) {
+          emitTtsStatus(false, "");
+        }
+      };
+
+      utterance.onerror = () => {
+        if (sessionId === currentPlaySessionId) {
+          emitTtsStatus(false, "");
+        }
+      };
+
+      emitTtsStatus(true, text);
+      window.speechSynthesis.speak(utterance);
+    } catch {
+      emitTtsStatus(false, "");
+    }
+  };
+
+  const existingVoices = window.speechSynthesis.getVoices();
+  if (existingVoices && existingVoices.length > 0) {
+    runSynthesis();
+  } else {
+    let handled = false;
+    const onVoicesChanged = () => {
+      if (handled) return;
+      handled = true;
+      window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+      runSynthesis();
+    };
+    window.speechSynthesis.addEventListener("voiceschanged", onVoicesChanged);
+    setTimeout(() => {
+      if (!handled) {
+        handled = true;
+        window.speechSynthesis.removeEventListener("voiceschanged", onVoicesChanged);
+        runSynthesis();
+      }
+    }, 250);
+  }
+}
+
+/**
+ * Phát âm văn bản chuẩn xác, đồng nhất 100% giữa Laptop và Điện thoại:
+ * - Luôn ưu tiên phát qua luồng âm thanh chuẩn `/api/tts` để cả Laptop và Mobile
+ *   đều phát ra cùng một giọng đọc chuẩn bản xứ (không bị phụ thuộc vào bộ giọng đọc nội bộ của điện thoại).
+ * - Nếu bấm lại khi đang đọc: dừng câu hiện tại và đọc lại từ đầu.
+ */
+export function speakSmart(
+  text: string,
+  event?: { stopPropagation?: () => void },
+  preferredLang?: string
+): void {
+  if (event?.stopPropagation) {
+    event.stopPropagation();
+  }
+  if (typeof window === "undefined") return;
+
+  const cleaned = cleanTextForSpeech(text);
+  if (!cleaned) return;
+
+  // Dừng mọi âm thanh đang phát trước khi bắt đầu lượt mới
+  stopAllSpeech();
+
+  const sessionId = currentPlaySessionId;
+  const langCode = preferredLang || detectTextLang(cleaned);
+
+  try {
+    const audioUrl = `/api/tts?text=${encodeURIComponent(
+      cleaned.slice(0, 1800)
+    )}&lang=${encodeURIComponent(langCode)}`;
+
+    const audio = new Audio(audioUrl);
+    (audio as any).playsInline = true;
+    audio.preload = "auto";
+    activeAudioElement = audio;
+
+    emitTtsStatus(true, cleaned);
+
+    audio.onended = () => {
+      if (sessionId === currentPlaySessionId) {
+        activeAudioElement = null;
+        emitTtsStatus(false, "");
+      }
+    };
+
+    audio.onerror = () => {
+      if (sessionId === currentPlaySessionId) {
+        activeAudioElement = null;
+        playBrowserOfflineFallback(cleaned, langCode, sessionId);
+      }
+    };
+
+    const playPromise = audio.play();
+    if (playPromise !== undefined) {
+      playPromise.catch(() => {
+        if (sessionId === currentPlaySessionId) {
+          activeAudioElement = null;
+          playBrowserOfflineFallback(cleaned, langCode, sessionId);
+        }
+      });
+    }
+  } catch {
+    playBrowserOfflineFallback(cleaned, langCode, sessionId);
   }
 }
