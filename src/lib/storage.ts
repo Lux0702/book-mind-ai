@@ -6,6 +6,7 @@ import {
   FlashcardSRS,
   StudyStreak,
   LearningActivity,
+  VocabularyItem,
 } from "@/types/course";
 import { SAMPLE_COURSE, SAMPLE_FLASHCARDS } from "./sampleData";
 
@@ -1296,6 +1297,242 @@ function mergeSharedBookChapters(
   };
 }
 
+/**
+ * Đẩy dữ liệu khóa học lên bảng `public.courses` (Kho B) trên Supabase với fallback an toàn.
+ */
+async function upsertCourseToSupabase(
+  supabase: SupabaseClient,
+  course: Course
+): Promise<void> {
+  const { error } = await supabase.from("courses").upsert({
+    id: course.id,
+    user_id: course.userId || null,
+    title: course.title,
+    data: course,
+    updated_at: course.updatedAt,
+  });
+  if (error) {
+    await supabase.from("courses").upsert({
+      id: course.id,
+      title: course.title,
+      data: course,
+      updated_at: course.updatedAt,
+    });
+  }
+}
+
+/**
+ * Tạo bổ sung thẻ Flashcard SRS trong IndexedDB cho các từ vựng chưa có thẻ.
+ */
+async function syncVocabularyFlashcards(
+  course: Course,
+  userId?: string
+): Promise<void> {
+  if (!db) return;
+  const existingCards = await db.flashcards
+    .where("courseId")
+    .equals(course.id)
+    .toArray();
+  const existingIds = new Set(existingCards.map((c) => c.id));
+  const existingWordKeys = new Set(
+    existingCards.map(
+      (c) => `${c.chapterId}::${(c.word || "").trim().toLowerCase()}`
+    )
+  );
+
+  for (const ch of course.chapters) {
+    if (!ch.lesson?.vocabulary) continue;
+    for (const vocab of ch.lesson.vocabulary) {
+      const wordKey = `${ch.id}::${(vocab.word || "").trim().toLowerCase()}`;
+      if (!vocab.word || existingWordKeys.has(wordKey)) continue;
+
+      let cardId = `fc-${course.id}-${ch.id}-${vocab.id}`;
+      let suffix = 1;
+      while (existingIds.has(cardId)) {
+        cardId = `fc-${course.id}-${ch.id}-${vocab.id}-v${suffix++}`;
+      }
+      existingIds.add(cardId);
+      existingWordKeys.add(wordKey);
+
+      await db.flashcards.put({
+        id: cardId,
+        userId,
+        courseId: course.id,
+        chapterId: ch.id,
+        word: vocab.word,
+        ipa: vocab.ipa,
+        partOfSpeech: vocab.partOfSpeech,
+        cefrLevel: vocab.cefrLevel,
+        vietnameseMeaning: vocab.vietnameseMeaning,
+        explanationInContext: vocab.explanationInContext,
+        quoteFromBook: vocab.quoteFromBook,
+        quoteTranslation: vocab.quoteTranslation,
+        collocations: vocab.collocations || [],
+        interval: 0,
+        repetition: 0,
+        efactor: 2.5,
+        nextReviewDate: new Date().toISOString(),
+      });
+    }
+  }
+}
+
+/**
+ * Tự động khôi phục các từ vựng đã trích xuất từ bảng `db.flashcards` trở lại `ch.lesson.vocabulary`
+ * nếu bản khóa học bị mất phần từ vựng mở rộng (ví dụ 49 từ bị ghi đè bởi bản 15 từ cũ).
+ */
+async function restoreMissingVocabFromFlashcards(
+  course: Course
+): Promise<{ course: Course; changed: boolean }> {
+  if (!db) return { course, changed: false };
+  try {
+    const cards = await db.flashcards
+      .where("courseId")
+      .equals(course.id)
+      .toArray();
+    if (!cards || cards.length === 0) {
+      return { course, changed: false };
+    }
+
+    let changed = false;
+    const updatedChapters = course.chapters.map((ch) => {
+      if (!ch.isGenerated || !ch.lesson) return ch;
+      const chapterCards = cards.filter((c) => c.chapterId === ch.id);
+      if (chapterCards.length === 0) return ch;
+
+      const currentVocab: VocabularyItem[] = Array.isArray(ch.lesson.vocabulary)
+        ? [...ch.lesson.vocabulary]
+        : [];
+      const seenWords = new Set(
+        currentVocab.map((v) => (v.word || "").trim().toLowerCase())
+      );
+
+      let chapterExtended = false;
+      for (const card of chapterCards) {
+        const wKey = (card.word || "").trim().toLowerCase();
+        if (!wKey || seenWords.has(wKey)) continue;
+        seenWords.add(wKey);
+        currentVocab.push({
+          id: `voc-${currentVocab.length + 1}`,
+          word: card.word,
+          ipa: card.ipa || "",
+          partOfSpeech: card.partOfSpeech || "",
+          cefrLevel: card.cefrLevel || "B1",
+          vietnameseMeaning: card.vietnameseMeaning || "",
+          explanationInContext: card.explanationInContext || "",
+          quoteFromBook: card.quoteFromBook || "",
+          quoteTranslation: card.quoteTranslation || "",
+          collocations: Array.isArray(card.collocations)
+            ? card.collocations
+            : [],
+          synonyms: [],
+        });
+        chapterExtended = true;
+      }
+
+      if (!chapterExtended) return ch;
+      changed = true;
+      return {
+        ...ch,
+        lesson: {
+          ...ch.lesson,
+          vocabulary: currentVocab,
+        },
+      };
+    });
+
+    if (!changed) return { course, changed: false };
+    return {
+      course: {
+        ...course,
+        chapters: updatedChapters,
+        updatedAt: new Date().toISOString(),
+      },
+      changed: true,
+    };
+  } catch {
+    return { course, changed: false };
+  }
+}
+
+/**
+ * Hợp nhất 2 chiều giữa bản lưu Local (`localCourse`) và bản trên Supabase (`cloudCourse`) của CÙNG 1 khóa học,
+ * đảm bảo không bao giờ ghi đè làm mất từ vựng (ví dụ 49 từ mới trích xuất), bài tập hoặc tiến độ làm bài cá nhân.
+ */
+function mergeSameCourseLocalAndCloud(
+  localCourse: Course,
+  cloudCourse: Course
+): { mergedCourse: Course; cloudNeedsUpdate: boolean } {
+  const cloudPlusLocal = mergeSharedBookChapters(cloudCourse, localCourse);
+  let merged = cloudPlusLocal.mergedCourse;
+  let cloudNeedsUpdate = cloudPlusLocal.changed;
+
+  // Giữ nguyên hợp nhất tiến độ cá nhân (completed IDs), rawText đầy đủ hơn, và cờ storageCleanedUp
+  const mergedChapters = merged.chapters.map((mch, idx) => {
+    const lch =
+      localCourse.chapters.find((c) => c.id === mch.id || c.index === mch.index) ||
+      localCourse.chapters[idx];
+    const cch =
+      cloudCourse.chapters.find((c) => c.id === mch.id || c.index === mch.index) ||
+      cloudCourse.chapters[idx];
+    if (!lch) return mch;
+
+    const clozeIds = Array.from(
+      new Set([
+        ...(cch?.completedClozeIds || []),
+        ...(lch.completedClozeIds || []),
+      ])
+    );
+    const quizIds = Array.from(
+      new Set([
+        ...(cch?.completedQuizIds || []),
+        ...(lch.completedQuizIds || []),
+      ])
+    );
+    const transIds = Array.from(
+      new Set([
+        ...(cch?.completedTranslationIds || []),
+        ...(lch.completedTranslationIds || []),
+      ])
+    );
+
+    const localExtraProgress =
+      clozeIds.length > (cch?.completedClozeIds?.length || 0) ||
+      quizIds.length > (cch?.completedQuizIds?.length || 0) ||
+      transIds.length > (cch?.completedTranslationIds?.length || 0);
+    if (localExtraProgress) {
+      cloudNeedsUpdate = true;
+    }
+
+    const bestRawText =
+      (lch.rawText || "").length > (mch.rawText || "").length
+        ? lch.rawText
+        : mch.rawText;
+    if ((lch.rawText || "").length > (cch?.rawText || "").length) {
+      cloudNeedsUpdate = true;
+    }
+
+    return {
+      ...mch,
+      rawText: bestRawText,
+      completedClozeIds: clozeIds,
+      completedQuizIds: quizIds,
+      completedTranslationIds: transIds,
+    };
+  });
+
+  merged = {
+    ...merged,
+    storageCleanedUp: Boolean(
+      localCourse.storageCleanedUp || cloudCourse.storageCleanedUp
+    ),
+    hasCloudPdf: Boolean(localCourse.hasCloudPdf || cloudCourse.hasCloudPdf),
+    chapters: mergedChapters,
+  };
+
+  return { mergedCourse: merged, cloudNeedsUpdate };
+}
+
 export async function getAllCourses(forceRefresh = false): Promise<Course[]> {
   if (!db) return [];
   if (!forceRefresh && inFlightGetAllCourses) {
@@ -1313,6 +1550,8 @@ export async function getAllCourses(forceRefresh = false): Promise<Course[]> {
     if (!user) {
       return [];
     }
+
+    const coursesToPushToCloud = new Map<string, Course>();
 
     // Pull user's own courses + shared library courses from Supabase to auto-merge any chapters generated by other users
     if (
@@ -1338,7 +1577,22 @@ export async function getAllCourses(forceRefresh = false): Promise<Course[]> {
               const courseData = row.data as Course;
               cloudCourses.push(courseData);
               if (isCourseOwnedByUser(courseData, user)) {
-                await db.courses.put(courseData);
+                const localExisting = await db.courses.get(courseData.id);
+                if (localExisting) {
+                  const mergedSame = mergeSameCourseLocalAndCloud(
+                    localExisting,
+                    courseData
+                  );
+                  await db.courses.put(mergedSame.mergedCourse);
+                  if (mergedSame.cloudNeedsUpdate) {
+                    coursesToPushToCloud.set(
+                      mergedSame.mergedCourse.id,
+                      mergedSame.mergedCourse
+                    );
+                  }
+                } else {
+                  await db.courses.put(courseData);
+                }
               }
             }
           }
@@ -1360,36 +1614,8 @@ export async function getAllCourses(forceRefresh = false): Promise<Course[]> {
           }
           if (anyMerged) {
             await db.courses.put(currentMerged);
-            // Tạo bổ sung Flashcard SRS cho các từ vựng mới được đồng bộ từ cộng đồng
-            for (const ch of currentMerged.chapters) {
-              if (ch.lesson?.vocabulary) {
-                for (const vocab of ch.lesson.vocabulary) {
-                  const cardId = `fc-${currentMerged.id}-${ch.id}-${vocab.id}`;
-                  const existingCard = await db.flashcards.get(cardId);
-                  if (!existingCard) {
-                    await db.flashcards.put({
-                      id: cardId,
-                      userId: user.id,
-                      courseId: currentMerged.id,
-                      chapterId: ch.id,
-                      word: vocab.word,
-                      ipa: vocab.ipa,
-                      partOfSpeech: vocab.partOfSpeech,
-                      cefrLevel: vocab.cefrLevel,
-                      vietnameseMeaning: vocab.vietnameseMeaning,
-                      explanationInContext: vocab.explanationInContext,
-                      quoteFromBook: vocab.quoteFromBook,
-                      quoteTranslation: vocab.quoteTranslation,
-                      collocations: vocab.collocations || [],
-                      interval: 0,
-                      repetition: 0,
-                      efactor: 2.5,
-                      nextReviewDate: new Date().toISOString(),
-                    });
-                  }
-                }
-              }
-            }
+            await syncVocabularyFlashcards(currentMerged, user.id);
+            coursesToPushToCloud.set(currentMerged.id, currentMerged);
           }
         }
       } catch {
@@ -1400,7 +1626,33 @@ export async function getAllCourses(forceRefresh = false): Promise<Course[]> {
     const list = await db.courses.toArray();
     // CÔ LẬP TUYỆT ĐỐI THEO TÀI KHOẢN: Chỉ trả về sách thuộc quyền sở hữu của user hiện tại
     const userCourses = list.filter((c) => isCourseOwnedByUser(c, user));
-    return userCourses.sort(
+
+    // Tự động khôi phục từ vựng từ FlashcardSRS nếu bản lưu khóa học bị thiếu so với Flashcards (ví dụ 49 từ vừa trích xuất)
+    const finalUserCourses: Course[] = [];
+    for (const uc of userCourses) {
+      const restored = await restoreMissingVocabFromFlashcards(uc);
+      if (restored.changed) {
+        await db.courses.put(restored.course);
+        coursesToPushToCloud.set(restored.course.id, restored.course);
+        finalUserCourses.push(restored.course);
+      } else {
+        await syncVocabularyFlashcards(uc, user.id);
+        finalUserCourses.push(uc);
+      }
+    }
+
+    // Đẩy ngược các bản khóa học đã được khôi phục / gộp đầy đủ hơn lên Supabase Cloud
+    if (supabase && settings.autoSyncCloud && coursesToPushToCloud.size > 0) {
+      for (const enrichedCourse of coursesToPushToCloud.values()) {
+        try {
+          await upsertCourseToSupabase(supabase, enrichedCourse);
+        } catch {
+          // Ignore single course cloud sync error
+        }
+      }
+    }
+
+    return finalUserCourses.sort(
       (a, b) =>
         new Date(b.updatedAt).getTime() - new Date(a.updatedAt).getTime()
     );
@@ -1919,45 +2171,60 @@ export async function getCourseById(id: string): Promise<Course | undefined> {
 export async function syncCourseLessonsWithCommunity(
   course: Course
 ): Promise<Course | null> {
+  if (!db) return null;
+  let currentMerged = course;
+  let anyChanged = false;
+
+  // 1. Kiểm tra & khôi phục ngay các từ vựng đã trích xuất từ bảng Flashcards cục bộ (nếu bản khóa học bị thiếu)
+  const localRestored = await restoreMissingVocabFromFlashcards(currentMerged);
+  if (localRestored.changed) {
+    currentMerged = localRestored.course;
+    anyChanged = true;
+  }
+
   const supabase = getSupabaseClient();
   const settings = getAppSettings();
-  if (!supabase || !settings.autoSyncCloud || !db) return null;
+  if (supabase && settings.autoSyncCloud) {
+    try {
+      const { data: rows } = await supabase
+        .from("courses")
+        .select("id, data, updated_at")
+        .order("updated_at", { ascending: false })
+        .limit(120);
 
-  try {
-    const { data: rows } = await supabase
-      .from("courses")
-      .select("id, data, updated_at")
-      .order("updated_at", { ascending: false })
-      .limit(120);
-
-    if (!Array.isArray(rows) || rows.length === 0) return null;
-
-    let currentMerged = course;
-    let anyChanged = false;
-
-    for (const row of rows) {
-      if (
-        !row?.data ||
-        row.id === course.id ||
-        row.id === SYSTEM_AI_CONFIG_COURSE_ID
-      ) {
-        continue;
+      if (Array.isArray(rows) && rows.length > 0) {
+        for (const row of rows) {
+          if (
+            !row?.data ||
+            row.id === SYSTEM_AI_CONFIG_COURSE_ID
+          ) {
+            continue;
+          }
+          const donor = row.data as Course;
+          if (row.id === currentMerged.id) {
+            const sameRes = mergeSharedBookChapters(currentMerged, donor);
+            if (sameRes.changed) {
+              currentMerged = sameRes.mergedCourse;
+              anyChanged = true;
+            }
+          } else {
+            const res = mergeSharedBookChapters(currentMerged, donor);
+            if (res.changed) {
+              currentMerged = res.mergedCourse;
+              anyChanged = true;
+            }
+          }
+        }
       }
-      const donor = row.data as Course;
-      const res = mergeSharedBookChapters(currentMerged, donor);
-      if (res.changed) {
-        currentMerged = res.mergedCourse;
-        anyChanged = true;
-      }
+    } catch {
+      // Offline fallback: still persist localRestored if changed
     }
-
-    if (!anyChanged) return null;
-
-    await saveCourse(currentMerged);
-    return currentMerged;
-  } catch {
-    return null;
   }
+
+  if (!anyChanged) return null;
+
+  await saveCourse(currentMerged);
+  return currentMerged;
 }
 
 export async function saveCourse(course: Course): Promise<void> {
@@ -2026,64 +2293,14 @@ export async function saveCourse(course: Course): Promise<void> {
   }
 
   // Sync flashcards from generated lessons (strictly scoped to userId)
-  for (const ch of updated.chapters) {
-    if (ch.lesson && ch.lesson.vocabulary) {
-      for (const vocab of ch.lesson.vocabulary) {
-        const cardId = `fc-${updated.id}-${ch.id}-${vocab.id}`;
-        const existing = await db.flashcards.get(cardId);
-        if (!existing) {
-          await db.flashcards.put({
-            id: cardId,
-            userId,
-            courseId: updated.id,
-            chapterId: ch.id,
-            word: vocab.word,
-            ipa: vocab.ipa,
-            partOfSpeech: vocab.partOfSpeech,
-            cefrLevel: vocab.cefrLevel,
-            vietnameseMeaning: vocab.vietnameseMeaning,
-            explanationInContext: vocab.explanationInContext,
-            quoteFromBook: vocab.quoteFromBook,
-            quoteTranslation: vocab.quoteTranslation,
-            collocations: vocab.collocations || [],
-            interval: 0,
-            repetition: 0,
-            efactor: 2.5,
-            nextReviewDate: new Date().toISOString(),
-          });
-        }
-      }
-    }
-  }
+  await syncVocabularyFlashcards(updated, userId);
 
-  // Record study activity
-  await recordLearningActivity({
-    type: "lesson_generated",
-    title: `Cập nhật khóa học: ${updated.title}`,
-    details: `Đã lưu tiến độ ${updated.chapters.length} chương sách.`,
-  });
-
-  // Sync to Supabase Cloud (Kho B: Database)
+  // Sync to Supabase Cloud (Kho B: Database) NGAY LẬP TỨC trước khi ghi log điểm danh để không bao giờ bị mất từ vựng mới trích xuất
   const supabase = getSupabaseClient();
   const settings = getAppSettings();
   if (supabase && settings.autoSyncCloud) {
     try {
-      const { error } = await supabase.from("courses").upsert({
-        id: updated.id,
-        user_id: userId || null,
-        title: updated.title,
-        data: updated,
-        updated_at: updated.updatedAt,
-      });
-      if (error) {
-        // Fallback nếu bảng courses trên Supabase chưa có cột user_id
-        await supabase.from("courses").upsert({
-          id: updated.id,
-          title: updated.title,
-          data: updated,
-          updated_at: updated.updatedAt,
-        });
-      }
+      await upsertCourseToSupabase(supabase, updated);
 
       // ĐỒNG BỘ CHIA SẺ BÀI HỌC 2 CHIỀU GIỮA SÁCH GỐC THƯ VIỆN & CÁC BẢN SÁCH USER ĐÃ THÊM VÀO:
       // Bất kể User A (chủ sách gốc) hay User B (người thêm sách từ Thư viện) soạn bài mới hoặc "Soạn thêm" từ vựng/bài tập,
@@ -2127,23 +2344,7 @@ export async function saveCourse(course: Course): Promise<void> {
                 updatedAt: new Date().toISOString(),
               };
 
-              const { error: peerUpErr } = await supabase
-                .from("courses")
-                .upsert({
-                  id: updatedPeerCourse.id,
-                  user_id: updatedPeerCourse.userId || null,
-                  title: updatedPeerCourse.title,
-                  data: updatedPeerCourse,
-                  updated_at: updatedPeerCourse.updatedAt,
-                });
-              if (peerUpErr) {
-                await supabase.from("courses").upsert({
-                  id: updatedPeerCourse.id,
-                  title: updatedPeerCourse.title,
-                  data: updatedPeerCourse,
-                  updated_at: updatedPeerCourse.updatedAt,
-                });
-              }
+              await upsertCourseToSupabase(supabase, updatedPeerCourse);
             }
           }
           cachedLibraryCourses = null;
@@ -2153,6 +2354,13 @@ export async function saveCourse(course: Course): Promise<void> {
       // Offline fallback
     }
   }
+
+  // Record study activity sau khi đã đồng bộ dữ liệu bài học lên Cloud
+  await recordLearningActivity({
+    type: "lesson_generated",
+    title: `Cập nhật khóa học: ${updated.title}`,
+    details: `Đã lưu tiến độ ${updated.chapters.length} chương sách.`,
+  });
 }
 
 export async function saveCoursePdfBlob(
@@ -2228,7 +2436,41 @@ export async function getCoursePdfBlob(
 
 export async function deleteCourse(courseId: string): Promise<void> {
   if (!db) return;
-  const existingCourse = await db.courses.get(courseId);
+  const user = await getCurrentUser();
+  const supabase = getSupabaseClient();
+
+  let targetCourse: Course | undefined = await db.courses.get(courseId);
+  if (!targetCourse && cachedLibraryCourses) {
+    targetCourse = cachedLibraryCourses.find((c) => c.id === courseId);
+  }
+  if (!targetCourse && supabase) {
+    try {
+      const { data: row } = await supabase
+        .from("courses")
+        .select("id, user_id, data")
+        .eq("id", courseId)
+        .maybeSingle();
+      if (row?.data) {
+        targetCourse = row.data as Course;
+        if (row.user_id && !targetCourse.userId) {
+          targetCourse.userId = row.user_id;
+        }
+      }
+    } catch {
+      // Ignore fetch error
+    }
+  }
+
+  const isAppliedCopy = Boolean(targetCourse?.clonedFromCourseId);
+  const isUploader = targetCourse
+    ? isCourseOwnedByUser(targetCourse, user)
+    : false;
+
+  // Chỉ người tải sách gốc lên mới có quyền xóa sách gốc
+  if (!isAppliedCopy && targetCourse && !isUploader) {
+    throw new Error("Chỉ người tải sách lên mới có quyền xóa sách gốc này.");
+  }
+
   await db.courses.delete(courseId);
   try {
     await db.pdfBlobs.delete(courseId);
@@ -2240,16 +2482,16 @@ export async function deleteCourse(courseId: string): Promise<void> {
   const cards = await db.flashcards.where("courseId").equals(courseId).toArray();
   await db.flashcards.bulkDelete(cards.map((c) => c.id));
 
-  // Nếu xóa sách gốc, dọn luôn Kho A (Storage) của sách đó
-  if (!existingCourse?.clonedFromCourseId) {
+  // Tuyệt đối không xóa Kho A (Storage) khi User Apply chỉ gỡ bản sao ra khỏi Tủ sách cá nhân;
+  // Chỉ dọn Kho A khi chính người tải sách gốc xóa sách gốc.
+  if (!isAppliedCopy && targetCourse && isUploader) {
     void cleanupBookStorageOnAllChaptersGenerated(
       courseId,
-      existingCourse?.chapters.length || 30
+      targetCourse.chapters.length || 30
     );
   }
 
-  const supabase = getSupabaseClient();
-  if (supabase) {
+  if (supabase && (isAppliedCopy || isUploader)) {
     try {
       await supabase.from("courses").delete().eq("id", courseId);
     } catch {
@@ -2352,4 +2594,119 @@ export async function importAllDataJSON(jsonString: string): Promise<number> {
     await db.flashcards.bulkPut(flashcards);
   }
   return courses.length;
+}
+
+// =========================================================
+// Study Resume Session & Starred Hard Vocabulary (Per-User)
+// =========================================================
+const LAST_STUDY_SESSION_KEY = "bookmind_last_study_session";
+const STARRED_VOCAB_KEY = "bookmind_starred_vocab_ids";
+
+export interface LastStudySession {
+  courseId: string;
+  courseTitle: string;
+  chapterId: string;
+  chapterIndex: number;
+  chapterTitle: string;
+  activeTab?: string;
+  updatedAt: string;
+}
+
+export function saveLastStudySession(
+  session: Omit<LastStudySession, "updatedAt">
+): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = getActiveUserScopeKey(LAST_STUDY_SESSION_KEY);
+    const payload: LastStudySession = {
+      ...session,
+      updatedAt: new Date().toISOString(),
+    };
+    localStorage.setItem(key, JSON.stringify(payload));
+    window.dispatchEvent(
+      new CustomEvent("bookmind:session-updated", { detail: payload })
+    );
+  } catch {
+    // Ignore storage quota errors
+  }
+}
+
+export function getLastStudySession(): LastStudySession | null {
+  if (typeof window === "undefined") return null;
+  try {
+    const key = getActiveUserScopeKey(LAST_STUDY_SESSION_KEY);
+    const raw = localStorage.getItem(key);
+    if (!raw) return null;
+    const parsed = JSON.parse(raw) as LastStudySession;
+    if (!parsed?.courseId || !parsed?.chapterId) return null;
+    return parsed;
+  } catch {
+    return null;
+  }
+}
+
+export function clearLastStudySessionIfCourse(courseId: string): void {
+  if (typeof window === "undefined") return;
+  try {
+    const key = getActiveUserScopeKey(LAST_STUDY_SESSION_KEY);
+    const current = getLastStudySession();
+    if (current && current.courseId === courseId) {
+      localStorage.removeItem(key);
+      window.dispatchEvent(new CustomEvent("bookmind:session-updated"));
+    }
+  } catch {
+    // Ignore
+  }
+}
+
+export function normalizeStarVocabKey(wordOrKey: string): string {
+  return String(wordOrKey || "").trim().toLowerCase();
+}
+
+export function getStarredVocabIds(): string[] {
+  if (typeof window === "undefined") return [];
+  try {
+    const key = getActiveUserScopeKey(STARRED_VOCAB_KEY);
+    const raw = localStorage.getItem(key);
+    if (!raw) return [];
+    const parsed = JSON.parse(raw);
+    return Array.isArray(parsed)
+      ? parsed.filter((x): x is string => typeof x === "string")
+      : [];
+  } catch {
+    return [];
+  }
+}
+
+export function isVocabStarred(wordOrKey: string): boolean {
+  const normalized = normalizeStarVocabKey(wordOrKey);
+  if (!normalized) return false;
+  return getStarredVocabIds().includes(normalized);
+}
+
+export function toggleStarredVocabId(wordOrKey: string): {
+  starredIds: string[];
+  isStarred: boolean;
+} {
+  const normalized = normalizeStarVocabKey(wordOrKey);
+  const current = getStarredVocabIds();
+  if (!normalized) return { starredIds: current, isStarred: false };
+
+  const exists = current.includes(normalized);
+  const next = exists
+    ? current.filter((id) => id !== normalized)
+    : [normalized, ...current];
+
+  if (typeof window !== "undefined") {
+    try {
+      const key = getActiveUserScopeKey(STARRED_VOCAB_KEY);
+      localStorage.setItem(key, JSON.stringify(next));
+      window.dispatchEvent(
+        new CustomEvent("bookmind:starred-updated", { detail: next })
+      );
+    } catch {
+      // Ignore
+    }
+  }
+  return { starredIds: next, isStarred: !exists };
 }

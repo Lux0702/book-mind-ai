@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   ArrowLeft,
   BookOpen,
@@ -30,7 +30,15 @@ import {
   Wrench,
   Plus,
   ChevronDown,
-  ChevronUp,
+  ChevronLeft,
+  ChevronRight,
+  X,
+  Search,
+  Star,
+  Square,
+  Play,
+  Columns2,
+  Eye,
 } from "lucide-react";
 import {
   Course,
@@ -47,6 +55,10 @@ import {
   fetchChapterRawPayloadFromStorage,
   uploadCourseRawStorageToCloud,
   syncCourseLessonsWithCommunity,
+  saveLastStudySession,
+  getStarredVocabIds,
+  toggleStarredVocabId,
+  normalizeStarVocabKey,
 } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 import {
@@ -64,10 +76,13 @@ import VocabScanningLoader from "./loadings/VocabScanningLoader";
 import FlashcardArena from "./FlashcardArena";
 import ExamArena from "./ExamArena";
 import PronunciationModal from "./PronunciationModal";
+import SelectionAiPopover from "./SelectionAiPopover";
 
 interface ChapterWorkspaceProps {
   course: Course;
   flashcards: FlashcardSRS[];
+  initialChapterId?: string;
+  initialTab?: string;
   onBackToDashboard: () => void;
   onCourseUpdated: (updated: Course) => Promise<void>;
   onOpenSettings: () => void;
@@ -81,17 +96,38 @@ type ActiveTab =
   | "translation"
   | "exam_arena";
 
+const isValidActiveTab = (tab?: string): tab is ActiveTab =>
+  tab === "content" ||
+  tab === "grammar" ||
+  tab === "vocabulary" ||
+  tab === "practice" ||
+  tab === "translation" ||
+  tab === "exam_arena";
+
 export default function ChapterWorkspace({
   course,
   flashcards,
+  initialChapterId,
+  initialTab,
   onBackToDashboard,
   onCourseUpdated,
   onOpenSettings,
 }: ChapterWorkspaceProps) {
-  const [selectedChapterId, setSelectedChapterId] = useState<string>(
-    course.chapters[0]?.id || ""
+  const [selectedChapterId, setSelectedChapterId] = useState<string>(() => {
+    if (
+      initialChapterId &&
+      course.chapters.some((c) => c.id === initialChapterId)
+    ) {
+      return initialChapterId;
+    }
+    return course.chapters[0]?.id || "";
+  });
+  const [activeTab, setActiveTab] = useState<ActiveTab>(() =>
+    isValidActiveTab(initialTab) ? initialTab : "content"
   );
-  const [activeTab, setActiveTab] = useState<ActiveTab>("content");
+  const [mobileVocabLayout, setMobileVocabLayout] = useState<
+    "carousel" | "list"
+  >("carousel");
   const [isMobileChapterDrawerOpen, setIsMobileChapterDrawerOpen] =
     useState<boolean>(false);
   const [isGeneratingLesson, setIsGeneratingLesson] = useState(false);
@@ -189,10 +225,137 @@ export default function ChapterWorkspace({
     (f) => f.chapterId === currentChapter?.id
   );
 
-  // Automatically stop speech when switching learning tabs, chapters, or leaving
+  const workspaceContentRef = useRef<HTMLDivElement | null>(null);
+  const [contentDisplayMode, setContentDisplayMode] = useState<
+    "full" | "bilingual"
+  >("full");
+  const [vocabSearchQuery, setVocabSearchQuery] = useState("");
+  const [vocabStarFilter, setVocabStarFilter] = useState<"all" | "starred">(
+    "all"
+  );
+  const [starredVocabKeys, setStarredVocabKeys] = useState<string[]>([]);
+  const [autoPlayVocabId, setAutoPlayVocabId] = useState<string | null>(null);
+  const autoPlayCancelRef = useRef<boolean>(false);
+
+  // Sync external resume targets if triggered while workspace is already open
   useEffect(() => {
+    if (
+      initialChapterId &&
+      course.chapters.some((c) => c.id === initialChapterId)
+    ) {
+      setSelectedChapterId(initialChapterId);
+    }
+    if (isValidActiveTab(initialTab)) {
+      setActiveTab(initialTab);
+    }
+  }, [initialChapterId, initialTab, course.id]);
+
+  // Save current study position for 1-Tap "Học Tiếp Ngay" resume
+  useEffect(() => {
+    if (!currentChapter) return;
+    saveLastStudySession({
+      courseId: course.id,
+      courseTitle: course.title,
+      chapterId: currentChapter.id,
+      chapterIndex: currentChapter.index,
+      chapterTitle: currentChapter.title,
+      activeTab,
+    });
+  }, [
+    course.id,
+    course.title,
+    currentChapter?.id,
+    currentChapter?.index,
+    currentChapter?.title,
+    activeTab,
+  ]);
+
+  // Sync starred hard vocabulary across Tab 3 & FlashcardArena
+  useEffect(() => {
+    const syncStarred = () => setStarredVocabKeys(getStarredVocabIds());
+    syncStarred();
+    window.addEventListener("bookmind:starred-updated", syncStarred);
+    return () => {
+      window.removeEventListener("bookmind:starred-updated", syncStarred);
+    };
+  }, []);
+
+  const handleToggleStarVocab = (word: string) => {
+    const res = toggleStarredVocabId(word);
+    setStarredVocabKeys(res.starredIds);
+  };
+
+  const stopAutoPlayVocab = () => {
+    autoPlayCancelRef.current = true;
+    setAutoPlayVocabId(null);
+    stopAllSpeech();
+  };
+
+  const handleToggleAutoPlayVocab = async (
+    items: Array<{ id: string; word: string }>
+  ) => {
+    if (autoPlayVocabId !== null) {
+      stopAutoPlayVocab();
+      return;
+    }
+    if (!items || items.length === 0) return;
+
+    autoPlayCancelRef.current = false;
+
+    const speakWait = (text: string) =>
+      new Promise<void>((resolve) => {
+        let settled = false;
+        let sawStart = false;
+        const done = () => {
+          if (settled) return;
+          settled = true;
+          window.removeEventListener(
+            "bookmind-tts-status",
+            onStatus as EventListener
+          );
+          clearTimeout(timer);
+          resolve();
+        };
+        const onStatus = (e: Event) => {
+          const detail = (e as CustomEvent<{ isPlaying?: boolean }>).detail;
+          if (detail?.isPlaying) {
+            sawStart = true;
+          } else if (sawStart) {
+            done();
+          }
+        };
+        const timer = setTimeout(done, 4800);
+        window.addEventListener(
+          "bookmind-tts-status",
+          onStatus as EventListener
+        );
+        speakSmart(text);
+      });
+
+    for (const item of items) {
+      if (autoPlayCancelRef.current) break;
+      setAutoPlayVocabId(item.id);
+      if (typeof document !== "undefined") {
+        document
+          .getElementById(`vocab-card-${item.id}`)
+          ?.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      }
+      await speakWait(item.word);
+      if (autoPlayCancelRef.current) break;
+      await new Promise((r) => setTimeout(r, 380));
+    }
+
+    autoPlayCancelRef.current = true;
+    setAutoPlayVocabId(null);
+  };
+
+  // Automatically stop speech & auto-play when switching learning tabs, chapters, or leaving
+  useEffect(() => {
+    autoPlayCancelRef.current = true;
+    setAutoPlayVocabId(null);
     stopAllSpeech();
     return () => {
+      autoPlayCancelRef.current = true;
       stopAllSpeech();
     };
   }, [activeTab, selectedChapterId]);
@@ -1108,6 +1271,7 @@ export default function ChapterWorkspace({
     return null;
   }
 
+  const isClonedBook = Boolean(course.clonedFromCourseId);
   const rawLesson = currentChapter.lesson;
   const lesson = rawLesson
     ? {
@@ -1163,11 +1327,199 @@ export default function ChapterWorkspace({
       }
     : undefined;
 
+  const renderChapterListContent = (scrollAreaClassName: string) => (
+    <>
+      {!isClonedBook && hasCachedPdf && (
+        <button
+          type="button"
+          disabled={isRedetectingToc}
+          onClick={handleRedetectCourseTocFromSidebar}
+          className="mb-3 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 disabled:opacity-50 cursor-pointer"
+          title="Dùng Vision AI đọc ảnh 10 trang đầu PDF để chia lại danh sách Bài học theo đúng Mục lục sách"
+        >
+          {isRedetectingToc ? (
+            <>
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-400" />
+              <span>Vision AI đang đọc ảnh Mục lục...</span>
+            </>
+          ) : (
+            <>
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <span>AI Đọc Mục Lục (TOC) &amp; Chia Lại Bài</span>
+            </>
+          )}
+        </button>
+      )}
+      <div className="mb-2 flex items-center justify-between px-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+        <span>Lộ trình Chương ({course.chapters.length})</span>
+        <span>
+          {course.chapters.filter((c) => c.isGenerated).length}/
+          {course.chapters.length} đã soạn
+        </span>
+      </div>
+      <div className={scrollAreaClassName}>
+        {course.chapters.map((ch) => {
+          const isSelected = ch.id === currentChapter.id;
+          const doneExercisesCount =
+            ch.completedClozeIds.length +
+            ch.completedQuizIds.length +
+            ch.completedTranslationIds.length;
+
+          return (
+            <button
+              key={ch.id}
+              type="button"
+              onClick={() => {
+                setSelectedChapterId(ch.id);
+                setActiveTab("content");
+                setGenError(null);
+                setTutorAnswer(null);
+                setIsMobileChapterDrawerOpen(false);
+                if (typeof window !== "undefined") {
+                  window.scrollTo({ top: 0, behavior: "smooth" });
+                }
+              }}
+              className={`w-full rounded-xl border p-3 text-left transition ${
+                isSelected
+                  ? "border-indigo-500/60 bg-indigo-500/15 text-white shadow-sm"
+                  : "border-white/[0.06] bg-slate-950/50 text-slate-300 hover:border-white/[0.14] hover:bg-slate-900"
+              }`}
+            >
+              <div className="flex items-start justify-between gap-2">
+                <span className="line-clamp-2 text-xs font-semibold leading-snug">
+                  {ch.title}
+                </span>
+                <div className="flex items-center gap-1 shrink-0">
+                  {ch.isGenerated ? (
+                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                  ) : (
+                    <Sparkles className="h-4 w-4 text-slate-500" />
+                  )}
+                  {!isClonedBook && (
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => handleDeleteChapterFromCourse(ch.id, e)}
+                      className="rounded p-1 text-slate-500 hover:bg-rose-950/70 hover:text-rose-400"
+                      title="Xóa chương không cần thiết này"
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </span>
+                  )}
+                </div>
+              </div>
+              <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+                <span>
+                  {ch.startPage && ch.endPage
+                    ? `Trang ${ch.startPage}–${ch.endPage}`
+                    : `Chương ${ch.index}`}
+                </span>
+                {ch.isGenerated ? (
+                  <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                    {doneExercisesCount > 0
+                      ? `Đã làm ${doneExercisesCount} bài`
+                      : "Sẵn sàng học"}
+                  </span>
+                ) : (
+                  <span className="text-[10px] text-slate-500">
+                    Bấm để AI soạn bài
+                  </span>
+                )}
+              </div>
+            </button>
+          );
+        })}
+      </div>
+    </>
+  );
+
+  const handleSelectLearningTab = (tab: ActiveTab) => {
+    setActiveTab(tab);
+    if (typeof window !== "undefined") {
+      window.scrollTo({ top: 0, behavior: "smooth" });
+    }
+  };
+
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row">
-      {/* LEFT SIDEBAR: Course Roadmap & Chapters (Collapsible Drawer on Mobile, Sticky Sidebar on Desktop) */}
-      <aside className="w-full shrink-0 border-b border-white/[0.08] bg-[#0F1523]/95 lg:w-80 lg:border-b-0 lg:border-r">
-        <div className="border-b border-white/[0.07] p-3.5 sm:p-4">
+      {/* MOBILE STICKY APP BAR (Chỉ ~52px, thay cho khối sidebar cồng kềnh trên mobile) */}
+      <div className="sticky top-14 z-20 flex items-center gap-2 border-b border-white/[0.08] bg-[#090D16]/95 px-3 py-2 backdrop-blur-xl lg:hidden">
+        <button
+          type="button"
+          onClick={() => {
+            stopAllSpeech();
+            onBackToDashboard();
+          }}
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-slate-900/90 text-indigo-300 hover:border-indigo-500/40 hover:text-white transition"
+          title="Quay lại Tủ sách"
+        >
+          <ArrowLeft className="h-4 w-4" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => setIsMobileChapterDrawerOpen(true)}
+          className="flex h-10 min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 text-left text-xs font-semibold text-indigo-100 transition hover:bg-indigo-500/20"
+        >
+          <span className="truncate">
+            Chương {currentChapter.index}/{course.chapters.length}:{" "}
+            {currentChapter.title}
+          </span>
+          <ChevronDown className="h-4 w-4 shrink-0 text-indigo-300" />
+        </button>
+
+        <button
+          type="button"
+          onClick={() => {
+            setShowRawText(!showRawText);
+            setEditableRawText(currentChapter.rawText);
+          }}
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition ${
+            showRawText
+              ? "border-indigo-500/60 bg-indigo-600 text-white"
+              : "border-white/[0.08] bg-slate-900/90 text-slate-300 hover:bg-slate-800"
+          }`}
+          title={showRawText ? "Ẩn văn bản gốc" : "Xem văn bản gốc"}
+        >
+          <FileText className="h-4 w-4" />
+        </button>
+      </div>
+
+      {/* MOBILE BOTTOM SHEET MODAL: Chọn Chương */}
+      {isMobileChapterDrawerOpen && (
+        <>
+          <div
+            onClick={() => setIsMobileChapterDrawerOpen(false)}
+            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm lg:hidden"
+          />
+          <div className="fixed bottom-0 inset-x-0 z-50 flex max-h-[82vh] flex-col rounded-t-3xl border-t border-white/[0.12] bg-[#0F1523] p-4 shadow-2xl lg:hidden animate-in slide-in-from-bottom duration-200 pb-safe">
+            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-700" />
+            <div className="mb-3 flex items-start justify-between gap-3 border-b border-white/[0.07] pb-3">
+              <div className="min-w-0">
+                <h2 className="truncate text-sm font-bold text-white">
+                  {course.title}
+                </h2>
+                <p className="mt-0.5 text-[11px] text-slate-400">
+                  {course.author} • CEFR {course.level}
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setIsMobileChapterDrawerOpen(false)}
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-slate-900 text-slate-300 hover:text-white"
+                title="Đóng danh sách chương"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
+            {renderChapterListContent("flex-1 space-y-1.5 overflow-y-auto pr-1")}
+          </div>
+        </>
+      )}
+
+      {/* DESKTOP LEFT SIDEBAR: Course Roadmap & Chapters */}
+      <aside className="hidden lg:flex lg:w-80 lg:flex-col shrink-0 border-r border-white/[0.08] bg-[#0F1523]/95">
+        <div className="border-b border-white/[0.07] p-4">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
@@ -1180,35 +1532,16 @@ export default function ChapterWorkspace({
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Quay lại Tủ sách</span>
             </button>
-
-            {/* Mobile Collapsible Chapter Drawer Toggle */}
-            <button
-              type="button"
-              onClick={() =>
-                setIsMobileChapterDrawerOpen(!isMobileChapterDrawerOpen)
-              }
-              className="inline-flex lg:hidden min-h-[36px] items-center gap-1.5 rounded-lg border border-indigo-500/30 bg-indigo-500/10 px-3 py-1.5 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-500/20"
-            >
-              <Layers className="h-3.5 w-3.5 text-indigo-400" />
-              <span>
-                Mục lục ({currentChapter.index}/{course.chapters.length})
-              </span>
-              {isMobileChapterDrawerOpen ? (
-                <ChevronUp className="h-3.5 w-3.5" />
-              ) : (
-                <ChevronDown className="h-3.5 w-3.5" />
-              )}
-            </button>
           </div>
 
-          <h2 className="mt-2.5 line-clamp-1 sm:line-clamp-2 text-sm sm:text-base font-bold text-white">
+          <h2 className="mt-2.5 line-clamp-2 text-base font-bold text-white">
             {course.title}
           </h2>
           <p className="mt-0.5 text-xs text-slate-400">
             {course.author} • CEFR {course.level}
           </p>
           {course.sourceFileName && (
-            <div className="mt-2 hidden sm:inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-slate-950/60 px-2.5 py-1 text-[11px] text-slate-300">
+            <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-slate-950/60 px-2.5 py-1 text-[11px] text-slate-300">
               <FileText className="h-3 w-3 text-indigo-400" />
               <span className="max-w-[180px] truncate">
                 {course.sourceFileName}
@@ -1222,131 +1555,97 @@ export default function ChapterWorkspace({
           )}
         </div>
 
-        {/* Chapters Roadmap List (Hidden on mobile unless drawer is toggled open; always visible on lg+) */}
-        <div
-          className={`${
-            isMobileChapterDrawerOpen ? "block" : "hidden"
-          } lg:block p-3`}
-        >
-          {hasCachedPdf && (
-            <button
-              type="button"
-              disabled={isRedetectingToc}
-              onClick={handleRedetectCourseTocFromSidebar}
-              className="mb-3 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 disabled:opacity-50 cursor-pointer"
-              title="Dùng Vision AI đọc ảnh 10 trang đầu PDF để chia lại danh sách Bài học theo đúng Mục lục sách"
-            >
-              {isRedetectingToc ? (
-                <>
-                  <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-400" />
-                  <span>Vision AI đang đọc ảnh Mục lục...</span>
-                </>
-              ) : (
-                <>
-                  <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-400" />
-                  <span>AI Đọc Mục Lục (TOC) &amp; Chia Lại Bài</span>
-                </>
-              )}
-            </button>
+        <div className="p-3">
+          {renderChapterListContent(
+            "space-y-1.5 overflow-y-auto pr-1 max-h-[calc(100vh-15rem)]"
           )}
-          <div className="mb-2 flex items-center justify-between px-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
-            <span>Lộ trình Chương ({course.chapters.length})</span>
-            <span>
-              {course.chapters.filter((c) => c.isGenerated).length}/
-              {course.chapters.length} đã soạn
-            </span>
-          </div>
-          <div className="max-h-[45vh] space-y-1.5 overflow-y-auto pr-1 lg:max-h-[calc(100vh-15rem)]">
-            {course.chapters.map((ch) => {
-              const isSelected = ch.id === currentChapter.id;
-              const doneExercisesCount =
-                ch.completedClozeIds.length +
-                ch.completedQuizIds.length +
-                ch.completedTranslationIds.length;
-
-              return (
-                <button
-                  key={ch.id}
-                  type="button"
-                  onClick={() => {
-                    setSelectedChapterId(ch.id);
-                    setActiveTab("content");
-                    setGenError(null);
-                    setTutorAnswer(null);
-                    setIsMobileChapterDrawerOpen(false);
-                  }}
-                  className={`w-full rounded-xl border p-3 text-left transition ${
-                    isSelected
-                      ? "border-indigo-500/60 bg-indigo-500/15 text-white shadow-sm"
-                      : "border-white/[0.06] bg-slate-950/50 text-slate-300 hover:border-white/[0.14] hover:bg-slate-900"
-                  }`}
-                >
-                  <div className="flex items-start justify-between gap-2">
-                    <span className="line-clamp-2 text-xs font-semibold leading-snug">
-                      {ch.title}
-                    </span>
-                    <div className="flex items-center gap-1 shrink-0">
-                      {ch.isGenerated ? (
-                        <CheckCircle2 className="h-4 w-4 text-emerald-400" />
-                      ) : (
-                        <Sparkles className="h-4 w-4 text-slate-500" />
-                      )}
-                      <span
-                        role="button"
-                        tabIndex={0}
-                        onClick={(e) => handleDeleteChapterFromCourse(ch.id, e)}
-                        className="rounded p-1 text-slate-500 hover:bg-rose-950/70 hover:text-rose-400"
-                        title="Xóa chương không cần thiết này"
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </span>
-                    </div>
-                  </div>
-                  <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
-                    <span>
-                      {ch.startPage && ch.endPage
-                        ? `Trang ${ch.startPage}–${ch.endPage}`
-                        : `Chương ${ch.index}`}
-                    </span>
-                    {ch.isGenerated ? (
-                      <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
-                        {doneExercisesCount > 0
-                          ? `Đã làm ${doneExercisesCount} bài`
-                          : "Sẵn sàng học"}
-                      </span>
-                    ) : (
-                      <span className="text-[10px] text-slate-500">
-                        Bấm để AI soạn bài
-                      </span>
-                    )}
-                  </div>
-                </button>
-              );
-            })}
-          </div>
         </div>
       </aside>
 
-      {/* MAIN CHAPTER WORKSPACE */}
-      <main className="flex-1 min-w-0 overflow-y-auto p-3.5 sm:p-5 md:p-6 lg:p-8">
-        {/* Chapter Header */}
-        <div className="mb-5 sm:mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-4 rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-5">
-          <div className="min-w-0">
-            <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-indigo-400">
-              <Layers className="h-3.5 w-3.5 shrink-0" />
-              <span>
-                Chương {currentChapter.index} / {course.chapters.length}
-                {currentChapter.startPage && currentChapter.endPage
-                  ? ` • Trang ${currentChapter.startPage}–${currentChapter.endPage}`
-                  : ""}
-              </span>
-            </div>
-            <h1 className="mt-1 text-lg sm:text-xl font-bold text-white md:text-2xl break-words">
-              {currentChapter.title}
-            </h1>
-          </div>
+      {/* MAIN CHAPTER WORKSPACE (Single-scroll trên mobile, không nested overflow) */}
+      <main
+        ref={workspaceContentRef}
+        className="flex-1 min-w-0 p-3.5 pb-24 sm:p-5 md:p-6 lg:p-8 lg:pb-8 lg:overflow-y-auto"
+      >
+        {/* Chapter Header + Completion Progress (%) */}
+        {(() => {
+          const hasLesson = Boolean(lesson);
+          const hasCloze = Boolean(
+            lesson &&
+              lesson.clozeExercises.length > 0 &&
+              lesson.clozeExercises.some((ex) => Boolean(clozeChecked[ex.id]))
+          );
+          const hasQuiz = Boolean(
+            lesson &&
+              lesson.quizExercises.length > 0 &&
+              lesson.quizExercises.some((q) => Boolean(quizSubmitted[q.id]))
+          );
+          const hasTranslation = Boolean(
+            lesson &&
+              lesson.translationExercises.some((tr) => Boolean(tr.lastEvaluation))
+          );
+          const completionPct =
+            (hasLesson ? 25 : 0) +
+            (hasCloze ? 25 : 0) +
+            (hasQuiz ? 25 : 0) +
+            (hasTranslation ? 25 : 0);
 
-          <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-2 sm:gap-2.5 w-full lg:w-auto">
+          return (
+            <div className="mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-3.5 sm:p-5">
+              <div className="min-w-0 flex-1">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-indigo-400">
+                  <Layers className="h-3.5 w-3.5 shrink-0" />
+                  <span>
+                    Chương {currentChapter.index} / {course.chapters.length}
+                    {currentChapter.startPage && currentChapter.endPage
+                      ? ` • Trang ${currentChapter.startPage}–${currentChapter.endPage}`
+                      : ""}
+                  </span>
+                  <span
+                    className={`ml-auto sm:ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-normal ${
+                      completionPct === 100
+                        ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                        : completionPct > 0
+                        ? "border-indigo-500/40 bg-indigo-500/15 text-indigo-300"
+                        : "border-white/[0.08] bg-slate-900 text-slate-400"
+                    }`}
+                  >
+                    Tiến độ: {completionPct}%
+                  </span>
+                </div>
+                <h1 className="mt-1 text-base sm:text-xl font-bold text-white md:text-2xl break-words">
+                  {currentChapter.title}
+                </h1>
+                {/* Visual Completion Progress Bar & 4 Milestones */}
+                <div className="mt-2.5 space-y-1.5 max-w-md">
+                  <div className="h-1.5 w-full rounded-full bg-slate-800/90 overflow-hidden">
+                    <div
+                      className={`h-full rounded-full transition-all duration-500 ${
+                        completionPct === 100
+                          ? "bg-emerald-500"
+                          : "bg-gradient-to-r from-indigo-500 to-amber-400"
+                      }`}
+                      style={{ width: `${completionPct}%` }}
+                    />
+                  </div>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-slate-400">
+                    <span className={hasLesson ? "text-emerald-400" : ""}>
+                      {hasLesson ? "✓" : "○"} Bài học
+                    </span>
+                    <span className={hasCloze ? "text-emerald-400" : ""}>
+                      {hasCloze ? "✓" : "○"} Điền từ
+                    </span>
+                    <span className={hasQuiz ? "text-emerald-400" : ""}>
+                      {hasQuiz ? "✓" : "○"} Trắc nghiệm
+                    </span>
+                    <span className={hasTranslation ? "text-emerald-400" : ""}>
+                      {hasTranslation ? "✓" : "○"} Luyện dịch
+                    </span>
+                  </div>
+                </div>
+              </div>
+
+          <div className="flex flex-row flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
             <select
               value={selectedAiModel}
               onChange={(e) => {
@@ -1356,7 +1655,7 @@ export default function ChapterWorkspace({
                 saveAppSettings({ ...cur, geminiModel: val });
               }}
               title="Chọn nguồn AI tạo bài học (Tự động xoay vòng dự phòng nếu hết hạn mức)"
-              className="min-h-[40px] rounded-xl border border-white/[0.1] bg-slate-950 px-3 py-2 text-xs font-semibold text-slate-200 focus:border-indigo-500 focus:outline-none"
+              className="min-h-[40px] flex-1 sm:flex-initial min-w-0 rounded-xl border border-white/[0.1] bg-slate-950 px-2.5 sm:px-3 py-2 text-xs font-semibold text-slate-200 focus:border-indigo-500 focus:outline-none"
             >
               <option value="qwen-groq">
                 Qwen 3 / Llama 3.3 (Groq Siêu Tốc)
@@ -1380,7 +1679,7 @@ export default function ChapterWorkspace({
                 setShowRawText(!showRawText);
                 setEditableRawText(currentChapter.rawText);
               }}
-              className="min-h-[40px] rounded-xl border border-white/[0.1] bg-slate-950 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 text-center transition"
+              className="hidden lg:inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/[0.1] bg-slate-950 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 text-center transition shrink-0"
             >
               {showRawText ? "Ẩn văn bản gốc" : "Văn bản gốc"}
             </button>
@@ -1389,28 +1688,30 @@ export default function ChapterWorkspace({
                 type="button"
                 disabled={isGeneratingLesson}
                 onClick={() => handleGenerateChapterLesson(currentChapter)}
-                className="flex min-h-[40px] items-center justify-center gap-2 rounded-xl bg-indigo-600 px-4 py-2.5 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
+                className="flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 sm:px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
               >
                 {isGeneratingLesson ? (
                   <>
                     <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                    <span>AI đang phân tích (10-15s)...</span>
+                    <span>AI đang phân tích...</span>
                   </>
                 ) : (
                   <>
                     <Sparkles className="h-4 w-4 shrink-0" />
-                    <span>AI Soạn Bài Chương Này</span>
+                    <span>AI Soạn Bài</span>
                   </>
                 )}
               </button>
             ) : (
-              <div className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-xs font-semibold text-emerald-300">
+              <div className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
                 <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
-                <span>Đã soạn bài giảng</span>
+                <span>Đã soạn</span>
               </div>
             )}
           </div>
         </div>
+          );
+        })()}
 
         {/* Raw Text Drawer */}
         {showRawText && (
@@ -1532,7 +1833,7 @@ export default function ChapterWorkspace({
                     )}
                   </div>
                   <p className="mt-0.5 text-slate-400">
-                    Thay vì gửi nguyên tệp ảnh nặng khiến Gemini Vision bị quá tải (die/timeout), hệ thống sẽ <strong>bóc toàn bộ chữ trong ảnh ra thành văn bản thuần</strong> (ghép vào văn bản gốc trang {currentChapter.startPage || 1}–{currentChapter.endPage || 15}) rồi mới gửi cho AI soạn bài!
+                    Bóc chữ sạch từ ảnh (trang {currentChapter.startPage || 1}–{currentChapter.endPage || 15}) trước khi soạn bài để tránh lỗi quá tải ảnh.
                   </p>
                 </div>
               </label>
@@ -1682,24 +1983,24 @@ export default function ChapterWorkspace({
         ) : (
           /* Lesson Exists -> Show 5 Learning Tabs */
           <div className="space-y-6">
-            {/* Navigation Tabs (Swipeable horizontally on mobile, wrapped on desktop) */}
-            <div className="flex overflow-x-auto no-scrollbar sm:flex-wrap gap-1.5 sm:gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5">
+            {/* Desktop Navigation Tabs (Hidden on mobile; Mobile uses Fixed Bottom Tab Bar) */}
+            <div className="hidden lg:flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5">
               <button
                 type="button"
-                onClick={() => setActiveTab("content")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-semibold transition ${
+                onClick={() => handleSelectLearningTab("content")}
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
                   activeTab === "content"
                     ? "bg-indigo-600 text-white shadow"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                 }`}
               >
                 <BookOpen className="h-4 w-4 shrink-0" />
-                <span>1. Nội dung & Diễn giải ({lesson.contentAnalysis.length} phần)</span>
+                <span>1. Nội dung &amp; Diễn giải ({lesson.contentAnalysis.length} phần)</span>
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab("grammar")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-semibold transition ${
+                onClick={() => handleSelectLearningTab("grammar")}
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
                   activeTab === "grammar"
                     ? "bg-indigo-600 text-white shadow"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
@@ -1710,20 +2011,20 @@ export default function ChapterWorkspace({
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab("vocabulary")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-semibold transition ${
+                onClick={() => handleSelectLearningTab("vocabulary")}
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
                   activeTab === "vocabulary"
                     ? "bg-indigo-600 text-white shadow"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
                 }`}
               >
                 <Layers className="h-4 w-4 shrink-0" />
-                <span>3. Từ vựng & Flashcard SRS ({lesson.vocabulary.length})</span>
+                <span>3. Từ vựng &amp; Flashcard SRS ({lesson.vocabulary.length})</span>
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab("practice")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-semibold transition ${
+                onClick={() => handleSelectLearningTab("practice")}
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
                   activeTab === "practice"
                     ? "bg-indigo-600 text-white shadow"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
@@ -1731,14 +2032,14 @@ export default function ChapterWorkspace({
               >
                 <HelpCircle className="h-4 w-4 shrink-0" />
                 <span>
-                  4. Điền từ & Trắc nghiệm (
+                  4. Điền từ &amp; Trắc nghiệm (
                   {lesson.clozeExercises.length + lesson.quizExercises.length})
                 </span>
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab("translation")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-semibold transition ${
+                onClick={() => handleSelectLearningTab("translation")}
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
                   activeTab === "translation"
                     ? "bg-indigo-600 text-white shadow"
                     : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
@@ -1746,21 +2047,21 @@ export default function ChapterWorkspace({
               >
                 <Languages className="h-4 w-4 shrink-0" />
                 <span>
-                  5. Luyện dịch & AI Chấm điểm % (
+                  5. Luyện dịch &amp; AI Chấm điểm % (
                   {lesson.translationExercises.length})
                 </span>
               </button>
               <button
                 type="button"
-                onClick={() => setActiveTab("exam_arena")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 sm:py-2.5 text-xs font-bold transition ${
+                onClick={() => handleSelectLearningTab("exam_arena")}
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-bold transition ${
                   activeTab === "exam_arena"
                     ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow"
                     : "text-amber-300 hover:bg-slate-800"
                 }`}
               >
                 <Trophy className="h-4 w-4 shrink-0" />
-                <span>6. Phòng Thi & Ôn Tập Đa Dạng (Exam Arena)</span>
+                <span>6. Phòng Thi &amp; Ôn Tập Đa Dạng (Exam Arena)</span>
               </button>
             </div>
 
@@ -1868,15 +2169,84 @@ export default function ChapterWorkspace({
 
                 {/* Section-by-Section Deep Breakdown */}
                 <div className="space-y-4">
-                  <h3 className="text-base font-bold text-white">
-                    Phân tích & Diễn giải chuyên sâu theo mạch văn bản
-                  </h3>
+                  <div className="flex flex-wrap items-center justify-between gap-2.5">
+                    <h3 className="text-base font-bold text-white">
+                      Phân tích & Diễn giải chuyên sâu theo mạch văn bản
+                    </h3>
+
+                    {/* View mode toggle to eliminate Wall of Text */}
+                    <div className="inline-flex items-center rounded-xl border border-white/[0.08] bg-slate-950/90 p-1">
+                      <button
+                        type="button"
+                        onClick={() => setContentDisplayMode("full")}
+                        className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                          contentDisplayMode === "full"
+                            ? "bg-indigo-600 text-white shadow"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        <Eye className="h-3.5 w-3.5" />
+                        <span>Đầy đủ</span>
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => setContentDisplayMode("bilingual")}
+                        className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                          contentDisplayMode === "bilingual"
+                            ? "bg-indigo-600 text-white shadow"
+                            : "text-slate-400 hover:text-slate-200"
+                        }`}
+                      >
+                        <Columns2 className="h-3.5 w-3.5" />
+                        <span>Chỉ xem Song ngữ</span>
+                      </button>
+                    </div>
+                  </div>
+
+                  {/* Quick Highlight Tip Pill */}
+                  <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-500/25 bg-indigo-950/25 px-3.5 py-2.5 text-xs text-indigo-200">
+                    <div className="flex items-center gap-2 min-w-0">
+                      <Sparkles className="h-3.5 w-3.5 shrink-0 text-indigo-400" />
+                      <span>
+                        Mẹo: <strong>Bôi đen</strong> từ hoặc câu tiếng Anh bất kỳ bên dưới để hiện thanh{" "}
+                        <span className="font-semibold text-white">🔊 Nghe &amp; ✨ AI Giải thích</span> ngay.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        const firstExcerpt =
+                          lesson.contentAnalysis[0]?.originalExcerpt ||
+                          currentChapter.rawText ||
+                          "";
+                        const cleanSentence = firstExcerpt
+                          .replace(/\s+/g, " ")
+                          .trim()
+                          .split(/(?<=[.!?])\s+/)[0]
+                          ?.slice(0, 120)
+                          .trim();
+                        const sample =
+                          cleanSentence && cleanSentence.length >= 4
+                            ? cleanSentence
+                            : "Practice makes progress in context.";
+                        window.dispatchEvent(
+                          new CustomEvent("bookmind:sample-selection", {
+                            detail: { text: sample },
+                          })
+                        );
+                      }}
+                      className="inline-flex min-h-[32px] shrink-0 items-center gap-1 rounded-lg border border-indigo-400/40 bg-indigo-500/20 px-2.5 py-1 text-[11px] font-bold text-indigo-100 transition hover:bg-indigo-500/35 active:scale-95 cursor-pointer"
+                    >
+                      <span>Thử ngay</span>
+                    </button>
+                  </div>
+
                   {lesson.contentAnalysis.map((sec) => (
                     <div
                       key={sec.id}
-                      className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 space-y-4"
+                      className="select-text rounded-2xl border border-slate-800 bg-slate-900/80 p-4 sm:p-6 space-y-4 transition-colors hover:border-slate-700"
                     >
-                      <div className="flex items-center justify-between">
+                      <div className="flex flex-wrap items-center justify-between gap-2">
                         <h4 className="text-base font-bold text-indigo-300">
                           {sec.sectionTitle}
                         </h4>
@@ -1907,23 +2277,27 @@ export default function ChapterWorkspace({
                         </div>
                       </div>
 
-                      <div className="flex items-start gap-2 rounded-xl bg-indigo-950/25 border border-indigo-500/20 p-4 text-sm leading-relaxed text-slate-200">
-                        <Lightbulb className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
-                        <div>
-                          <strong className="text-indigo-300">
-                            Diễn giải sâu nội dung:{" "}
-                          </strong>
-                          {sec.deepExplanation}
-                        </div>
-                      </div>
+                      {contentDisplayMode === "full" && (
+                        <>
+                          <div className="flex items-start gap-2 rounded-xl bg-indigo-950/25 border border-indigo-500/20 p-4 text-sm leading-relaxed text-slate-200 animate-in fade-in duration-200">
+                            <Lightbulb className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
+                            <div>
+                              <strong className="text-indigo-300">
+                                Diễn giải sâu nội dung:{" "}
+                              </strong>
+                              {sec.deepExplanation}
+                            </div>
+                          </div>
 
-                      <div className="flex items-start gap-2 rounded-xl bg-amber-950/20 border border-amber-500/20 p-3.5 text-xs leading-relaxed text-amber-200/90">
-                        <Feather className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
-                        <div>
-                          <strong>Ghi chú văn phong & Ngữ cảnh: </strong>
-                          {sec.stylisticOrContextNotes}
-                        </div>
-                      </div>
+                          <div className="flex items-start gap-2 rounded-xl bg-amber-950/20 border border-amber-500/20 p-3.5 text-xs leading-relaxed text-amber-200/90 animate-in fade-in duration-200">
+                            <Feather className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                            <div>
+                              <strong>Ghi chú văn phong & Ngữ cảnh: </strong>
+                              {sec.stylisticOrContextNotes}
+                            </div>
+                          </div>
+                        </>
+                      )}
                     </div>
                   ))}
                 </div>
@@ -2066,12 +2440,14 @@ export default function ChapterWorkspace({
 
             {/* TAB 3: VOCABULARY & SRS FLASHCARDS */}
             {activeTab === "vocabulary" && (
-              <div className="space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
-                {/* Interactive SRS Flashcard Deck for this chapter */}
+              <div className="space-y-6 sm:space-y-8 animate-in fade-in slide-in-from-bottom-2 duration-300">
+                {/* Interactive SRS Flashcard Deck for this chapter (Touch Swipe Left/Right on Mobile) */}
                 <div>
-                  <h3 className="mb-3 flex items-center gap-2 text-base font-bold text-white">
-                    <Sparkles className="h-4 w-4 text-indigo-400" />
-                    Luyện lật thẻ nhớ từ vựng thông minh (Spaced Repetition SRS)
+                  <h3 className="mb-3 flex items-center gap-2 text-sm sm:text-base font-bold text-white">
+                    <Sparkles className="h-4 w-4 text-indigo-400 shrink-0" />
+                    <span>
+                      Luyện lật thẻ nhớ từ vựng thông minh (Spaced Repetition SRS)
+                    </span>
                   </h3>
                   <FlashcardArena
                     cards={chapterFlashcards}
@@ -2081,10 +2457,10 @@ export default function ChapterWorkspace({
 
                 {/* Detailed Vocabulary Table / Cards */}
                 <div className="space-y-4">
-                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-4">
+                  <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-3.5 sm:p-4">
                     <div>
-                      <h3 className="text-base font-bold text-white">
-                        Bảng phân tích toàn bộ Từ vựng, Danh từ riêng & Cụm từ (
+                      <h3 className="text-sm sm:text-base font-bold text-white">
+                        Bảng phân tích toàn bộ Từ vựng, Danh từ riêng &amp; Cụm từ (
                         {lesson.vocabulary.length} từ)
                       </h3>
                       <p className="text-xs text-slate-400">
@@ -2092,11 +2468,37 @@ export default function ChapterWorkspace({
                       </p>
                     </div>
                     <div className="flex flex-wrap items-center gap-2">
+                      {/* Chuyển chế độ lướt ngang / danh sách trên điện thoại */}
+                      <div className="flex md:hidden items-center rounded-xl border border-white/[0.08] bg-slate-950 p-1">
+                        <button
+                          type="button"
+                          onClick={() => setMobileVocabLayout("carousel")}
+                          className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition cursor-pointer ${
+                            mobileVocabLayout === "carousel"
+                              ? "bg-indigo-600 text-white shadow"
+                              : "text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Lướt ngang
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setMobileVocabLayout("list")}
+                          className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition cursor-pointer ${
+                            mobileVocabLayout === "list"
+                              ? "bg-indigo-600 text-white shadow"
+                              : "text-slate-400 hover:text-slate-200"
+                          }`}
+                        >
+                          Dạng danh sách
+                        </button>
+                      </div>
+
                       <button
                         type="button"
                         disabled={isExtractingFullVocab}
                         onClick={() => handleExtractFullVocab(currentChapter)}
-                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2 text-xs font-bold text-white shadow hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
+                        className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 sm:px-4 py-2 text-xs font-bold text-white shadow hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
                       >
                         {isExtractingFullVocab ? (
                           <>
@@ -2163,88 +2565,276 @@ export default function ChapterWorkspace({
                     </div>
                   )}
 
-                  <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                    {lesson.vocabulary.map((voc) => (
-                      <div
-                        key={voc.id}
-                        className="rounded-2xl border border-slate-800 bg-slate-900/80 p-5 space-y-3 hover:border-slate-700 transition"
-                      >
-                        <div className="flex items-start justify-between">
-                          <div>
-                            <div className="flex items-center gap-2">
-                              <h4 className="text-lg font-bold text-white">
-                                {voc.word}
-                              </h4>
-                              <AudioSpeakButton
-                                text={voc.word}
-                                showLabel={false}
-                                className="rounded-lg bg-slate-800 p-1.5 text-indigo-400 hover:bg-indigo-600 hover:text-white"
-                              />
+                  {/* Mobile Swipe Hint */}
+                  {mobileVocabLayout === "carousel" &&
+                    lesson.vocabulary.length > 1 && (
+                      <div className="flex md:hidden items-center justify-center gap-1.5 text-[11px] font-medium text-indigo-300/90">
+                        <ChevronLeft className="h-3.5 w-3.5 text-indigo-400" />
+                        <span>
+                          Lướt ngang qua lại để xem {lesson.vocabulary.length} từ vựng
+                        </span>
+                        <ChevronRight className="h-3.5 w-3.5 text-indigo-400" />
+                      </div>
+                    )}
+
+                  {(() => {
+                    const q = vocabSearchQuery.trim().toLowerCase();
+                    const starredInChapterCount = lesson.vocabulary.filter((v) =>
+                      starredVocabKeys.includes(normalizeStarVocabKey(v.word))
+                    ).length;
+
+                    const filteredVocab = lesson.vocabulary.filter((v) => {
+                      const isStarred = starredVocabKeys.includes(
+                        normalizeStarVocabKey(v.word)
+                      );
+                      if (vocabStarFilter === "starred" && !isStarred) {
+                        return false;
+                      }
+                      if (!q) return true;
+                      return (
+                        v.word.toLowerCase().includes(q) ||
+                        v.vietnameseMeaning.toLowerCase().includes(q) ||
+                        (v.ipa || "").toLowerCase().includes(q) ||
+                        (v.explanationInContext || "").toLowerCase().includes(q)
+                      );
+                    });
+
+                    return (
+                      <>
+                        {/* Search + Star Hard-Word Filter + Sequential Audio Auto-Play Bar */}
+                        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 rounded-2xl border border-white/[0.08] bg-[#0F1523]/90 p-3">
+                          <div className="relative flex-1 min-w-0">
+                            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+                            <input
+                              type="text"
+                              value={vocabSearchQuery}
+                              onChange={(e) => setVocabSearchQuery(e.target.value)}
+                              placeholder="Tìm nhanh từ vựng, IPA hoặc nghĩa tiếng Việt..."
+                              className="min-h-[42px] w-full rounded-xl border border-white/[0.08] bg-slate-950/90 pl-9 pr-9 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                            />
+                            {vocabSearchQuery && (
                               <button
                                 type="button"
-                                onClick={() =>
-                                  openPronunciationCoach({
-                                    targetText: voc.word,
-                                    phonetic: voc.ipa,
-                                    vietnameseMeaning: voc.vietnameseMeaning,
-                                    contextHint: `Ví dụ: ${voc.quoteFromBook}`,
-                                  })
-                                }
-                                className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 px-2 py-1 rounded-lg border border-emerald-500/30 transition cursor-pointer"
-                                title="Luyện đọc từ này để AI chấm điểm"
+                                onClick={() => setVocabSearchQuery("")}
+                                aria-label="Xóa tìm kiếm"
+                                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
                               >
-                                <Mic className="h-3 w-3" />
-                                <span>Luyện nói</span>
+                                <X className="h-3.5 w-3.5" />
+                              </button>
+                            )}
+                          </div>
+
+                          <div className="flex flex-wrap items-center gap-2 shrink-0">
+                            <div className="inline-flex items-center rounded-xl border border-white/[0.08] bg-slate-950/90 p-1">
+                              <button
+                                type="button"
+                                onClick={() => setVocabStarFilter("all")}
+                                className={`min-h-[34px] rounded-lg px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                                  vocabStarFilter === "all"
+                                    ? "bg-indigo-600 text-white shadow"
+                                    : "text-slate-400 hover:text-white"
+                                }`}
+                              >
+                                Tất cả ({lesson.vocabulary.length})
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() => setVocabStarFilter("starred")}
+                                className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                                  vocabStarFilter === "starred"
+                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                                    : "text-slate-400 hover:text-amber-200"
+                                }`}
+                              >
+                                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                                <span>Từ khó ({starredInChapterCount})</span>
                               </button>
                             </div>
-                            <span className="font-mono text-xs text-indigo-300">
-                              {voc.ipa} • {voc.partOfSpeech}
-                            </span>
+
+                            <button
+                              type="button"
+                              disabled={filteredVocab.length === 0 && autoPlayVocabId === null}
+                              onClick={() => handleToggleAutoPlayVocab(filteredVocab)}
+                              className={`inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition active:scale-95 cursor-pointer disabled:opacity-40 ${
+                                autoPlayVocabId !== null
+                                  ? "border-rose-500/50 bg-rose-600/20 text-rose-200 hover:bg-rose-600/30"
+                                  : "border-indigo-500/40 bg-indigo-500/15 text-indigo-200 hover:bg-indigo-500/25"
+                              }`}
+                            >
+                              {autoPlayVocabId !== null ? (
+                                <>
+                                  <Square className="h-3.5 w-3.5 fill-rose-400 text-rose-400" />
+                                  <span>Dừng nghe tự động</span>
+                                </>
+                              ) : (
+                                <>
+                                  <Play className="h-3.5 w-3.5 fill-indigo-400 text-indigo-400" />
+                                  <span>Nghe tự động ({filteredVocab.length} từ)</span>
+                                </>
+                              )}
+                            </button>
                           </div>
-                          <span className="rounded-lg bg-indigo-500/20 px-2.5 py-1 text-xs font-bold text-indigo-300">
-                            {voc.cefrLevel}
-                          </span>
                         </div>
 
-                        <div className="text-sm font-bold text-emerald-300">
-                          {voc.vietnameseMeaning}
-                        </div>
-
-                        <p className="text-xs leading-relaxed text-slate-300">
-                          {voc.explanationInContext}
-                        </p>
-
-                        <div className="rounded-xl bg-slate-950 p-3 text-xs">
-                          <p className="italic text-slate-200">
-                            &ldquo;{voc.quoteFromBook}&rdquo;
-                          </p>
-                          <p className="mt-1 text-slate-400">
-                            → {voc.quoteTranslation}
-                          </p>
-                        </div>
-
-                        <div className="flex flex-wrap gap-1.5 pt-1">
-                          {voc.collocations.map((c, idx) => (
-                            <span
-                              key={idx}
-                              className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300"
+                        {filteredVocab.length === 0 ? (
+                          <div className="rounded-2xl border border-dashed border-white/[0.1] bg-slate-900/50 p-8 text-center space-y-3">
+                            <p className="text-sm font-medium text-slate-300">
+                              {vocabStarFilter === "starred" && starredInChapterCount === 0
+                                ? "Bạn chưa đánh dấu ⭐ Từ khó nào trong chương này."
+                                : "Không tìm thấy từ vựng phù hợp với bộ lọc hiện tại."}
+                            </p>
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setVocabSearchQuery("");
+                                setVocabStarFilter("all");
+                              }}
+                              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-4 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/25"
                             >
-                              <Link2 className="h-3 w-3 text-slate-400" />
-                              <span>{c}</span>
-                            </span>
-                          ))}
-                          {voc.synonyms.map((s, idx) => (
-                            <span
-                              key={idx}
-                              className="rounded bg-indigo-950/60 px-2 py-0.5 text-[11px] text-indigo-300"
-                            >
-                              ≈ {s}
-                            </span>
-                          ))}
-                        </div>
-                      </div>
-                    ))}
-                  </div>
+                              Xem lại toàn bộ từ vựng
+                            </button>
+                          </div>
+                        ) : (
+                          <div
+                            className={
+                              mobileVocabLayout === "carousel"
+                                ? "flex overflow-x-auto snap-x snap-mandatory gap-3.5 pb-3 no-scrollbar md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:pb-0"
+                                : "grid grid-cols-1 gap-4 md:grid-cols-2"
+                            }
+                          >
+                            {filteredVocab.map((voc, vocIdx) => {
+                              const isStarred = starredVocabKeys.includes(
+                                normalizeStarVocabKey(voc.word)
+                              );
+                              const isAutoPlaying = autoPlayVocabId === voc.id;
+
+                              return (
+                                <div
+                                  key={voc.id}
+                                  id={`vocab-card-${voc.id}`}
+                                  className={`select-text rounded-2xl border p-4 sm:p-5 space-y-3 transition ${
+                                    isAutoPlaying
+                                      ? "border-indigo-400 bg-indigo-950/35 ring-2 ring-indigo-500/30 shadow-lg"
+                                      : isStarred
+                                      ? "border-amber-500/35 bg-slate-900/90 hover:border-amber-400/50"
+                                      : "border-slate-800 bg-slate-900/80 hover:border-slate-700"
+                                  } ${
+                                    mobileVocabLayout === "carousel"
+                                      ? "w-[86vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none"
+                                      : ""
+                                  }`}
+                                >
+                                  <div className="flex items-start justify-between gap-2">
+                                    <div className="min-w-0">
+                                      <div className="flex flex-wrap items-center gap-2">
+                                        <h4 className="text-lg font-bold text-white break-words">
+                                          {voc.word}
+                                        </h4>
+                                        {isAutoPlaying && (
+                                          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/25 px-2 py-0.5 text-[10px] font-bold text-indigo-200 animate-pulse">
+                                            🔊 Đang đọc
+                                          </span>
+                                        )}
+                                        <AudioSpeakButton
+                                          text={voc.word}
+                                          showLabel={false}
+                                          className="rounded-lg bg-slate-800 p-1.5 text-indigo-400 hover:bg-indigo-600 hover:text-white"
+                                        />
+                                        <button
+                                          type="button"
+                                          onClick={() => handleToggleStarVocab(voc.word)}
+                                          title={
+                                            isStarred
+                                              ? "Bỏ đánh dấu Từ khó"
+                                              : "Đánh dấu ⭐ Từ khó để ôn tập riêng"
+                                          }
+                                          className={`inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg border transition active:scale-90 cursor-pointer ${
+                                            isStarred
+                                              ? "border-amber-500/50 bg-amber-500/15 text-amber-400"
+                                              : "border-white/[0.08] bg-slate-800/80 text-slate-400 hover:border-amber-500/40 hover:text-amber-300"
+                                          }`}
+                                        >
+                                          <Star
+                                            className={`h-3.5 w-3.5 ${
+                                              isStarred ? "fill-amber-400 text-amber-400" : ""
+                                            }`}
+                                          />
+                                        </button>
+                                        <button
+                                          type="button"
+                                          onClick={() =>
+                                            openPronunciationCoach({
+                                              targetText: voc.word,
+                                              phonetic: voc.ipa,
+                                              vietnameseMeaning: voc.vietnameseMeaning,
+                                              contextHint: `Ví dụ: ${voc.quoteFromBook}`,
+                                            })
+                                          }
+                                          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 px-2 py-1 rounded-lg border border-emerald-500/30 transition cursor-pointer"
+                                          title="Luyện đọc từ này để AI chấm điểm"
+                                        >
+                                          <Mic className="h-3 w-3" />
+                                          <span>Luyện nói</span>
+                                        </button>
+                                      </div>
+                                      <span className="font-mono text-xs text-indigo-300">
+                                        {voc.ipa} • {voc.partOfSpeech}
+                                      </span>
+                                    </div>
+                                    <div className="flex flex-col items-end gap-1 shrink-0">
+                                      <span className="rounded-lg bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                                        Từ {vocIdx + 1}/{filteredVocab.length}
+                                      </span>
+                                      <span className="rounded-lg bg-indigo-500/20 px-2.5 py-0.5 text-xs font-bold text-indigo-300">
+                                        {voc.cefrLevel}
+                                      </span>
+                                    </div>
+                                  </div>
+
+                                  <div className="text-sm font-bold text-emerald-300">
+                                    {voc.vietnameseMeaning}
+                                  </div>
+
+                                  <p className="text-xs leading-relaxed text-slate-300">
+                                    {voc.explanationInContext}
+                                  </p>
+
+                                  <div className="rounded-xl bg-slate-950 p-3 text-xs">
+                                    <p className="italic text-slate-200">
+                                      &ldquo;{voc.quoteFromBook}&rdquo;
+                                    </p>
+                                    <p className="mt-1 text-slate-400">
+                                      → {voc.quoteTranslation}
+                                    </p>
+                                  </div>
+
+                                  <div className="flex flex-wrap gap-1.5 pt-1">
+                                    {voc.collocations.map((c, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300"
+                                      >
+                                        <Link2 className="h-3 w-3 text-slate-400" />
+                                        <span>{c}</span>
+                                      </span>
+                                    ))}
+                                    {voc.synonyms.map((s, idx) => (
+                                      <span
+                                        key={idx}
+                                        className="rounded bg-indigo-950/60 px-2 py-0.5 text-[11px] text-indigo-300"
+                                      >
+                                        ≈ {s}
+                                      </span>
+                                    ))}
+                                  </div>
+                                </div>
+                              );
+                            })}
+                          </div>
+                        )}
+                      </>
+                    );
+                  })()}
                 </div>
               </div>
             )}
@@ -2588,11 +3178,11 @@ export default function ChapterWorkspace({
                   </div>
                 )}
 
-                <div className="flex items-start gap-2.5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 p-4 text-xs text-indigo-200">
+                <div className="flex items-start gap-2.5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 px-4 py-3 text-xs text-indigo-200">
                   <Target className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
                   <div>
-                    <strong>Cơ chế AI Chấm Điểm Dịch Câu (Semantic Similarity Evaluation):</strong>{" "}
-                    Bạn hãy dịch các câu trích từ chương sách sang tiếng Việt theo cách hiểu của bạn. AI Agent sẽ đối chiếu ngữ nghĩa, ngữ pháp và sắc thái văn phong để chấm điểm từ <strong>0% – 100%</strong>, chỉ rõ từng cụm từ bạn dịch hay hoặc cần chỉnh sửa.
+                    <strong>AI Chấm Dịch (0–100%):</strong>{" "}
+                    Dịch câu trích theo văn phong tự nhiên của bạn — AI sẽ chấm điểm ngữ nghĩa, ngữ pháp và chỉ rõ từng cụm từ cần tối ưu.
                   </div>
                 </div>
 
@@ -2850,6 +3440,110 @@ export default function ChapterWorkspace({
           </div>
         )}
       </main>
+
+      {/* MOBILE FIXED BOTTOM TAB BAR (6 Tab Học Tập 1 Chạm khi Chương Đã Soạn) */}
+      {lesson && (
+        <nav
+          aria-label="Tab bài học"
+          className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#090D16]/95 backdrop-blur-xl pb-safe lg:hidden"
+        >
+          <div className="mx-auto grid max-w-2xl grid-cols-6 items-center px-1 pt-1 pb-0.5">
+            {(
+              [
+                {
+                  id: "content",
+                  label: "Nội dung",
+                  count: lesson.contentAnalysis.length,
+                  icon: BookOpen,
+                  isExam: false,
+                },
+                {
+                  id: "grammar",
+                  label: "Ngữ pháp",
+                  count: lesson.grammarPoints.length,
+                  icon: GraduationCap,
+                  isExam: false,
+                },
+                {
+                  id: "vocabulary",
+                  label: "Từ vựng",
+                  count: lesson.vocabulary.length,
+                  icon: Layers,
+                  isExam: false,
+                },
+                {
+                  id: "practice",
+                  label: "Bài tập",
+                  count:
+                    lesson.clozeExercises.length + lesson.quizExercises.length,
+                  icon: HelpCircle,
+                  isExam: false,
+                },
+                {
+                  id: "translation",
+                  label: "Dịch câu",
+                  count: lesson.translationExercises.length,
+                  icon: Languages,
+                  isExam: false,
+                },
+                {
+                  id: "exam_arena",
+                  label: "Phòng thi",
+                  count: null,
+                  icon: Trophy,
+                  isExam: true,
+                },
+              ] as const
+            ).map((tabItem) => {
+              const Icon = tabItem.icon;
+              const isActive = activeTab === tabItem.id;
+              return (
+                <button
+                  key={tabItem.id}
+                  type="button"
+                  onClick={() => handleSelectLearningTab(tabItem.id)}
+                  className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1 text-[10px] font-semibold transition ${
+                    isActive
+                      ? tabItem.isExam
+                        ? "text-amber-400 bg-amber-500/10"
+                        : "text-indigo-400 bg-indigo-500/10"
+                      : tabItem.isExam
+                      ? "text-amber-300/80 hover:text-amber-200"
+                      : "text-slate-400 hover:text-slate-200"
+                  }`}
+                >
+                  <div className="relative flex items-center justify-center">
+                    <Icon className="h-4 w-4 shrink-0" />
+                    {tabItem.count !== null && tabItem.count > 0 && (
+                      <span
+                        className={`ml-0.5 rounded px-1 text-[8px] font-bold leading-tight ${
+                          isActive
+                            ? "bg-indigo-500/30 text-indigo-200"
+                            : "bg-slate-800 text-slate-300"
+                        }`}
+                      >
+                        {tabItem.count}
+                      </span>
+                    )}
+                  </div>
+                  <span className="truncate max-w-full leading-tight">
+                    {tabItem.label}
+                  </span>
+                </button>
+              );
+            })}
+          </div>
+        </nav>
+      )}
+
+      {/* Instant Text Selection Popover (Bôi đen để Nghe & AI Giải thích ngay) */}
+      <SelectionAiPopover
+        containerRef={workspaceContentRef}
+        courseTitle={course.title}
+        chapterTitle={currentChapter.title}
+        chapterText={currentChapter.rawText}
+        selectedAiModel={selectedAiModel}
+      />
 
       {/* AI Pronunciation Coach Modal */}
       <PronunciationModal

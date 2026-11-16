@@ -144,70 +144,129 @@ export default function GlobalFeedbackOverlay() {
 
   return (
     <>
-      {/* 1. UNIQUE ACTION LOADING HUD (Delete / Edit / AI API / Sync) */}
+      {/* 1. FULL-SCREEN FOCUS LOCK MODAL (Delete / Edit / AI API / Sync) */}
       {currentLoading && (
-        <div className="fixed inset-x-0 top-16 sm:top-20 z-[90] flex justify-center px-3 pointer-events-none">
+        <div
+          role="dialog"
+          aria-modal="true"
+          aria-busy="true"
+          aria-label={currentLoading.title}
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-[#060911]/80 backdrop-blur-md p-4 pointer-events-auto select-none animate-in fade-in duration-200"
+        >
           {(() => {
             const style = VARIANT_STYLES[currentLoading.variant];
+            const STEP_MESSAGES: Record<FeedbackVariant, string[]> = {
+              api: [
+                "Đang kết nối bộ định tuyến AI & phân tích ngữ cảnh...",
+                "Đang xử lý học liệu chuyên sâu theo chuẩn sư phạm...",
+                "Đang chuẩn hóa cấu trúc dữ liệu & hoàn tất phản hồi...",
+              ],
+              sync: [
+                "Đang thiết lập kết nối an toàn tới Supabase Cloud...",
+                "Đang đồng bộ dữ liệu hai chiều giữa thiết bị & kho lưu trữ...",
+                "Đang xác thực toàn vẹn dữ liệu đồng bộ...",
+              ],
+              delete: [
+                "Đang xác minh quyền sở hữu & dọn dẹp dữ liệu cục bộ...",
+                "Đang gỡ bỏ tệp lưu trữ trên Supabase Kho A & Kho B...",
+                "Đang làm mới lại tủ sách & bộ nhớ đệm...",
+              ],
+              edit: [
+                "Đang kiểm tra thay đổi & cập nhật cấu trúc dữ liệu...",
+                "Đang lưu bản cập nhật vào IndexedDB & Cloud...",
+                "Đang đồng bộ hiển thị giao diện...",
+              ],
+            };
+            const steps = STEP_MESSAGES[currentLoading.variant] || STEP_MESSAGES.api;
+            const elapsedNum = Number.parseFloat(String(elapsedSec)) || 0;
+            const stepIndex = Math.floor(elapsedNum / 3) % steps.length;
+
             return (
               <div
-                className={`pointer-events-auto relative overflow-hidden flex items-center gap-3.5 rounded-2xl border bg-[#0B101B]/95 px-4 py-3 sm:px-5 sm:py-3.5 shadow-2xl backdrop-blur-2xl transition-all duration-200 max-w-md w-full ${style.borderGlow}`}
+                className={`relative overflow-hidden rounded-3xl border bg-[#0B101B]/95 p-6 sm:p-7 shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200 ${style.borderGlow}`}
               >
-                {/* Unique Animated Orbital Icon */}
-                <div className="relative flex h-11 w-11 shrink-0 items-center justify-center">
-                  <div
-                    className={`absolute inset-0 rounded-full border-2 animate-spin ${style.ringOuter}`}
-                  />
-                  <div
-                    className={`absolute -inset-1 rounded-full border border-dashed animate-[spin_4s_linear_infinite_reverse] ${style.ringInner}`}
-                  />
-                  <div
-                    className={`relative flex h-8 w-8 items-center justify-center rounded-xl bg-gradient-to-br shadow-lg ${style.orbBg}`}
-                  >
-                    {renderVariantIcon(currentLoading.variant)}
-                  </div>
-                </div>
-
-                {/* Task Text & Live Equalizer */}
-                <div className="min-w-0 flex-1">
-                  <div className="flex items-center justify-between gap-2">
-                    <span
-                      className={`text-[10px] font-extrabold uppercase tracking-wider ${style.accentText}`}
+                {/* Top Status Row: Orbital Icon + Badge + Timer */}
+                <div className="flex items-start gap-4">
+                  {/* Unique Animated Orbital Icon */}
+                  <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
+                    <div
+                      className={`absolute inset-0 rounded-full border-2 animate-spin ${style.ringOuter}`}
+                    />
+                    <div
+                      className={`absolute -inset-1.5 rounded-full border border-dashed animate-[spin_4s_linear_infinite_reverse] ${style.ringInner}`}
+                    />
+                    <div
+                      className={`relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg ${style.orbBg}`}
                     >
-                      {style.badge}
-                    </span>
-                    <span className="font-mono text-[11px] font-semibold text-slate-400">
-                      {elapsedSec}s
-                    </span>
+                      {renderVariantIcon(currentLoading.variant)}
+                    </div>
                   </div>
-                  <p className="truncate text-xs sm:text-sm font-bold text-white mt-0.5">
-                    {currentLoading.title}
+
+                  {/* Title, Badge & Live Timer */}
+                  <div className="min-w-0 flex-1">
+                    <div className="flex items-center justify-between gap-2">
+                      <span
+                        className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider ${style.accentText}`}
+                      >
+                        <span className={`h-1.5 w-1.5 rounded-full animate-ping ${style.barColor}`} />
+                        {style.badge}
+                      </span>
+                      <span className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] font-bold text-slate-300 tabular-nums">
+                        {elapsedSec}s
+                      </span>
+                    </div>
+
+                    <h3 className="text-sm sm:text-base font-bold text-white mt-1.5 leading-snug">
+                      {currentLoading.title}
+                    </h3>
+                    {currentLoading.subtitle && (
+                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                        {currentLoading.subtitle}
+                      </p>
+                    )}
+                  </div>
+                </div>
+
+                {/* Dynamic 3s Step Message & Animated Wave Bars */}
+                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5">
+                  <p className="text-[11px] sm:text-xs font-medium text-slate-300 leading-relaxed">
+                    {steps[stepIndex]}
                   </p>
-                  {currentLoading.subtitle && (
-                    <p className="truncate text-[11px] text-slate-400 mt-0.5">
-                      {currentLoading.subtitle}
-                    </p>
-                  )}
+                  <div className="flex items-end gap-0.5 h-4 shrink-0 pl-1">
+                    <span
+                      className={`w-1 h-2 rounded-full animate-[bounce_0.7s_infinite_100ms] ${style.barColor}`}
+                    />
+                    <span
+                      className={`w-1 h-4 rounded-full animate-[bounce_0.7s_infinite_250ms] ${style.barColor}`}
+                    />
+                    <span
+                      className={`w-1 h-2.5 rounded-full animate-[bounce_0.7s_infinite_400ms] ${style.barColor}`}
+                    />
+                  </div>
                 </div>
 
-                {/* Animated Wave Bars on the right */}
-                <div className="flex items-end gap-0.5 h-4 shrink-0 pl-1">
-                  <span
-                    className={`w-1 h-2 rounded-full animate-[bounce_0.7s_infinite_100ms] ${style.barColor}`}
-                  />
-                  <span
-                    className={`w-1 h-4 rounded-full animate-[bounce_0.7s_infinite_250ms] ${style.barColor}`}
-                  />
-                  <span
-                    className={`w-1 h-2.5 rounded-full animate-[bounce_0.7s_infinite_400ms] ${style.barColor}`}
-                  />
-                </div>
-
-                {/* Bottom Shimmer Bar */}
-                <div className="absolute inset-x-0 bottom-0 h-0.5 bg-slate-800/80 overflow-hidden">
+                {/* Smooth Shimmer Progress Track */}
+                <div className="mt-4 h-1.5 w-full rounded-full bg-slate-800/90 overflow-hidden">
                   <div
-                    className={`h-full w-2/3 animate-pulse ${style.barColor}`}
+                    className={`h-full w-2/5 rounded-full bm-shimmer-bar ${style.barColor}`}
                   />
+                </div>
+
+                {/* Safety Focus Lock Notice */}
+                <div className="mt-3.5 flex items-center justify-center gap-2 text-[11px] text-slate-400">
+                  <svg
+                    className="h-3.5 w-3.5 shrink-0 text-amber-400/90"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <rect width="18" height="11" x="3" y="11" rx="2" ry="2" />
+                    <path d="M7 11V7a5 5 0 0 1 10 0v4" />
+                  </svg>
+                  <span>Đang khóa thao tác tạm thời để đảm bảo an toàn dữ liệu</span>
                 </div>
               </div>
             );

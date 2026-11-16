@@ -886,30 +886,30 @@ export default function ExamArena({
           </div>
         </div>
 
-        {/* 4 Practice & Exam Sub-Tabs */}
-        <div className="flex flex-wrap gap-2">
+        {/* 5 Practice & Exam Sub-Tabs (Cuộn ngang gọn trên mobile, không xếp chồng 5 hàng) */}
+        <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 sm:flex-wrap sm:pb-0">
           <button
             type="button"
             onClick={() => setMode("timed_chapter_exam")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3.5 sm:px-4 py-2.5 text-xs font-bold transition ${
               mode === "timed_chapter_exam"
                 ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg"
                 : "bg-slate-950 text-amber-300 hover:bg-slate-800"
             }`}
           >
-            <Timer className="h-4 w-4" />
-            1. Đề Thi Kiểm Tra Chương (Tính giờ từng câu)
+            <Timer className="h-4 w-4 shrink-0" />
+            1. Đề Thi Kiểm Tra Chương (Tính giờ)
           </button>
           <button
             type="button"
             onClick={() => setMode("vocab_quiz")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3.5 sm:px-4 py-2.5 text-xs font-bold transition ${
               mode === "vocab_quiz"
                 ? "bg-indigo-600 text-white shadow"
                 : "bg-slate-950 text-slate-400 hover:text-white"
             }`}
           >
-            <Trophy className="h-4 w-4" />
+            <Trophy className="h-4 w-4 shrink-0" />
             2. Phản Xạ Trắc Nghiệm Từ Vựng ({activeCards.length} từ)
           </button>
           <button
@@ -919,25 +919,25 @@ export default function ExamArena({
               setMatchedIds([]);
               setSelectedLeft(null);
             }}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3.5 sm:px-4 py-2.5 text-xs font-bold transition ${
               mode === "matching"
                 ? "bg-indigo-600 text-white shadow"
                 : "bg-slate-950 text-slate-400 hover:text-white"
             }`}
           >
-            <Gamepad2 className="h-4 w-4" />
+            <Gamepad2 className="h-4 w-4 shrink-0" />
             3. Ghép Thẻ Từ – Nghĩa
           </button>
           <button
             type="button"
             onClick={() => setMode("typing")}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3.5 sm:px-4 py-2.5 text-xs font-bold transition ${
               mode === "typing"
                 ? "bg-indigo-600 text-white shadow"
                 : "bg-slate-950 text-slate-400 hover:text-white"
             }`}
           >
-            <Keyboard className="h-4 w-4" />
+            <Keyboard className="h-4 w-4 shrink-0" />
             4. Nghe / Nhìn Nghĩa Gõ Từ
           </button>
           <button
@@ -949,14 +949,14 @@ export default function ExamArena({
               setSpeechEvaluation(null);
               setSpeakingTranscript("");
             }}
-            className={`flex items-center gap-2 rounded-xl px-4 py-2.5 text-xs font-bold transition cursor-pointer ${
+            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl px-3.5 sm:px-4 py-2.5 text-xs font-bold transition cursor-pointer ${
               mode === "pronunciation_arena"
                 ? "bg-gradient-to-r from-emerald-600 to-teal-600 text-white shadow-lg shadow-emerald-600/25"
                 : "bg-slate-950 text-slate-400 hover:text-white"
             }`}
           >
-            <Mic className="h-4 w-4" />
-            5. Luyện Đọc & Chấm Âm AI ({speakingItems.length})
+            <Mic className="h-4 w-4 shrink-0" />
+            5. Luyện Đọc &amp; Chấm Âm AI ({speakingItems.length})
           </button>
         </div>
       </div>

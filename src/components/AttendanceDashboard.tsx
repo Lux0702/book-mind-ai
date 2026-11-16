@@ -54,6 +54,7 @@ export default function AttendanceDashboard({
   const [isSyncingCloud, setIsSyncingCloud] = useState(false);
   const [cloudSynced, setCloudSynced] = useState(false);
   const [lastSyncedTime, setLastSyncedTime] = useState<string>("");
+  const [showAllActivities, setShowAllActivities] = useState(false);
 
   const handleSyncCloud = useCallback(async (force = false) => {
     setIsSyncingCloud(true);
@@ -455,37 +456,50 @@ export default function AttendanceDashboard({
             Chưa có hoạt động nào được ghi nhận. Hãy bấm Điểm danh hoặc học một chương sách!
           </div>
         ) : (
-          <div className="space-y-2.5 max-h-96 overflow-y-auto pr-1">
-            {activities.map((act) => (
-              <div
-                key={act.id}
-                className="flex items-start sm:items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 p-3 sm:p-3.5 text-xs transition hover:border-white/[0.12]"
-              >
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 border border-white/[0.07] text-indigo-300">
-                  {act.type === "vocab_review" ? (
-                    <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
-                  ) : act.type === "check_in" ? (
-                    <Flame className="h-3.5 w-3.5 text-amber-400" />
-                  ) : (
-                    <BookOpen className="h-3.5 w-3.5 text-emerald-400" />
-                  )}
-                </div>
-
-                <div className="min-w-0 flex-1 space-y-0.5">
-                  <div className="flex flex-wrap items-center justify-between gap-1">
-                    <span className="font-semibold text-slate-100 truncate">
-                      {act.title}
-                    </span>
-                    <span className="text-[11px] text-slate-500 shrink-0">
-                      {formatTimeAgo(act.timestamp)}
-                    </span>
+          <div className="space-y-2.5">
+            {(showAllActivities ? activities : activities.slice(0, 6)).map(
+              (act) => (
+                <div
+                  key={act.id}
+                  className="flex items-start sm:items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 p-3 sm:p-3.5 text-xs transition hover:border-white/[0.12]"
+                >
+                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 border border-white/[0.07] text-indigo-300">
+                    {act.type === "vocab_review" ? (
+                      <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                    ) : act.type === "check_in" ? (
+                      <Flame className="h-3.5 w-3.5 text-amber-400" />
+                    ) : (
+                      <BookOpen className="h-3.5 w-3.5 text-emerald-400" />
+                    )}
                   </div>
-                  <p className="text-slate-400 leading-relaxed break-words">
-                    {act.details}
-                  </p>
+
+                  <div className="min-w-0 flex-1 space-y-0.5">
+                    <div className="flex flex-wrap items-center justify-between gap-1">
+                      <span className="font-semibold text-slate-100 truncate">
+                        {act.title}
+                      </span>
+                      <span className="text-[11px] text-slate-500 shrink-0">
+                        {formatTimeAgo(act.timestamp)}
+                      </span>
+                    </div>
+                    <p className="text-slate-400 leading-relaxed break-words">
+                      {act.details}
+                    </p>
+                  </div>
                 </div>
-              </div>
-            ))}
+              )
+            )}
+            {activities.length > 6 && (
+              <button
+                type="button"
+                onClick={() => setShowAllActivities(!showAllActivities)}
+                className="flex min-h-[40px] w-full items-center justify-center rounded-xl border border-white/[0.08] bg-slate-950/60 px-4 py-2 text-xs font-semibold text-indigo-300 transition hover:bg-slate-900 hover:text-white cursor-pointer"
+              >
+                {showAllActivities
+                  ? "Thu gọn"
+                  : `Xem tất cả (${activities.length})`}
+              </button>
+            )}
           </div>
         )}
       </div>

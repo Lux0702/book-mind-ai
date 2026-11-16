@@ -42,6 +42,7 @@ import {
   getCourseFlashcards,
   saveCourse,
   deleteCourse,
+  isCourseOwnedByUser,
   getAppSettings,
   getCurrentUser,
   setCachedAuthenticatedUser,
@@ -52,6 +53,7 @@ import {
   pullSystemAiKeysFromCloud,
   getSupabaseClient,
   AppUser,
+  LastStudySession,
 } from "@/lib/storage";
 import {
   getUserQuotaAccount,
@@ -73,12 +75,17 @@ import LoginScreen from "@/components/LoginScreen";
 import CustomSelect from "@/components/ui/CustomSelect";
 import UpgradePlanModal from "@/components/UpgradePlanModal";
 import EmailInboxModal from "@/components/EmailInboxModal";
+import ContinueLearningBanner from "@/components/ContinueLearningBanner";
 
 export default function HomePage() {
   const [courses, setCourses] = useState<Course[]>([]);
   const [libraryCourses, setLibraryCourses] = useState<Course[]>([]);
   const [flashcards, setFlashcards] = useState<FlashcardSRS[]>([]);
   const [activeCourseId, setActiveCourseId] = useState<string | null>(null);
+  const [workspaceResumeTarget, setWorkspaceResumeTarget] = useState<{
+    chapterId?: string;
+    tab?: string;
+  } | null>(null);
   const [viewMode, setViewMode] = useState<
     "dashboard" | "library" | "srs_global" | "attendance"
   >("attendance");
@@ -329,20 +336,44 @@ export default function HomePage() {
 
   const handleDeleteCourse = async (courseId: string, e: React.MouseEvent) => {
     e.stopPropagation();
-    const targetCourse = courses.find((c) => c.id === courseId);
-    if (
-      !window.confirm(
-        "Bạn có chắc chắn muốn xóa Khóa học (Course) này và các thẻ Flashcard đi kèm?"
-      )
-    ) {
+    const targetCourse =
+      courses.find((c) => c.id === courseId) ||
+      libraryCourses.find((c) => c.id === courseId);
+
+    const isAppliedCopy = Boolean(targetCourse?.clonedFromCourseId);
+    const isUploader = targetCourse
+      ? isCourseOwnedByUser(targetCourse, currentUser)
+      : false;
+
+    if (!isAppliedCopy && targetCourse && !isUploader) {
+      showToast({
+        type: "error",
+        title: "Không có quyền xóa sách gốc",
+        message: "Chỉ người tải sách này lên mới có quyền xóa sách gốc.",
+      });
       return;
     }
+
+    const confirmMsg = isAppliedCopy
+      ? "Bạn có muốn gỡ sách này khỏi Tủ sách cá nhân? (Sách gốc trên Thư viện Cộng đồng vẫn được giữ nguyên)"
+      : "Bạn là người tải cuốn sách này lên. Xóa sách sẽ xóa vĩnh viễn khỏi cả Tủ sách và Thư viện Cộng đồng. Bạn có chắc chắn muốn xóa?";
+
+    if (!window.confirm(confirmMsg)) {
+      return;
+    }
+
     await runWithFeedback(
       {
         variant: "delete",
-        loadingTitle: `Đang xóa "${targetCourse?.title || "Khóa học"}"...`,
-        loadingSubtitle: "Đang dọn dẹp thẻ Flashcard và dữ liệu Cloud",
-        successTitle: "Đã xóa khóa học thành công!",
+        loadingTitle: isAppliedCopy
+          ? `Đang gỡ "${targetCourse?.title || "sách"}" khỏi Tủ sách cá nhân...`
+          : `Đang xóa vĩnh viễn "${targetCourse?.title || "Khóa học"}"...`,
+        loadingSubtitle: isAppliedCopy
+          ? "Đang dọn dẹp bản sao cá nhân & thẻ Flashcard (Sách gốc vẫn giữ nguyên)"
+          : "Đang xóa sách gốc, thẻ Flashcard và dữ liệu Cloud",
+        successTitle: isAppliedCopy
+          ? "Đã gỡ sách khỏi Tủ sách cá nhân!"
+          : "Đã xóa sách gốc thành công!",
         successMessage: targetCourse?.title,
       },
       async () => {
@@ -741,15 +772,22 @@ export default function HomePage() {
 
       {/* Main Content Area */}
       {activeCourse ? (
-        <ChapterWorkspace
-          course={activeCourse}
-          flashcards={flashcards.filter((f) => f.courseId === activeCourse.id)}
-          onBackToDashboard={() => setActiveCourseId(null)}
-          onCourseUpdated={async () => {
-            await refreshData();
-          }}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-        />
+        <div key={`course-${activeCourse.id}`} className="bm-view-enter flex-1 flex flex-col">
+          <ChapterWorkspace
+            course={activeCourse}
+            flashcards={flashcards.filter((f) => f.courseId === activeCourse.id)}
+            initialChapterId={workspaceResumeTarget?.chapterId}
+            initialTab={workspaceResumeTarget?.tab}
+            onBackToDashboard={() => {
+              setWorkspaceResumeTarget(null);
+              setActiveCourseId(null);
+            }}
+            onCourseUpdated={async () => {
+              await refreshData();
+            }}
+            onOpenSettings={() => setIsSettingsOpen(true)}
+          />
+        </div>
       ) : viewMode === "srs_global" ? (
         /* Course & Chapter Scoped Review + Timed Exam Page */
         (() => {
@@ -905,89 +943,119 @@ export default function HomePage() {
             setLibraryCourses(freshLib);
           }}
           onOpenCreateModal={() => setIsCreateOpen(true)}
+          onDeleteLibraryCourse={handleDeleteCourse}
         />
       ) : viewMode === "attendance" ? (
-        <AttendanceDashboard
-          courses={courses}
-          flashcards={flashcards}
-          onOpenCourse={(courseId) => {
-            setActiveCourseId(courseId);
-            setViewMode("dashboard");
-          }}
-          onOpenSrs={() => {
-            setViewMode("srs_global");
-          }}
-        />
+        <div key="view-attendance" className="bm-view-enter flex-1 flex flex-col">
+          <div className="mx-auto w-full max-w-5xl px-3.5 pt-5 sm:px-6 sm:pt-7">
+            <ContinueLearningBanner
+              courses={courses}
+              onResumeSession={(session) => {
+                setWorkspaceResumeTarget({
+                  chapterId: session.chapterId,
+                  tab: session.activeTab,
+                });
+                setActiveCourseId(session.courseId);
+              }}
+            />
+          </div>
+          <AttendanceDashboard
+            courses={courses}
+            flashcards={flashcards}
+            onOpenCourse={(courseId) => {
+              setWorkspaceResumeTarget(null);
+              setActiveCourseId(courseId);
+              setViewMode("dashboard");
+            }}
+            onOpenSrs={() => {
+              setViewMode("srs_global");
+            }}
+          />
+        </div>
       ) : (
         /* DASHBOARD: All Courses Grid */
-        <div className="mx-auto w-full max-w-7xl flex-1 px-3.5 py-5 sm:px-6 sm:py-8">
-          {/* Top Stats Banner (2-col on mobile, 4-col on desktop) */}
-          <div className="mb-6 sm:mb-8 grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Tủ Sách Cá Nhân</span>
-                <BookOpen className="h-4 w-4 text-indigo-400 shrink-0" />
+        <div
+          key="view-dashboard"
+          className="bm-view-enter mx-auto w-full max-w-7xl flex-1 px-3.5 py-4 sm:px-6 sm:py-8"
+        >
+          <ContinueLearningBanner
+            courses={courses}
+            onResumeSession={(session) => {
+              setWorkspaceResumeTarget({
+                chapterId: session.chapterId,
+                tab: session.activeTab,
+              });
+              setActiveCourseId(session.courseId);
+            }}
+            className="mb-6"
+          />
+          {/* Top Stats Banner (2-col compact on mobile, 4-col on desktop) */}
+          <div className="mb-4 sm:mb-8 grid grid-cols-2 gap-2.5 sm:gap-4 lg:grid-cols-4">
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-3 sm:p-5">
+              <div className="flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
+                <span className="truncate">Tủ Sách Cá Nhân</span>
+                <BookOpen className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-indigo-400 shrink-0" />
               </div>
-              <div className="mt-1.5 text-xl sm:text-2xl font-bold text-white">
+              <div className="mt-1 sm:mt-1.5 text-lg sm:text-2xl font-bold text-white">
                 {courses.length}{" "}
-                <span className="text-xs font-normal text-slate-400">cuốn</span>
+                <span className="text-[11px] sm:text-xs font-normal text-slate-400">cuốn</span>
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 truncate">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] text-slate-400 truncate">
                 Lộ trình học tập độc lập
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Chương Đã Soạn</span>
-                <Layers className="h-4 w-4 text-emerald-400 shrink-0" />
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-3 sm:p-5">
+              <div className="flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
+                <span className="truncate">Chương Đã Soạn</span>
+                <Layers className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400 shrink-0" />
               </div>
-              <div className="mt-1.5 text-xl sm:text-2xl font-bold text-white">
+              <div className="mt-1 sm:mt-1.5 text-lg sm:text-2xl font-bold text-white">
                 {courses.reduce(
                   (acc, c) =>
                     acc + c.chapters.filter((ch) => ch.isGenerated).length,
                   0
                 )}{" "}
-                <span className="text-sm font-normal text-slate-500">
+                <span className="text-xs sm:text-sm font-normal text-slate-500">
                   / {courses.reduce((acc, c) => acc + c.chapters.length, 0)}
                 </span>
               </div>
-              <div className="mt-1 text-[11px] text-slate-400 truncate">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] text-slate-400 truncate">
                 Phân tích sâu &amp; Bài tập
               </div>
             </div>
 
-            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5">
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Kho Từ Vựng SRS</span>
-                <GraduationCap className="h-4 w-4 text-amber-400 shrink-0" />
+            <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-3 sm:p-5">
+              <div className="flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
+                <span className="truncate">Kho Từ Vựng SRS</span>
+                <GraduationCap className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 shrink-0" />
               </div>
-              <div className="mt-1.5 text-xl sm:text-2xl font-bold text-white">
+              <div className="mt-1 sm:mt-1.5 text-lg sm:text-2xl font-bold text-white">
                 {flashcards.length}{" "}
-                <span className="text-xs font-normal text-slate-400">từ</span>
+                <span className="text-[11px] sm:text-xs font-normal text-slate-400">từ</span>
               </div>
-              <div className="mt-1 text-[11px] text-amber-300/90 truncate">
+              <div className="mt-0.5 sm:mt-1 text-[10px] sm:text-[11px] text-amber-300/90 truncate">
                 {dueFlashcards.length} thẻ đến hạn hôm nay
               </div>
             </div>
 
             <div
               onClick={() => setIsUpgradeModalOpen(true)}
-              className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 cursor-pointer hover:border-indigo-500/40 transition"
+              className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-3 sm:p-5 cursor-pointer hover:border-indigo-500/40 transition"
             >
-              <div className="flex items-center justify-between text-xs text-slate-400">
-                <span>Gói AI Credit</span>
-                <Crown className="h-4 w-4 text-amber-400 shrink-0" />
+              <div className="flex items-center justify-between text-[11px] sm:text-xs text-slate-400">
+                <span className="truncate">Gói AI Credit</span>
+                <Crown className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-amber-400 shrink-0" />
               </div>
-              <div className="mt-1.5 text-sm sm:text-base font-bold text-white truncate">
+              <div className="mt-1 sm:mt-1.5 text-sm sm:text-base font-bold text-white truncate">
                 {quotaAccount
                   ? PLAN_CONFIG[quotaAccount.plan].name
                   : "Gói Free (30 Credit)"}
               </div>
-              <div className="mt-1 flex items-center gap-1.5 text-[11px] text-slate-400 truncate">
+              <div className="mt-0.5 sm:mt-1 flex items-center gap-1.5 text-[10px] sm:text-[11px] text-slate-400 truncate">
                 {quotaAccount?.isKeyActivated ? (
                   <>
-                    <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                    <CheckCircle2 className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-emerald-400 shrink-0" />
                     <span className="text-emerald-300 truncate">
                       {quotaAccount.plan === "unlimited"
                         ? `Đã dùng ${quotaAccount.usedCalls} • VIP`
@@ -996,7 +1064,7 @@ export default function HomePage() {
                   </>
                 ) : (
                   <>
-                    <AlertCircle className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                    <AlertCircle className="h-3 w-3 sm:h-3.5 sm:w-3.5 text-amber-400 shrink-0" />
                     <span className="text-amber-300 truncate">
                       Kích hoạt Key ngay
                     </span>
@@ -1087,14 +1155,30 @@ export default function HomePage() {
                             {course.targetLanguage}
                           </span>
                         </div>
-                        <button
-                          type="button"
-                          onClick={(e) => handleDeleteCourse(course.id, e)}
-                          className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-500/15 hover:text-rose-400 transition"
-                          title="Xóa khóa học"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                        </button>
+                        {(() => {
+                          const isAppliedBook = Boolean(course.clonedFromCourseId);
+                          const isUploaderBook =
+                            !isAppliedBook &&
+                            isCourseOwnedByUser(course, currentUser);
+                          if (!isAppliedBook && !isUploaderBook) return null;
+                          return (
+                            <button
+                              type="button"
+                              onClick={(e) => handleDeleteCourse(course.id, e)}
+                              className="inline-flex items-center gap-1 rounded-lg px-2 py-1 text-[11px] font-medium text-slate-400 hover:bg-rose-500/15 hover:text-rose-400 transition cursor-pointer"
+                              title={
+                                isAppliedBook
+                                  ? "Gỡ sách khỏi Tủ sách cá nhân"
+                                  : "Xóa vĩnh viễn sách bạn đã tải lên"
+                              }
+                            >
+                              <Trash2 className="h-3.5 w-3.5 shrink-0" />
+                              <span>
+                                {isAppliedBook ? "Gỡ khỏi tủ" : "Xóa sách"}
+                              </span>
+                            </button>
+                          );
+                        })()}
                       </div>
                       <h3 className="mt-3.5 line-clamp-2 text-base sm:text-lg font-bold text-white group-hover:text-indigo-200 transition">
                         {course.title}
@@ -1252,104 +1336,110 @@ export default function HomePage() {
         </div>
       )}
 
-      {/* Mobile Fixed Bottom Navigation Bar (UI/UX Pro Max Mobile-First) */}
-      <nav
-        aria-label="Điều hướng di động"
-        className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#090D16]/95 backdrop-blur-xl pb-safe lg:hidden"
-      >
-        <div className="mx-auto grid max-w-lg grid-cols-5 items-center px-1.5 pt-1.5 pb-1">
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCourseId(null);
-              setViewMode("attendance");
-            }}
-            className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
-              !activeCourseId && viewMode === "attendance"
-                ? "text-amber-400"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <div className="relative flex items-center justify-center">
-              <Flame className="h-4 w-4" />
-              {streakData.currentStreak > 0 && (
-                <span className="ml-0.5 text-[9px] font-extrabold text-amber-300">
-                  {streakData.currentStreak}
-                </span>
-              )}
-            </div>
-            <span>Điểm danh</span>
-          </button>
+      {/* Mobile Fixed Bottom Navigation Bar (Chỉ hiển thị ở màn hình chính; khi đang mở sách sẽ nhường chỗ cho Thanh 6 Tab Chương) */}
+      {!activeCourse && (
+        <nav
+          aria-label="Điều hướng di động"
+          className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#090D16]/95 backdrop-blur-xl pb-safe lg:hidden"
+        >
+          <div className="mx-auto grid max-w-lg grid-cols-5 items-center px-1.5 pt-1.5 pb-1">
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("attendance");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+                !activeCourseId && viewMode === "attendance"
+                  ? "text-amber-400"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <div className="relative flex items-center justify-center">
+                <Flame className="h-4 w-4" />
+                {streakData.currentStreak > 0 && (
+                  <span className="ml-0.5 text-[9px] font-extrabold text-amber-300">
+                    {streakData.currentStreak}
+                  </span>
+                )}
+              </div>
+              <span>Điểm danh</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCourseId(null);
-              setViewMode("dashboard");
-            }}
-            className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
-              !activeCourseId && viewMode === "dashboard"
-                ? "text-indigo-400"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <BookOpen className="h-4 w-4" />
-            <span>Tủ sách ({courses.length})</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("dashboard");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+                !activeCourseId && viewMode === "dashboard"
+                  ? "text-indigo-400"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <BookOpen className="h-4 w-4" />
+              <span>Tủ sách ({courses.length})</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => setIsCreateOpen(true)}
-            className="flex min-h-[44px] flex-col items-center justify-center gap-0.5"
-          >
-            <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/30 active:scale-95 transition">
-              <Plus className="h-4.5 w-4.5" />
-            </div>
-            <span className="text-[10px] font-semibold text-indigo-300">
-              Nạp sách
-            </span>
-          </button>
+            <button
+              type="button"
+              onClick={() => setIsCreateOpen(true)}
+              className="flex min-h-[44px] flex-col items-center justify-center gap-0.5"
+            >
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/30 active:scale-95 transition">
+                <Plus className="h-4.5 w-4.5" />
+              </div>
+              <span className="text-[10px] font-semibold text-indigo-300">
+                Nạp sách
+              </span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCourseId(null);
-              setViewMode("library");
-            }}
-            className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
-              !activeCourseId && viewMode === "library"
-                ? "text-emerald-400"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <Library className="h-4 w-4" />
-            <span>Thư viện</span>
-          </button>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("library");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+                !activeCourseId && viewMode === "library"
+                  ? "text-emerald-400"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <Library className="h-4 w-4" />
+              <span>Thư viện</span>
+            </button>
 
-          <button
-            type="button"
-            onClick={() => {
-              setActiveCourseId(null);
-              setViewMode("srs_global");
-            }}
-            className={`relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
-              !activeCourseId && viewMode === "srs_global"
-                ? "text-indigo-400"
-                : "text-slate-400 hover:text-slate-200"
-            }`}
-          >
-            <div className="relative">
-              <GraduationCap className="h-4 w-4" />
-              {dueFlashcards.length > 0 && (
-                <span className="absolute -right-2.5 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-amber-500 px-1 text-[8px] font-black text-slate-950">
-                  {dueFlashcards.length}
-                </span>
-              )}
-            </div>
-            <span>Ôn &amp; Thi</span>
-          </button>
-        </div>
-      </nav>
+            <button
+              type="button"
+              onClick={() => {
+                setActiveCourseId(null);
+                setViewMode("srs_global");
+                window.scrollTo({ top: 0, behavior: "smooth" });
+              }}
+              className={`relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+                !activeCourseId && viewMode === "srs_global"
+                  ? "text-indigo-400"
+                  : "text-slate-400 hover:text-slate-200"
+              }`}
+            >
+              <div className="relative">
+                <GraduationCap className="h-4 w-4" />
+                {dueFlashcards.length > 0 && (
+                  <span className="absolute -right-2.5 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-amber-500 px-1 text-[8px] font-black text-slate-950">
+                    {dueFlashcards.length}
+                  </span>
+                )}
+              </div>
+              <span>Ôn &amp; Thi</span>
+            </button>
+          </div>
+        </nav>
+      )}
 
       {/* Modals */}
       <CreateCourseModal

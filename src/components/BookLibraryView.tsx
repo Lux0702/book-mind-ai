@@ -17,6 +17,7 @@ import {
   Library,
   ShieldCheck,
   GraduationCap,
+  Trash2,
 } from "lucide-react";
 import { Course } from "@/types/course";
 import { AppUser, isCourseOwnedByUser } from "@/lib/storage";
@@ -30,6 +31,7 @@ interface BookLibraryViewProps {
   onOpenMyCourse: (courseId: string) => void;
   onRefreshLibrary: () => Promise<void>;
   onOpenCreateModal: () => void;
+  onDeleteLibraryCourse?: (courseId: string, e: React.MouseEvent) => Promise<void>;
 }
 
 export default function BookLibraryView({
@@ -40,6 +42,7 @@ export default function BookLibraryView({
   onOpenMyCourse,
   onRefreshLibrary,
   onOpenCreateModal,
+  onDeleteLibraryCourse,
 }: BookLibraryViewProps) {
   const [searchQuery, setSearchQuery] = useState("");
   const [sourceFilter, setSourceFilter] = useState<"all" | "community" | "mine">(
@@ -284,9 +287,9 @@ export default function BookLibraryView({
           )}
         </div>
 
-        {/* Filter Pills */}
-        <div className="flex flex-wrap items-center gap-2">
-          <div className="flex items-center rounded-xl border border-slate-800 bg-slate-950 p-1">
+        {/* Filter Pills (Cuộn ngang mượt trên mobile, không rớt dòng lộn xộn) */}
+        <div className="flex items-center gap-2 overflow-x-auto no-scrollbar pb-0.5">
+          <div className="flex shrink-0 items-center rounded-xl border border-slate-800 bg-slate-950 p-1">
             {(
               [
                 { id: "all", label: "Tất cả sách" },
@@ -298,7 +301,7 @@ export default function BookLibraryView({
                 key={tab.id}
                 type="button"
                 onClick={() => setSourceFilter(tab.id)}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
                   sourceFilter === tab.id
                     ? "bg-indigo-600 text-white shadow"
                     : "text-slate-400 hover:text-slate-200"
@@ -309,13 +312,13 @@ export default function BookLibraryView({
             ))}
           </div>
 
-          <div className="flex items-center rounded-xl border border-slate-800 bg-slate-950 p-1">
+          <div className="flex shrink-0 items-center rounded-xl border border-slate-800 bg-slate-950 p-1">
             {(["ALL", "A1-A2", "B1-B2", "C1-C2"] as const).map((lvl) => (
               <button
                 key={lvl}
                 type="button"
                 onClick={() => setLevelFilter(lvl)}
-                className={`rounded-lg px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
+                className={`shrink-0 whitespace-nowrap rounded-lg px-2.5 py-1.5 text-xs font-semibold transition cursor-pointer ${
                   levelFilter === lvl
                     ? "bg-slate-800 text-amber-300 border border-amber-500/30"
                     : "text-slate-400 hover:text-slate-200"
@@ -378,12 +381,28 @@ export default function BookLibraryView({
                       </span>
                     </div>
 
-                    {isOwnedByMe && (
-                      <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-bold text-slate-950 shadow">
-                        <CheckCircle2 className="h-3 w-3" />
-                        Đã có trong Tủ sách
-                      </span>
-                    )}
+                    <div className="flex items-center gap-1.5">
+                      {isOwnedByMe && (
+                        <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/90 px-2.5 py-0.5 text-[11px] font-bold text-slate-950 shadow">
+                          <CheckCircle2 className="h-3 w-3" />
+                          Đã có trong Tủ sách
+                        </span>
+                      )}
+                      {onDeleteLibraryCourse &&
+                        isUploadedByMe &&
+                        !course.clonedFromCourseId &&
+                        !course.isLibrarySample && (
+                          <button
+                            type="button"
+                            onClick={(e) => onDeleteLibraryCourse(course.id, e)}
+                            title="Xóa sách đã tải lên"
+                            className="inline-flex items-center gap-1 rounded-full bg-rose-950/80 border border-rose-400/40 px-2 py-1 text-[11px] font-bold text-rose-200 hover:bg-rose-600 hover:text-white transition shadow cursor-pointer"
+                          >
+                            <Trash2 className="h-3 w-3" />
+                            <span>Xóa sách</span>
+                          </button>
+                        )}
+                    </div>
                   </div>
 
                   <h3 className="mt-4 line-clamp-2 text-lg font-extrabold text-white">

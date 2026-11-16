@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from "react";
+import React, { useState, useEffect, useRef } from "react";
 import {
   Volume2,
   RotateCw,
@@ -11,10 +11,16 @@ import {
   ChevronRight,
   Shuffle,
   Mic,
+  Star,
 } from "lucide-react";
 import { FlashcardSRS } from "@/types/course";
 import { calculateNextReview } from "@/lib/srs";
-import { updateFlashcard } from "@/lib/storage";
+import {
+  updateFlashcard,
+  getStarredVocabIds,
+  toggleStarredVocabId,
+  normalizeStarVocabKey,
+} from "@/lib/storage";
 import { speakSmart, stopAllSpeech } from "@/lib/tts";
 import AudioSpeakButton from "./AudioSpeakButton";
 import PronunciationModal from "./PronunciationModal";
@@ -33,18 +39,70 @@ export default function FlashcardArena({
   const [isFlipped, setIsFlipped] = useState(false);
   const [sessionReviewed, setSessionReviewed] = useState(0);
   const [isPronounceOpen, setIsPronounceOpen] = useState(false);
+  const [vocabFilter, setVocabFilter] = useState<"all" | "starred">("all");
+  const [starredKeys, setStarredKeys] = useState<string[]>([]);
+
+  // Mobile touch-swipe gesture state & refs
+  const [touchDeltaX, setTouchDeltaX] = useState(0);
+  const touchStartXRef = useRef<number | null>(null);
+  const touchStartYRef = useRef<number | null>(null);
+  const isHorizontalSwipeRef = useRef(false);
+  const didSwipeRef = useRef(false);
+  const pillsContainerRef = useRef<HTMLDivElement | null>(null);
 
   useEffect(() => {
-    setDeck(cards);
-  }, [cards]);
+    const syncStarred = () => setStarredKeys(getStarredVocabIds());
+    syncStarred();
+    window.addEventListener("bookmind:starred-updated", syncStarred);
+    return () => {
+      window.removeEventListener("bookmind:starred-updated", syncStarred);
+    };
+  }, []);
 
-  // Stop speech whenever card changes or component unmounts
+  const starredCardsCount = cards.filter((c) =>
+    starredKeys.includes(normalizeStarVocabKey(c.word))
+  ).length;
+
+  useEffect(() => {
+    if (vocabFilter === "starred") {
+      const starredSubset = cards.filter((c) =>
+        starredKeys.includes(normalizeStarVocabKey(c.word))
+      );
+      if (starredSubset.length > 0) {
+        setDeck(starredSubset);
+        setCurrentIndex((prev) =>
+          prev >= starredSubset.length ? 0 : prev
+        );
+      } else {
+        // Auto-fallback to all cards if user unstars the last item
+        setVocabFilter("all");
+        setDeck(cards);
+      }
+    } else {
+      setDeck(cards);
+    }
+  }, [cards, vocabFilter, starredKeys]);
+
+  // Stop speech whenever card changes or component unmounts, and center active pill
   useEffect(() => {
     stopAllSpeech();
+    const container = pillsContainerRef.current;
+    if (container) {
+      const activeBtn = container.children[
+        currentIndex % Math.max(1, deck.length)
+      ] as HTMLElement | undefined;
+      if (activeBtn && typeof activeBtn.scrollIntoView === "function") {
+        activeBtn.scrollIntoView({
+          behavior: "smooth",
+          inline: "center",
+          block: "nearest",
+        });
+      }
+    }
     return () => {
       stopAllSpeech();
     };
-  }, [currentIndex]);
+  }, [currentIndex, deck.length]);
 
   // Keyboard navigation: Left/Right arrows to switch cards, Space to flip
   useEffect(() => {
@@ -117,6 +175,64 @@ export default function FlashcardArena({
     setCurrentIndex((prev) => (prev + 1) % deck.length);
   };
 
+  const handleCardTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {
+    // Bỏ qua swipe nếu người dùng chạm vào nút Loa / Luyện nói bên trong thẻ
+    if ((e.target as HTMLElement).closest("button")) {
+      touchStartXRef.current = null;
+      touchStartYRef.current = null;
+      return;
+    }
+    const touch = e.touches[0];
+    if (!touch) return;
+    touchStartXRef.current = touch.clientX;
+    touchStartYRef.current = touch.clientY;
+    isHorizontalSwipeRef.current = false;
+    didSwipeRef.current = false;
+    setTouchDeltaX(0);
+  };
+
+  const handleCardTouchMove = (e: React.TouchEvent<HTMLDivElement>) => {
+    if (touchStartXRef.current === null || touchStartYRef.current === null) {
+      return;
+    }
+    const touch = e.touches[0];
+    if (!touch) return;
+    const dx = touch.clientX - touchStartXRef.current;
+    const dy = touch.clientY - touchStartYRef.current;
+
+    if (!isHorizontalSwipeRef.current) {
+      if (Math.abs(dx) > Math.abs(dy) && Math.abs(dx) > 10) {
+        isHorizontalSwipeRef.current = true;
+      } else if (Math.abs(dy) > 12) {
+        // Người dùng đang cuộn dọc trang -> hủy theo dõi vuốt ngang
+        touchStartXRef.current = null;
+        return;
+      }
+    }
+
+    if (isHorizontalSwipeRef.current) {
+      setTouchDeltaX(dx);
+    }
+  };
+
+  const handleCardTouchEnd = () => {
+    if (touchStartXRef.current === null) {
+      setTouchDeltaX(0);
+      return;
+    }
+    if (touchDeltaX <= -45) {
+      didSwipeRef.current = true;
+      handleNext();
+    } else if (touchDeltaX >= 45) {
+      didSwipeRef.current = true;
+      handlePrev();
+    }
+    touchStartXRef.current = null;
+    touchStartYRef.current = null;
+    isHorizontalSwipeRef.current = false;
+    setTouchDeltaX(0);
+  };
+
   return (
     <div className="space-y-4">
       {/* Top Status & Quick Word Selector Bar */}
@@ -148,7 +264,10 @@ export default function FlashcardArena({
       </div>
 
       {/* Quick Jump Word Pills */}
-      <div className="flex items-center gap-1.5 overflow-x-auto pb-1">
+      <div
+        ref={pillsContainerRef}
+        className="flex items-center gap-1.5 overflow-x-auto no-scrollbar pb-1"
+      >
         {deck.map((c, idx) => (
           <button
             key={c.id}
@@ -168,10 +287,28 @@ export default function FlashcardArena({
         ))}
       </div>
 
-      {/* Interactive Flashcard */}
+      {/* Interactive Flashcard (Supports Touch Swipe Left/Right on Mobile) */}
       <div
-        onClick={() => setIsFlipped(!isFlipped)}
-        className="group relative min-h-[270px] sm:min-h-[290px] cursor-pointer select-none rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-7 shadow-xl transition hover:border-indigo-500/40"
+        onTouchStart={handleCardTouchStart}
+        onTouchMove={handleCardTouchMove}
+        onTouchEnd={handleCardTouchEnd}
+        onTouchCancel={handleCardTouchEnd}
+        onClick={() => {
+          if (didSwipeRef.current) {
+            didSwipeRef.current = false;
+            return;
+          }
+          setIsFlipped(!isFlipped);
+        }}
+        style={{
+          transform:
+            touchDeltaX !== 0
+              ? `translateX(${Math.max(-90, Math.min(90, touchDeltaX * 0.4))}px)`
+              : undefined,
+          transition:
+            touchDeltaX !== 0 ? "none" : "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)",
+        }}
+        className="group relative min-h-[270px] sm:min-h-[290px] touch-pan-y cursor-pointer select-none rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-7 shadow-xl transition hover:border-indigo-500/40"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
           <span className="rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 py-1 text-xs font-semibold text-indigo-300">
@@ -185,7 +322,7 @@ export default function FlashcardArena({
                 : "Bấm vào thẻ (hoặc phím Space) để lật xem nghĩa"}
             </span>
             <span className="sm:hidden">
-              {isFlipped ? "Chạm để xem từ" : "Chạm để lật nghĩa"}
+              Vuốt trái/phải đổi từ • Chạm lật nghĩa
             </span>
           </span>
         </div>
@@ -274,35 +411,115 @@ export default function FlashcardArena({
               </p>
             </div>
 
-            <div className="rounded-xl bg-slate-950/80 p-3.5 text-xs leading-relaxed text-slate-300">
-              <strong className="text-indigo-300">Giải thích sâu: </strong>
-              {currentCard.explanationInContext}
-            </div>
-
-            <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3.5 text-xs">
-              <p className="italic text-slate-200">
-                &ldquo;{currentCard.quoteFromBook}&rdquo;
-              </p>
-              <p className="mt-1 text-slate-400">
-                → {currentCard.quoteTranslation}
-              </p>
-            </div>
-
-            {currentCard.collocations && currentCard.collocations.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {currentCard.collocations.map((col, idx) => (
-                  <span
-                    key={idx}
-                    className="rounded-md bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300"
-                  >
-                    {col}
-                  </span>
-                ))}
+            <div
+              key={`flash-back-${currentCard.id}`}
+              className="space-y-3 bm-flashcard-3d"
+            >
+              <div className="rounded-xl bg-slate-950/80 p-3.5 text-xs leading-relaxed text-slate-300">
+                <strong className="text-indigo-300">Giải thích sâu: </strong>
+                {currentCard.explanationInContext}
               </div>
-            )}
+
+              <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3.5 text-xs">
+                <p className="italic text-slate-200">
+                  &ldquo;{currentCard.quoteFromBook}&rdquo;
+                </p>
+                <p className="mt-1 text-slate-400">
+                  → {currentCard.quoteTranslation}
+                </p>
+              </div>
+
+              {currentCard.collocations && currentCard.collocations.length > 0 && (
+                <div className="flex flex-wrap gap-1.5">
+                  {currentCard.collocations.map((col, idx) => (
+                    <span
+                      key={idx}
+                      className="rounded-md bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300"
+                    >
+                      {col}
+                    </span>
+                  ))}
+                </div>
+              )}
+            </div>
           </div>
         )}
       </div>
+
+      {/* Filter & Star Hard-Word Bar */}
+      {(() => {
+        const isCurrentStarred = starredKeys.includes(
+          normalizeStarVocabKey(currentCard.word)
+        );
+        return (
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[0.08] bg-[#0F1523]/80 px-3 py-2">
+            <div className="inline-flex items-center gap-1 rounded-lg bg-slate-950/80 p-1">
+              <button
+                type="button"
+                onClick={() => {
+                  setVocabFilter("all");
+                  setCurrentIndex(0);
+                  setIsFlipped(false);
+                }}
+                className={`min-h-[34px] rounded-md px-3 py-1 text-xs font-semibold transition ${
+                  vocabFilter === "all"
+                    ? "bg-indigo-600 text-white shadow-sm"
+                    : "text-slate-400 hover:text-white"
+                }`}
+              >
+                Tất cả ({cards.length})
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  if (starredCardsCount === 0) return;
+                  setVocabFilter("starred");
+                  setCurrentIndex(0);
+                  setIsFlipped(false);
+                }}
+                disabled={starredCardsCount === 0}
+                title={
+                  starredCardsCount === 0
+                    ? "Hãy bấm nút ⭐ Đánh dấu từ khó để lọc danh sách ôn tập riêng"
+                    : "Chỉ ôn các từ khó đã đánh dấu sao"
+                }
+                className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                  vocabFilter === "starred"
+                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
+                    : "text-slate-400 hover:text-amber-200"
+                }`}
+              >
+                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                <span>Từ khó ({starredCardsCount})</span>
+              </button>
+            </div>
+
+            <button
+              type="button"
+              onClick={() => {
+                const res = toggleStarredVocabId(currentCard.word);
+                setStarredKeys(res.starredIds);
+              }}
+              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition active:scale-95 ${
+                isCurrentStarred
+                  ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
+                  : "border-white/[0.08] bg-slate-950/80 text-slate-300 hover:border-amber-500/40 hover:text-amber-200"
+              }`}
+            >
+              <Star
+                className={`h-3.5 w-3.5 ${
+                  isCurrentStarred
+                    ? "fill-amber-400 text-amber-400"
+                    : "text-slate-400"
+                }`}
+              />
+              <span>
+                {isCurrentStarred ? "Đã lưu Từ khó" : "Đánh dấu Từ khó"}
+              </span>
+            </button>
+          </div>
+        );
+      })()}
 
       {/* Explicit Previous / Flip / Next Navigation Controls */}
       <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.08] bg-[#0F1523]/90 p-2">

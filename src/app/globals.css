@@ -96,3 +96,133 @@ body {
     width: 0%;
   }
 }
+
+/* =========================================================
+   BookMind Smooth Motion & Animation System (60fps GPU)
+   ========================================================= */
+@keyframes bmEnter {
+  from {
+    opacity: var(--bm-enter-opacity, 1);
+    transform: translate3d(
+        var(--bm-enter-translate-x, 0),
+        var(--bm-enter-translate-y, 0),
+        0
+      )
+      scale3d(
+        var(--bm-enter-scale, 1),
+        var(--bm-enter-scale, 1),
+        var(--bm-enter-scale, 1)
+      );
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.animate-in {
+  animation-name: bmEnter;
+  animation-duration: var(--bm-enter-duration, 240ms);
+  animation-timing-function: cubic-bezier(0.16, 1, 0.3, 1);
+  animation-fill-mode: both;
+}
+
+.animate-in.duration-150 {
+  --bm-enter-duration: 150ms;
+}
+.animate-in.duration-200 {
+  --bm-enter-duration: 200ms;
+}
+.animate-in.duration-300 {
+  --bm-enter-duration: 300ms;
+}
+.animate-in.duration-500 {
+  --bm-enter-duration: 500ms;
+}
+
+.fade-in {
+  --bm-enter-opacity: 0;
+}
+
+.zoom-in-95 {
+  --bm-enter-scale: 0.95;
+}
+
+.slide-in-from-bottom-2 {
+  --bm-enter-translate-y: 0.5rem;
+}
+
+.slide-in-from-bottom-5 {
+  --bm-enter-translate-y: 1.25rem;
+}
+
+.slide-in-from-bottom {
+  --bm-enter-translate-y: 100%;
+}
+
+.slide-in-from-top-2 {
+  --bm-enter-translate-y: -0.5rem;
+}
+
+@keyframes bmShimmerSlide {
+  0% {
+    transform: translateX(-120%);
+  }
+  100% {
+    transform: translateX(280%);
+  }
+}
+
+.bm-shimmer-bar {
+  animation: bmShimmerSlide 1.5s cubic-bezier(0.4, 0, 0.2, 1) infinite;
+}
+
+@keyframes bmViewEnter {
+  from {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+  }
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.bm-view-enter {
+  animation: bmViewEnter 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+}
+
+.bm-card-interactive {
+  transition: border-color 220ms ease,
+    box-shadow 220ms ease,
+    background-color 220ms ease;
+}
+
+@keyframes bmFlashcardFlip {
+  0% {
+    opacity: 0.85;
+    transform: perspective(1200px) rotateX(7deg) scale(0.985);
+  }
+  100% {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+.bm-flashcard-3d {
+  animation: bmFlashcardFlip 260ms cubic-bezier(0.16, 1, 0.3, 1) both;
+  transform-style: preserve-3d;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .animate-in,
+  .bm-view-enter,
+  .bm-flashcard-3d,
+  .bm-shimmer-bar {
+    animation-duration: 1ms !important;
+  }
+  .bm-card-interactive:hover,
+  .bm-card-interactive:active {
+    transform: none !important;
+  }
+}
