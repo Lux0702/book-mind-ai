@@ -1050,10 +1050,17 @@ export async function fetchAiAgent(
     const maxRetries = 1;
     let lastErrorText = "Lỗi kết nối hoặc xử lý AI";
 
+    const isHeavyEndpoint =
+      endpoint.includes("chapter-lesson") ||
+      endpoint.includes("analyze-chapter") ||
+      endpoint.includes("extract-vocab") ||
+      endpoint.includes("detect-toc");
+    const requestTimeoutMs = isHeavyEndpoint ? 180_000 : 120_000;
+
     try {
       while (attempt <= maxRetries) {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 120_000);
+        const timeoutId = setTimeout(() => controller.abort(), requestTimeoutMs);
 
         try {
           const authHeaders = await getSessionAuthHeaders();
@@ -1167,8 +1174,9 @@ export async function fetchAiAgent(
         } catch (err: unknown) {
           clearTimeout(timeoutId);
           if (err instanceof Error && err.name === "AbortError") {
-            lastErrorText =
-              "Yêu cầu xử lý AI vượt quá thời gian chờ (Timeout 120s). Vui lòng thử lại hoặc rút ngắn nội dung văn bản gốc của chương.";
+            lastErrorText = `Yêu cầu xử lý AI vượt quá thời gian chờ (Timeout ${Math.round(
+              requestTimeoutMs / 1000
+            )}s). Vui lòng thử lại hoặc rút ngắn nội dung văn bản gốc của chương.`;
             break;
           } else {
             lastErrorText =

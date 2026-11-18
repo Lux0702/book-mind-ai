@@ -353,8 +353,8 @@ ${blueprint}`;
     bodyPayload.response_format = { type: "json_object" };
   }
 
-  // Per-provider attempt timeout: allow 45s for multi-image Vision requests so Nemotron-VL finishes scanning all TOC pages without aborting early!
-  const timeoutMs = hasVisionPayload ? 45_000 : 20_000;
+  // Per-provider attempt timeout: fail over quickly on stalled providers so request stays well within HTTP timeout
+  const timeoutMs = hasVisionPayload ? 35_000 : 16_000;
   const attemptController = new AbortController();
   const attemptTimer = setTimeout(() => attemptController.abort(), timeoutMs);
 
@@ -387,6 +387,30 @@ ${blueprint}`;
     JSON.parse(cleaned);
   }
   return cleaned;
+}
+
+async function withRaceTimeout<T>(
+  promise: Promise<T>,
+  timeoutMs: number,
+  label: string
+): Promise<T> {
+  let timerId: ReturnType<typeof setTimeout> | undefined;
+  try {
+    return await Promise.race([
+      promise,
+      new Promise<never>((_, reject) => {
+        timerId = setTimeout(
+          () =>
+            reject(
+              new Error(`${label} timeout after ${Math.round(timeoutMs / 1000)}s`)
+            ),
+          timeoutMs
+        );
+      }),
+    ]);
+  } finally {
+    if (timerId) clearTimeout(timerId);
+  }
 }
 
 const GEMINI_FALLBACK_MODELS = [
@@ -540,11 +564,16 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
             ) {
               delete (clonedConfig as Record<string, unknown>).thinkingConfig;
             }
-            const res = await genFn({
-              ...params,
-              model: candidateModel,
-              config: clonedConfig,
-            });
+            const geminiTimeoutMs = hasImages ? 35_000 : 22_000;
+            const res = await withRaceTimeout(
+              genFn({
+                ...params,
+                model: candidateModel,
+                config: clonedConfig,
+              }),
+              geminiTimeoutMs,
+              `Gemini ${candidateModel}`
+            );
             if (!res.text) {
               throw new Error("Empty response from Gemini");
             }
@@ -601,9 +630,14 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
     }
 
     let lastError: unknown = null;
-    for (const attemptFn of attempts) {
+    const routerStartTime = Date.now();
+    const maxAttempts = Math.min(attempts.length, 6);
+    for (let attemptIdx = 0; attemptIdx < maxAttempts; attemptIdx++) {
+      if (attemptIdx >= 2 && Date.now() - routerStartTime > 50_000) {
+        break;
+      }
       try {
-        const resultText = await attemptFn();
+        const resultText = await attempts[attemptIdx]();
         return {
           text: resultText,
         } as Awaited<ReturnType<typeof originalGenerateContent>>;
@@ -1017,11 +1051,12 @@ export async function generateChapterLessonWithAI(params: {
   masterApiKey?: string;
   model?: string;
 }): Promise<ChapterLesson> {
+  const lessonStartTime = Date.now();
   const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
-  // Limit text per single chapter call to ~26,000 chars for fast response without timeout
-  const trimmedText = params.chapterText.slice(0, 26000);
+  // Limit text per single chapter call to ~16,000 chars for fast, reliable single-pass response
+  const trimmedText = params.chapterText.slice(0, 16000);
 
   const hasVisionImages =
     Array.isArray(params.pageImagesBase64) &&
@@ -1197,23 +1232,27 @@ ${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính k�
     generatedAt: new Date().toISOString(),
   };
 
-  // Luôn tự động kích hoạt bộ quét chuyên biệt 100% Từ Vựng (chia nhiều chặng để vượt giới hạn 13-16 từ/request của LLM)
-  // nếu bước soạn bài 1-pass mới chỉ lấy được < 38 từ vựng!
+  // Chặng 2 (Time-boxed): chỉ kích hoạt quét bổ sung từ vựng khi vẫn còn quỹ thời gian (< 38s) và bước đầu mới lấy < 25 từ
   if (
-    normalizedLesson.vocabulary.length < 38 &&
+    Date.now() - lessonStartTime < 38_000 &&
+    normalizedLesson.vocabulary.length < 25 &&
     (params.chapterText.trim().length > 200 ||
       (params.pageImagesBase64 && params.pageImagesBase64.length > 0))
   ) {
     try {
-      const fullVocab = await extractAllChapterVocabWithAI({
-        courseTitle: params.courseTitle,
-        chapterTitle: params.chapterTitle,
-        chapterText: params.chapterText,
-        pageImagesBase64: params.pageImagesBase64,
-        apiKey: params.apiKey,
-        masterApiKey: params.masterApiKey,
-        model: params.model,
-      });
+      const fullVocab = await withRaceTimeout(
+        extractAllChapterVocabWithAI({
+          courseTitle: params.courseTitle,
+          chapterTitle: params.chapterTitle,
+          chapterText: params.chapterText,
+          pageImagesBase64: params.pageImagesBase64,
+          apiKey: params.apiKey,
+          masterApiKey: params.masterApiKey,
+          model: params.model,
+        }),
+        25_000,
+        "Extract full chapter vocabulary"
+      );
       if (Array.isArray(fullVocab) && fullVocab.length > 0) {
         const seenWords = new Set<string>();
         const mergedVocab: typeof normalizedLesson.vocabulary = [];
@@ -1237,10 +1276,11 @@ ${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính k�
     }
   }
 
-  // Nếu model dừng sớm khiến Tab 4 hoặc Tab 5 bị rỗng, tự động gọi bổ sung ngay
+  // Chặng 3 (Time-boxed): nếu Tab 4 hoặc Tab 5 bị rỗng và vẫn còn thời gian (< 38s), bổ sung nhanh trong tối đa 25s
   if (
-    normalizedLesson.clozeExercises.length === 0 ||
-    normalizedLesson.translationExercises.length === 0
+    Date.now() - lessonStartTime < 38_000 &&
+    (normalizedLesson.clozeExercises.length === 0 ||
+      normalizedLesson.translationExercises.length === 0)
   ) {
     try {
       const vocabSummary = normalizedLesson.vocabulary
@@ -1253,15 +1293,19 @@ ${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính k�
         .map((c) => `${c.originalExcerpt} -> ${c.vietnameseTranslation}`)
         .join("\n");
 
-      const supp = await generateSupplementalExercisesWithAI({
-        courseTitle: params.courseTitle,
-        chapterTitle: params.chapterTitle,
-        chapterText: params.chapterText,
-        existingLessonContext: `TỪ VỰNG ĐÃ TRÍCH XUẤT: ${vocabSummary}\nNGỮ PHÁP: ${grammarSummary}\nĐOẠN TRÍCH TRONG BÀI:\n${contentSummary}`,
-        apiKey: params.apiKey,
-        masterApiKey: params.masterApiKey,
-        model: params.model,
-      });
+      const supp = await withRaceTimeout(
+        generateSupplementalExercisesWithAI({
+          courseTitle: params.courseTitle,
+          chapterTitle: params.chapterTitle,
+          chapterText: params.chapterText,
+          existingLessonContext: `TỪ VỰNG ĐÃ TRÍCH XUẤT: ${vocabSummary}\nNGỮ PHÁP: ${grammarSummary}\nĐOẠN TRÍCH TRONG BÀI:\n${contentSummary}`,
+          apiKey: params.apiKey,
+          masterApiKey: params.masterApiKey,
+          model: params.model,
+        }),
+        25_000,
+        "Generate supplemental exercises"
+      );
 
       if (normalizedLesson.clozeExercises.length === 0) {
         normalizedLesson.clozeExercises = supp.clozeExercises;
