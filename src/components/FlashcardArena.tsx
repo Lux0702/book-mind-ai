@@ -22,6 +22,7 @@ import {
   normalizeStarVocabKey,
 } from "@/lib/storage";
 import { speakSmart, stopAllSpeech } from "@/lib/tts";
+import { triggerChibiCelebrate } from "@/lib/chibiEvents";
 import AudioSpeakButton from "./AudioSpeakButton";
 import PronunciationModal from "./PronunciationModal";
 
@@ -170,9 +171,22 @@ export default function FlashcardArena({
     const updated = calculateNextReview(currentCard, quality);
     await updateFlashcard(updated);
     setIsFlipped(false);
-    setSessionReviewed((s) => s + 1);
+    const nextReviewed = sessionReviewed + 1;
+    setSessionReviewed(nextReviewed);
     onCardsUpdated();
     setCurrentIndex((prev) => (prev + 1) % deck.length);
+
+    if (
+      quality >= 4 &&
+      deck.length > 0 &&
+      (nextReviewed === deck.length || nextReviewed % 5 === 0)
+    ) {
+      triggerChibiCelebrate({
+        badge: "🔥 ÔN THẺ QUÁ CHĂM!",
+        message: `HOAN HÔ!! Đã nhớ tốt ${nextReviewed} thẻ Flashcard rồi!! Hát mừng nào~ 🎵🎉`,
+        subtext: "Trí nhớ SRS của bạn đang lên cấp vù vù!",
+      });
+    }
   };
 
   const handleCardTouchStart = (e: React.TouchEvent<HTMLDivElement>) => {

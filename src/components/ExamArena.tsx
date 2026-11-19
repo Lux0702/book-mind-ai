@@ -46,6 +46,7 @@ import ExamGeneratingLoader from "./loadings/ExamGeneratingLoader";
 import CustomSelect from "./ui/CustomSelect";
 import { getAppSettings } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
+import { triggerChibiCelebrate } from "@/lib/chibiEvents";
 
 interface ExamArenaProps {
   course: Course;
@@ -708,6 +709,16 @@ export default function ExamArena({
   const handleNextExamQuestion = () => {
     if (examStepIndex + 1 >= examQuestions.length) {
       setExamFinished(true);
+      const total = examResults.length;
+      const correctCount = examResults.filter((r) => r.isCorrect).length;
+      const pct = total > 0 ? Math.round((correctCount / total) * 100) : 0;
+      if (pct >= 70) {
+        triggerChibiCelebrate({
+          badge: "🏆 HOÀN THÀNH XUẤT SẮC!",
+          message: `WOOHOO!! Đạt ${pct}% (${correctCount}/${total} câu) luôn!! La la la~ Quẩy lên nào!! 🎵🎉`,
+          subtext: `Bài thi kiểm tra: ${targetChapter.title}`,
+        });
+      }
       return;
     }
     setExamStepIndex((i) => i + 1);
@@ -1524,6 +1535,18 @@ export default function ExamArena({
                           setSelectedOpt(null);
                           if (quizIdx + 1 >= generatedVocabQuestions.length) {
                             setQuizFinished(true);
+                            const total = generatedVocabQuestions.length;
+                            const pct =
+                              total > 0
+                                ? Math.round((quizScore / total) * 100)
+                                : 0;
+                            if (pct >= 70) {
+                              triggerChibiCelebrate({
+                                badge: "⚡ PHẢN XẠ TỪ VỰNG ĐỈNH!",
+                                message: `LA LA LA~ Đúng ${quizScore}/${total} câu (${pct}%)!! Quá siêu luôn!! 🎶✨`,
+                                subtext: "Tốc độ ghi nhớ từ vựng rất ấn tượng!",
+                              });
+                            }
                           } else {
                             setQuizIdx((i) => i + 1);
                           }

@@ -20,6 +20,7 @@ import {
 } from "@/types/course";
 import { getAppSettings, saveCourse } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
+import { triggerChibiCelebrate } from "@/lib/chibiEvents";
 import AudioSpeakButton from "@/components/AudioSpeakButton";
 import TranslationEvaluatingLoader from "@/components/loadings/TranslationEvaluatingLoader";
 import { PronunciationTargetParams } from "./types";
@@ -108,6 +109,14 @@ export default function TranslationTab({
         const updatedCourse = { ...course, chapters: updatedChapters };
         await saveCourse(updatedCourse);
         await onCourseUpdated(updatedCourse);
+
+        if (evaluation.overallScore >= 75) {
+          triggerChibiCelebrate({
+            badge: "🌟 DỊCH QUÁ ĐỈNH!",
+            message: `WOOHOO!! Bản dịch đạt ${evaluation.overallScore}% luôn!! La la la~ 🎵✨`,
+            subtext: `Chương ${currentChapter.index}: ${currentChapter.title}`,
+          });
+        }
       }
     } catch (err: unknown) {
       setEvalError(

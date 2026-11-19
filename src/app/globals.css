@@ -217,7 +217,13 @@ body {
   .bm-chibi-arm-l,
   .bm-chibi-arm-r,
   .bm-claw-slash,
-  .bm-anger-vein {
+  .bm-anger-vein,
+  .bm-chibi-party-jump,
+  .bm-chibi-party-arm-l,
+  .bm-chibi-party-arm-r,
+  .bm-music-float-1,
+  .bm-music-float-2,
+  .bm-confetti-pop {
     animation-duration: 1ms !important;
   }
   .bm-card-interactive:hover,
@@ -352,4 +358,95 @@ body {
 
 .bm-chibi-happy {
   animation: bmChibiHappy 0.55s ease-in-out infinite;
+}
+
+@keyframes bmChibiPartyJump {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scaleX(1.06) scaleY(0.94);
+  }
+  20% {
+    transform: translate3d(-4px, -14px, 0) rotate(-8deg) scaleX(0.95) scaleY(1.08);
+  }
+  45% {
+    transform: translate3d(0, 0, 0) scaleX(1.08) scaleY(0.92);
+  }
+  70% {
+    transform: translate3d(4px, -15px, 0) rotate(8deg) scaleX(0.95) scaleY(1.08);
+  }
+  90% {
+    transform: translate3d(0, -3px, 0);
+  }
+}
+
+.bm-chibi-party-jump {
+  animation: bmChibiPartyJump 0.65s steps(6, end) infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes bmChibiPartyArmL {
+  0%,
+  100% {
+    transform: translate3d(0, -1px, 0);
+  }
+  50% {
+    transform: translate3d(-1px, -3.5px, 0);
+  }
+}
+
+@keyframes bmChibiPartyArmR {
+  0%,
+  100% {
+    transform: translate3d(1px, -3.5px, 0);
+  }
+  50% {
+    transform: translate3d(0, -1px, 0);
+  }
+}
+
+.bm-chibi-party-arm-l {
+  animation: bmChibiPartyArmL 0.28s steps(2, end) infinite;
+}
+
+.bm-chibi-party-arm-r {
+  animation: bmChibiPartyArmR 0.28s steps(2, end) infinite;
+}
+
+@keyframes bmMusicFloat {
+  0% {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0) scale(0.8);
+  }
+  30% {
+    opacity: 1;
+    transform: translate3d(-3px, -2px, 0) scale(1.1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(3px, -16px, 0) scale(0.9);
+  }
+}
+
+.bm-music-float-1 {
+  animation: bmMusicFloat 1.1s ease-out infinite;
+}
+
+.bm-music-float-2 {
+  animation: bmMusicFloat 1.1s ease-out 0.45s infinite;
+}
+
+@keyframes bmConfettiPop {
+  0%,
+  100% {
+    opacity: 0.9;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+  50% {
+    opacity: 1;
+    transform: translate3d(0, -4px, 0) scale(1.08);
+  }
+}
+
+.bm-confetti-pop {
+  animation: bmConfettiPop 0.6s steps(3, end) infinite;
 }

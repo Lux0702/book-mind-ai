@@ -32,6 +32,7 @@ import {
   syncAttendanceWithSupabase,
 } from "@/lib/storage";
 import { runWithFeedback } from "@/lib/feedback";
+import { triggerChibiCelebrate } from "@/lib/chibiEvents";
 
 interface AttendanceDashboardProps {
   courses: Course[];
@@ -225,7 +226,23 @@ export default function AttendanceDashboard({
                 title="Xem thử hoạt cảnh Pixel Chibi giận dữ khi bỏ lỡ điểm danh hôm qua"
                 className="inline-flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-300 transition hover:border-rose-400/50 hover:bg-rose-500/20 cursor-pointer"
               >
-                <span>💢 Xem thử Chibi</span>
+                <span>💢 Thử Chibi giận</span>
+              </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  triggerChibiCelebrate({
+                    badge: "🎉 CHIBI KHEN NGỢI!",
+                    message:
+                      "WOOHOO!! Học xuất sắc quá trời ơi!! La la la~ Quẩy lên nào!! 🎵✨",
+                    subtext: "Hoàn thành tốt bài học & bài thi!",
+                  })
+                }
+                title="Xem thử hoạt cảnh Pixel Chibi nhảy nhót la hát khen ngợi"
+                className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-500/20 cursor-pointer"
+              >
+                <span>🎉 Thử Chibi khen</span>
               </button>
             </div>
 

@@ -68,6 +68,7 @@ import {
 } from "@/lib/pdfParser";
 import { speakSmart, stopAllSpeech } from "@/lib/tts";
 import { runWithFeedback, showToast } from "@/lib/feedback";
+import { triggerChibiCelebrate } from "@/lib/chibiEvents";
 import LessonGeneratingLoader from "./loadings/LessonGeneratingLoader";
 import ExamArena from "./ExamArena";
 import PronunciationModal from "./PronunciationModal";
@@ -1050,6 +1051,16 @@ export default function ChapterWorkspace({
       const updatedCourse = { ...course, chapters: updatedChapters };
       await saveCourse(updatedCourse);
       await onCourseUpdated(updatedCourse);
+
+      const newClozeCount = currentChapter.completedClozeIds.length + 1;
+      const totalCloze = currentChapter.lesson?.clozeExercises?.length || 0;
+      if (totalCloze > 0 && newClozeCount >= totalCloze) {
+        triggerChibiCelebrate({
+          badge: "🎉 HOÀN THÀNH ĐIỀN TỪ!",
+          message: `YAYY!! Bạn hoàn thành 100% bài Điền từ chương ${currentChapter.index} rồi!! La la la~ 🎵`,
+          subtext: currentChapter.title,
+        });
+      }
     }
   };
 
@@ -1071,6 +1082,16 @@ export default function ChapterWorkspace({
       const updatedCourse = { ...course, chapters: updatedChapters };
       await saveCourse(updatedCourse);
       await onCourseUpdated(updatedCourse);
+
+      const newQuizCount = currentChapter.completedQuizIds.length + 1;
+      const totalQuiz = currentChapter.lesson?.quizExercises?.length || 0;
+      if (totalQuiz > 0 && newQuizCount >= totalQuiz) {
+        triggerChibiCelebrate({
+          badge: "🏆 XUẤT SẮC TRẮC NGHIỆM!",
+          message: `WOOHOO!! Chinh phục trọn bộ Trắc nghiệm chương ${currentChapter.index}!! Quẩy lên nào~ 🎶✨`,
+          subtext: currentChapter.title,
+        });
+      }
     }
   };
 
