@@ -216,6 +216,17 @@ export default function AttendanceDashboard({
                   </>
                 )}
               </button>
+
+              <button
+                type="button"
+                onClick={() =>
+                  window.dispatchEvent(new CustomEvent("bookmind:preview-chibi"))
+                }
+                title="Xem thử hoạt cảnh Pixel Chibi giận dữ khi bỏ lỡ điểm danh hôm qua"
+                className="inline-flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-300 transition hover:border-rose-400/50 hover:bg-rose-500/20 cursor-pointer"
+              >
+                <span>💢 Xem thử Chibi</span>
+              </button>
             </div>
 
             <div className="flex items-baseline gap-2.5 pt-1">

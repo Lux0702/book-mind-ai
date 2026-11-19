@@ -210,7 +210,10 @@ export default function VocabularyTab({
               {lesson.vocabulary.length} từ)
             </h3>
             <p className="text-xs text-slate-400">
-              Nếu chương sách có nhiều từ vựng hơn (VD: 35–50 từ), bấm nút bên phải để AI quét lấy đủ 100% không sót từ nào!
+              {currentChapter.rawText.length > 16000 &&
+              lesson.vocabulary.length < 35
+                ? `Chương dài (${currentChapter.rawText.length.toLocaleString()} ký tự) — bấm "Quét Đủ 100% Từ Vựng" để AI rà soát hết các phần còn lại!`
+                : "Nếu chương sách có nhiều từ vựng hơn (VD: 35–50 từ), bấm nút bên phải để AI quét lấy đủ 100% không sót từ nào!"}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">

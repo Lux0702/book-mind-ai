@@ -1379,12 +1379,14 @@ export default function ChapterWorkspace({
           const hasCloze = Boolean(
             lesson &&
               lesson.clozeExercises.length > 0 &&
-              lesson.clozeExercises.some((ex) => Boolean(clozeChecked[ex.id]))
+              (currentChapter.completedClozeIds.length > 0 ||
+                lesson.clozeExercises.some((ex) => Boolean(clozeChecked[ex.id])))
           );
           const hasQuiz = Boolean(
             lesson &&
               lesson.quizExercises.length > 0 &&
-              lesson.quizExercises.some((q) => Boolean(quizSubmitted[q.id]))
+              (currentChapter.completedQuizIds.length > 0 ||
+                lesson.quizExercises.some((q) => Boolean(quizSubmitted[q.id])))
           );
           const hasTranslation = Boolean(
             lesson &&

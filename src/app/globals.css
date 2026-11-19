@@ -212,11 +212,144 @@ body {
   .animate-in,
   .bm-view-enter,
   .bm-flashcard-3d,
-  .bm-shimmer-bar {
+  .bm-shimmer-bar,
+  .bm-chibi-jump,
+  .bm-chibi-arm-l,
+  .bm-chibi-arm-r,
+  .bm-claw-slash,
+  .bm-anger-vein {
     animation-duration: 1ms !important;
   }
   .bm-card-interactive:hover,
   .bm-card-interactive:active {
     transform: none !important;
   }
+}
+
+/* =========================================================
+   Angry Pixel Chibi Attendance Guardian Animations
+   ========================================================= */
+@keyframes bmChibiJump {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scaleX(1.06) scaleY(0.94);
+  }
+  20% {
+    transform: translate3d(-2px, -11px, 0) rotate(-4deg) scaleX(0.96) scaleY(1.06);
+  }
+  45% {
+    transform: translate3d(1px, 0, 0) scaleX(1.08) scaleY(0.92);
+  }
+  70% {
+    transform: translate3d(3px, -13px, 0) rotate(5deg) scaleX(0.95) scaleY(1.07);
+  }
+  88% {
+    transform: translate3d(-1px, -2px, 0) scaleX(1.03) scaleY(0.97);
+  }
+}
+
+.bm-chibi-jump {
+  animation: bmChibiJump 0.72s steps(6, end) infinite;
+  transform-origin: center bottom;
+}
+
+@keyframes bmChibiShadow {
+  0%,
+  45%,
+  100% {
+    transform: scaleX(1.05);
+    opacity: 0.55;
+  }
+  20%,
+  70% {
+    transform: scaleX(0.68);
+    opacity: 0.28;
+  }
+}
+
+.bm-chibi-shadow {
+  animation: bmChibiShadow 0.72s steps(6, end) infinite;
+}
+
+@keyframes bmChibiArmLeft {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(-1.5px, -2.5px, 0);
+  }
+}
+
+@keyframes bmChibiArmRight {
+  0%,
+  100% {
+    transform: translate3d(1.5px, -2.5px, 0);
+  }
+  50% {
+    transform: translate3d(0, 0.5px, 0);
+  }
+}
+
+.bm-chibi-arm-l {
+  animation: bmChibiArmLeft 0.24s steps(2, end) infinite;
+}
+
+.bm-chibi-arm-r {
+  animation: bmChibiArmRight 0.24s steps(2, end) infinite;
+}
+
+@keyframes bmClawSlash {
+  0%,
+  45% {
+    opacity: 0;
+    transform: translate3d(-6px, -6px, 0) scale(0.7);
+  }
+  55% {
+    opacity: 1;
+    transform: translate3d(2px, 2px, 0) scale(1.1);
+  }
+  78% {
+    opacity: 0.9;
+    transform: translate3d(4px, 5px, 0) scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: translate3d(6px, 8px, 0) scale(0.85);
+  }
+}
+
+.bm-claw-slash {
+  animation: bmClawSlash 1.15s steps(4, end) infinite;
+}
+
+@keyframes bmAngerVein {
+  0%,
+  100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.22);
+    opacity: 0.7;
+  }
+}
+
+.bm-anger-vein {
+  animation: bmAngerVein 0.45s steps(2, end) infinite;
+  transform-origin: 2px 2px;
+}
+
+@keyframes bmChibiHappy {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0);
+  }
+  50% {
+    transform: translate3d(0, -6px, 0);
+  }
+}
+
+.bm-chibi-happy {
+  animation: bmChibiHappy 0.55s ease-in-out infinite;
 }

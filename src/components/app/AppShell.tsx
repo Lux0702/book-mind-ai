@@ -1,6 +1,7 @@
 "use client";
 
 import React, { useEffect, useState } from "react";
+import Link from "next/link";
 import { useParams, usePathname, useRouter } from "next/navigation";
 import {
   BookOpen,
@@ -25,6 +26,7 @@ import CreateCourseModal from "@/components/CreateCourseModal";
 import SettingsModal from "@/components/SettingsModal";
 import UpgradePlanModal from "@/components/UpgradePlanModal";
 import EmailInboxModal from "@/components/EmailInboxModal";
+import AngryPixelChibiGuard from "@/components/AngryPixelChibiGuard";
 import { useAppData } from "./AppDataProvider";
 
 type NavKey = "attendance" | "dashboard" | "library" | "srs_global";
@@ -138,11 +140,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           {/* Center: Clean Editorial Segmented Navigation Bar (Desktop) */}
           <nav className="hidden lg:flex items-center gap-1 p-1 rounded-xl bg-[#0F1523] border border-white/[0.07] shrink-0">
             {/* 1. Điểm danh */}
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.home);
-              }}
+            <Link
+              href={ROUTES.home}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
                 isNavActive("attendance")
                   ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
@@ -154,14 +153,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
                 {streakData.currentStreak}d
               </span>
-            </button>
+            </Link>
 
             {/* 2. Tủ sách cá nhân */}
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.books);
-              }}
+            <Link
+              href={ROUTES.books}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
                 isNavActive("dashboard")
                   ? "bg-white/[0.08] text-white border border-white/[0.1]"
@@ -173,14 +169,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-300 font-semibold">
                 {courses.length}
               </span>
-            </button>
+            </Link>
 
             {/* 3. Thư viện sách cộng đồng */}
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.library);
-              }}
+            <Link
+              href={ROUTES.library}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
                 isNavActive("library")
                   ? "bg-white/[0.08] text-white border border-white/[0.1]"
@@ -192,14 +185,11 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300 font-semibold">
                 {libraryCourses.length}
               </span>
-            </button>
+            </Link>
 
             {/* 4. Ôn tập & Thi */}
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.srs);
-              }}
+            <Link
+              href={ROUTES.srs}
               className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
                 isNavActive("srs_global")
                   ? "bg-white/[0.08] text-white border border-white/[0.1]"
@@ -213,7 +203,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   {dueFlashcards.length}
                 </span>
               )}
-            </button>
+            </Link>
           </nav>
 
           {/* Right: Unified Action Controls */}
@@ -516,12 +506,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
           className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#090D16]/95 backdrop-blur-xl pb-safe lg:hidden"
         >
           <div className="mx-auto grid max-w-lg grid-cols-5 items-center px-1.5 pt-1.5 pb-1">
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.home);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
+            <Link
+              href={ROUTES.home}
               className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
                 isNavActive("attendance")
                   ? "text-amber-400"
@@ -537,14 +523,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <span>Điểm danh</span>
-            </button>
+            </Link>
 
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.books);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
+            <Link
+              href={ROUTES.books}
               className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
                 isNavActive("dashboard")
                   ? "text-indigo-400"
@@ -553,7 +535,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               <BookOpen className="h-4 w-4" />
               <span>Tủ sách ({courses.length})</span>
-            </button>
+            </Link>
 
             <button
               type="button"
@@ -568,12 +550,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               </span>
             </button>
 
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.library);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
+            <Link
+              href={ROUTES.library}
               className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
                 isNavActive("library")
                   ? "text-emerald-400"
@@ -582,14 +560,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             >
               <Library className="h-4 w-4" />
               <span>Thư viện</span>
-            </button>
+            </Link>
 
-            <button
-              type="button"
-              onClick={() => {
-                router.push(ROUTES.srs);
-                window.scrollTo({ top: 0, behavior: "smooth" });
-              }}
+            <Link
+              href={ROUTES.srs}
               className={`relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
                 isNavActive("srs_global")
                   ? "text-indigo-400"
@@ -605,10 +579,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 )}
               </div>
               <span>Ôn &amp; Thi</span>
-            </button>
+            </Link>
           </div>
         </nav>
       )}
+
+      {/* Angry Pixel Chibi Guardian (khi bỏ lỡ điểm danh hôm qua & chưa điểm danh hôm nay) */}
+      <AngryPixelChibiGuard />
 
       {/* Modals */}
       <CreateCourseModal
