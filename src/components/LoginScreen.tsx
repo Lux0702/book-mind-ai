@@ -56,49 +56,46 @@ export default function LoginScreen({}: LoginScreenProps) {
   };
 
   return (
-    <div className="relative min-h-screen flex flex-col justify-center items-center px-4 py-12 bg-[#090D16] overflow-hidden select-none">
-      {/* Subtle Editorial Ambient Light */}
-      <div className="pointer-events-none absolute -top-40 left-1/2 -translate-x-1/2 w-[640px] h-[420px] rounded-full bg-indigo-500/[0.08] blur-[120px]" />
-
+    <div className="relative min-h-screen flex flex-col justify-center items-center px-4 py-12 select-none">
       <div className="relative z-10 w-full max-w-md mx-auto">
         {/* Brand Header */}
         <div className="text-center mb-6 relative">
-          <div className="inline-flex items-center justify-center h-13 w-13 rounded-2xl bg-indigo-600 text-white shadow-lg shadow-indigo-600/25 border border-white/15 mb-4">
-            <BookOpen className="h-6 w-6" />
+          <div className="inline-flex items-center justify-center h-14 w-14 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[4px_4px_0_0_#F5EFE6] mb-4">
+            <BookOpen className="h-7 w-7" />
           </div>
           <div className="flex items-center justify-center gap-2">
-            <h1 className="text-2xl sm:text-3xl font-bold tracking-tight text-white">
+            <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#F5EFE6]">
               BookMind
             </h1>
-            <span className="rounded-md border border-white/[0.1] bg-white/[0.05] px-2 py-0.5 text-xs font-semibold tracking-wider text-indigo-300">
+            <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2.5 py-0.5 text-xs font-extrabold tracking-wider text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
               STUDIO
             </span>
           </div>
-          <p className="mt-2 text-xs sm:text-sm text-slate-400 max-w-sm mx-auto leading-relaxed">
+          <p className="mt-2.5 text-xs sm:text-sm text-[#B8B2A6] max-w-sm mx-auto leading-relaxed">
             Không gian đọc sách học thuật, bóc tách từ vựng &amp; luyện dịch chuyên sâu đồng bộ đa thiết bị
           </p>
         </div>
 
         {/* Auth Card */}
-        <div className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#0F1523]/95 p-6 sm:p-8 shadow-2xl">
+        <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 sm:p-8 shadow-[5px_5px_0_0_#F5EFE6]">
           {/* Session Expired Auto-Logout Banner */}
           {sessionExpiredMessage && (
-            <div className="mb-5 flex items-start gap-2.5 rounded-2xl border border-amber-500/40 bg-amber-950/50 p-3.5 text-xs text-amber-200 leading-relaxed shadow-lg">
-              <AlertCircle className="h-4 w-4 shrink-0 text-amber-400 mt-0.5" />
+            <div className="mb-5 flex items-start gap-2.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] p-3.5 text-xs text-[#141413] leading-relaxed">
+              <AlertCircle className="h-4 w-4 shrink-0 text-[#141413] mt-0.5" />
               <div>
-                <div className="font-extrabold text-amber-300 uppercase tracking-wide text-[10px] mb-0.5">
+                <div className="font-extrabold uppercase tracking-wide text-[10px] mb-0.5">
                   Phiên Đăng Nhập Đã Hết Hạn
                 </div>
-                <span>{sessionExpiredMessage}</span>
+                <span className="font-semibold">{sessionExpiredMessage}</span>
               </div>
             </div>
           )}
 
           {/* Error Banner */}
           {errorMessage && (
-            <div className="mb-5 rounded-2xl border border-rose-500/40 bg-rose-950/40 p-4 text-xs text-rose-200 leading-relaxed">
+            <div className="mb-5 rounded-xl border-2 border-[#F5EFE6] bg-[#FF8A8A] p-4 text-xs font-bold text-[#141413] leading-relaxed">
               <div className="flex items-start gap-2">
-                <AlertCircle className="h-4 w-4 shrink-0 text-rose-400 mt-0.5" />
+                <AlertCircle className="h-4 w-4 shrink-0 text-[#141413] mt-0.5" />
                 <div>{errorMessage}</div>
               </div>
             </div>
@@ -109,7 +106,7 @@ export default function LoginScreen({}: LoginScreenProps) {
               type="button"
               disabled={isGoogleLoading}
               onClick={handleGoogleLogin}
-              className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-2xl bg-white hover:bg-slate-100 text-slate-900 font-bold text-sm shadow-lg transition transform active:scale-[0.98] disabled:opacity-70 cursor-pointer"
+              className="w-full flex items-center justify-center gap-3 py-3.5 px-5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] text-[#141413] font-extrabold text-sm shadow-[4px_4px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-70 cursor-pointer"
             >
               <svg className="w-5 h-5" viewBox="0 0 24 24">
                 <path
@@ -136,7 +133,7 @@ export default function LoginScreen({}: LoginScreenProps) {
               </span>
             </button>
 
-            <p className="text-center text-[11px] text-slate-400 leading-relaxed">
+            <p className="text-center text-[11px] text-[#B8B2A6] leading-relaxed">
               Hệ thống đồng bộ tự động tiến độ học tập, khóa học PDF, Flashcard
               SRS và hạn mức AI theo tài khoản Google của bạn.
             </p>
@@ -144,21 +141,21 @@ export default function LoginScreen({}: LoginScreenProps) {
         </div>
 
         {/* Feature Badges under card */}
-        <div className="mt-8 grid grid-cols-2 gap-2.5 text-slate-400 text-[11px]">
-          <div className="flex items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/50 p-2.5">
-            <Layers className="h-4 w-4 text-indigo-400 shrink-0" />
+        <div className="mt-8 grid grid-cols-2 gap-2.5 text-[#F5EFE6] text-[11px] font-semibold">
+          <div className="flex items-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-2.5">
+            <Layers className="h-4 w-4 text-[#B8D8F8] shrink-0" />
             <span>Đọc file PDF 80MB+ trực tiếp</span>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/50 p-2.5">
-            <Sparkles className="h-4 w-4 text-purple-400 shrink-0" />
+          <div className="flex items-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-2.5">
+            <Sparkles className="h-4 w-4 text-[#C8B6FF] shrink-0" />
             <span>AI phân tích từ vựng & ngữ pháp</span>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/50 p-2.5">
-            <GraduationCap className="h-4 w-4 text-amber-400 shrink-0" />
+          <div className="flex items-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-2.5">
+            <GraduationCap className="h-4 w-4 text-[#F3C969] shrink-0" />
             <span>Flashcard SRS ngắt quãng</span>
           </div>
-          <div className="flex items-center gap-2 rounded-xl border border-slate-800/80 bg-slate-900/50 p-2.5">
-            <Clock className="h-4 w-4 text-emerald-400 shrink-0" />
+          <div className="flex items-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-2.5">
+            <Clock className="h-4 w-4 text-[#A7D7A9] shrink-0" />
             <span>Thi trắc nghiệm tính giờ từng câu</span>
           </div>
         </div>

@@ -132,17 +132,17 @@ export default function TranslationTab({
   return (
     <div className="space-y-6">
       {/* Supplemental Exercises Generator Banner */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-2xl border border-emerald-500/30 bg-gradient-to-r from-slate-900 via-emerald-950/25 to-slate-900 p-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 shadow-[4px_4px_0_0_#F5EFE6]">
         <div className="space-y-1">
-          <div className="flex items-center gap-2 text-xs font-bold text-emerald-300">
-            <Sparkles className="h-4 w-4 text-emerald-400 shrink-0" />
+          <div className="flex items-center gap-2 text-xs font-extrabold text-[#A7D7A9]">
+            <Sparkles className="h-4 w-4 shrink-0" />
             <span>
               Bổ sung Câu Luyện Dịch &amp; Bài Tập Thực Hành (Giữ nguyên dữ liệu cũ)
             </span>
           </div>
-          <p className="text-xs text-slate-300">
+          <p className="text-xs text-[#B8B2A6]">
             Hiện có{" "}
-            <strong className="text-white">
+            <strong className="text-[#F5EFE6]">
               {lesson.translationExercises.length} câu luyện dịch
             </strong>{" "}
             trong chương này. Bạn có thể bấm nút bên cạnh để AI tạo bổ sung thêm câu luyện dịch và bài tập điền từ mới bất cứ lúc nào.
@@ -152,7 +152,7 @@ export default function TranslationTab({
           type="button"
           disabled={isSupplementingExercises}
           onClick={() => onSupplementExercises(currentChapter)}
-          className="inline-flex items-center justify-center gap-2 shrink-0 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 px-4 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/20 transition hover:from-emerald-500 hover:to-teal-500 disabled:opacity-50 cursor-pointer"
+          className="inline-flex items-center justify-center gap-2 shrink-0 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-4 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
         >
           {isSupplementingExercises ? (
             <>
@@ -173,30 +173,31 @@ export default function TranslationTab({
       </div>
 
       {genError && (
-        <div className="rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200">
+        <div className="rounded-xl border-2 border-[#FF8A8A] bg-[#261919] p-3.5 text-xs font-bold text-[#FF8A8A]">
           {genError}
         </div>
       )}
 
-      <div className="flex items-start gap-2.5 rounded-2xl border border-indigo-500/30 bg-indigo-950/20 px-4 py-3 text-xs text-indigo-200">
-        <Target className="h-4 w-4 text-indigo-400 shrink-0 mt-0.5" />
+      <div className="flex items-start gap-2.5 rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] px-4 py-3 text-xs text-[#F5EFE6]">
+        <Target className="h-4 w-4 text-[#F3C969] shrink-0 mt-0.5" />
         <div>
-          <strong>AI Chấm Dịch (0–100%):</strong> Dịch câu trích theo văn phong tự nhiên của bạn — AI sẽ chấm điểm ngữ nghĩa, ngữ pháp và chỉ rõ từng cụm từ cần tối ưu.
+          <strong className="text-[#F3C969]">AI Chấm Dịch (0–100%):</strong>{" "}
+          Dịch câu trích theo văn phong tự nhiên của bạn — AI sẽ chấm điểm ngữ nghĩa, ngữ pháp và chỉ rõ từng cụm từ cần tối ưu.
         </div>
       </div>
 
       {lesson.translationExercises.length === 0 && (
-        <div className="rounded-2xl border border-dashed border-slate-700 bg-slate-900/50 p-6 text-center text-xs text-slate-400">
+        <div className="rounded-xl border-2 border-dashed border-[#3A3832] bg-[#1D1C19] p-6 text-center text-xs text-[#B8B2A6]">
           Chưa có câu Luyện dịch cho chương này. Hãy bấm nút{" "}
-          <strong className="text-emerald-300">
+          <strong className="text-[#A7D7A9]">
             &ldquo;Tạo ngay Câu Luyện Dịch &amp; Bài Tập Điền Từ&rdquo;
           </strong>{" "}
-          màu xanh phía trên để AI bổ sung ngay mà không mất dữ liệu các tab khác!
+          phía trên để AI bổ sung ngay mà không mất dữ liệu các tab khác!
         </div>
       )}
 
       {evalError && (
-        <div className="flex items-center justify-between rounded-xl border border-rose-500/40 bg-rose-950/30 p-3.5 text-xs text-rose-200">
+        <div className="flex items-center justify-between rounded-xl border-2 border-[#FF8A8A] bg-[#261919] p-3.5 text-xs font-bold text-[#FF8A8A]">
           <span>{evalError}</span>
         </div>
       )}
@@ -210,17 +211,17 @@ export default function TranslationTab({
         return (
           <div
             key={tr.id}
-            className="rounded-2xl border border-slate-800 bg-slate-900/80 p-6 space-y-4"
+            className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-5 sm:p-6 space-y-4 shadow-[4px_4px_0_0_#F5EFE6]"
           >
-            <div className="flex items-center justify-between">
-              <span className="rounded-lg bg-indigo-500/20 px-3 py-1 text-xs font-bold text-indigo-300">
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-3 py-0.5 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
                 Bài luyện dịch #{idx + 1} ({tr.direction})
               </span>
               <div className="flex items-center gap-2">
                 <AudioSpeakButton
                   text={tr.originalSentence}
                   label="Nghe câu gốc"
-                  className="text-xs text-indigo-400 hover:text-indigo-300"
+                  className="rounded-lg border-2 border-[#F5EFE6] bg-[#B8D8F8] px-2.5 py-1 text-xs font-extrabold text-[#141413]"
                 />
                 <button
                   type="button"
@@ -231,7 +232,7 @@ export default function TranslationTab({
                       contextHint: tr.contextHint,
                     })
                   }
-                  className="flex items-center gap-1 text-xs font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 px-2 py-0.5 rounded-lg border border-emerald-500/30 transition cursor-pointer"
+                  className="flex items-center gap-1 rounded-lg border-2 border-[#F5EFE6] bg-[#A7D7A9] px-2.5 py-1 text-xs font-extrabold text-[#141413] transition-transform active:translate-y-[1px] cursor-pointer"
                   title="Luyện đọc câu gốc này để AI chấm điểm"
                 >
                   <Mic className="h-3 w-3" />
@@ -240,12 +241,12 @@ export default function TranslationTab({
               </div>
             </div>
 
-            <div className="rounded-xl border border-slate-800 bg-slate-950 p-4">
-              <p className="font-serif text-base italic leading-relaxed text-white">
+            <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4">
+              <p className="font-serif text-base italic leading-relaxed text-[#F5EFE6]">
                 &ldquo;{tr.originalSentence}&rdquo;
               </p>
-              <p className="mt-2 flex items-center gap-1.5 text-xs text-amber-300/90">
-                <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <p className="mt-2 flex items-center gap-1.5 text-xs text-[#F3C969]">
+                <Lightbulb className="h-3.5 w-3.5 shrink-0" />
                 <span>
                   <strong>Gợi ý ngữ cảnh:</strong> {tr.contextHint}
                 </span>
@@ -256,9 +257,9 @@ export default function TranslationTab({
                     {tr.targetGrammarOrVocab.map((item, i) => (
                       <span
                         key={i}
-                        className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300"
+                        className="inline-flex items-center gap-1 rounded-lg border-2 border-[#3A3832] bg-[#1D1C19] px-2 py-0.5 text-[11px] font-bold text-[#F5EFE6]"
                       >
-                        <Tag className="h-3 w-3 text-indigo-400" />
+                        <Tag className="h-3 w-3 text-[#C8B6FF]" />
                         <span>{item}</span>
                       </span>
                     ))}
@@ -267,7 +268,7 @@ export default function TranslationTab({
             </div>
 
             <div>
-              <label className="mb-1.5 block text-xs font-semibold text-slate-300">
+              <label className="mb-1.5 block text-xs font-extrabold text-[#F5EFE6]">
                 Bản dịch của bạn:
               </label>
               <textarea
@@ -280,7 +281,7 @@ export default function TranslationTab({
                   })
                 }
                 placeholder="Nhập bản dịch tiếng Việt của bạn tại đây..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] p-3.5 text-sm text-[#F5EFE6] placeholder-[#8F8A7E] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
               />
             </div>
 
@@ -296,7 +297,7 @@ export default function TranslationTab({
                     tr.contextHint
                   )
                 }
-                className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2.5 text-xs font-bold text-white shadow-lg shadow-indigo-600/20 hover:from-indigo-500 hover:to-purple-500 disabled:opacity-40"
+                className="flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-40 cursor-pointer"
               >
                 {isEvaluating ? (
                   <>
@@ -315,38 +316,38 @@ export default function TranslationTab({
             {/* AI Evaluation Loading & Result Breakdown */}
             {isEvaluating && <TranslationEvaluatingLoader />}
             {evalResult && !isEvaluating && (
-              <div className="mt-4 space-y-4 rounded-2xl border border-indigo-500/30 bg-slate-950/90 p-5 animate-in fade-in duration-300">
+              <div className="mt-4 space-y-4 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] p-5">
                 {/* Score Gauges */}
                 <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
-                  <div className="rounded-xl border border-indigo-500/30 bg-indigo-950/30 p-3 text-center">
-                    <div className="text-[11px] text-indigo-300">
+                  <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] p-3 text-center text-[#141413]">
+                    <div className="text-[11px] font-bold">
                       Tổng điểm Độ gần đúng
                     </div>
-                    <div className="mt-1 text-2xl font-extrabold text-white">
+                    <div className="mt-1 text-2xl font-black">
                       {evalResult.overallScore}%
                     </div>
                   </div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-center">
-                    <div className="text-[11px] text-slate-400">
+                  <div className="rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-3 text-center">
+                    <div className="text-[11px] font-bold text-[#B8B2A6]">
                       Độ chính xác nghĩa
                     </div>
-                    <div className="mt-1 text-xl font-bold text-emerald-400">
+                    <div className="mt-1 text-xl font-black text-[#A7D7A9]">
                       {evalResult.semanticAccuracy}%
                     </div>
                   </div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-center">
-                    <div className="text-[11px] text-slate-400">
+                  <div className="rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-3 text-center">
+                    <div className="text-[11px] font-bold text-[#B8B2A6]">
                       Ngữ pháp &amp; Cấu trúc
                     </div>
-                    <div className="mt-1 text-xl font-bold text-sky-400">
+                    <div className="mt-1 text-xl font-black text-[#B8D8F8]">
                       {evalResult.grammarAndStructure}%
                     </div>
                   </div>
-                  <div className="rounded-xl border border-slate-800 bg-slate-900 p-3 text-center">
-                    <div className="text-[11px] text-slate-400">
+                  <div className="rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-3 text-center">
+                    <div className="text-[11px] font-bold text-[#B8B2A6]">
                       Độ tự nhiên văn phong
                     </div>
-                    <div className="mt-1 text-xl font-bold text-amber-400">
+                    <div className="mt-1 text-xl font-black text-[#F3C969]">
                       {evalResult.naturalnessAndTone}%
                     </div>
                   </div>
@@ -354,23 +355,23 @@ export default function TranslationTab({
 
                 {/* Strengths & Improvements */}
                 <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
-                  <div className="rounded-xl bg-emerald-950/20 border border-emerald-500/20 p-3.5 text-xs">
-                    <div className="flex items-center gap-1.5 font-bold text-emerald-300 mb-1.5">
-                      <CheckCircle2 className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+                  <div className="rounded-xl border-2 border-[#A7D7A9] bg-[#1D1C19] p-3.5 text-xs">
+                    <div className="flex items-center gap-1.5 font-extrabold text-[#A7D7A9] mb-1.5">
+                      <CheckCircle2 className="h-3.5 w-3.5 shrink-0" />
                       <span>Điểm bạn đã dịch rất tốt:</span>
                     </div>
-                    <ul className="list-disc pl-4 space-y-1 text-slate-200">
+                    <ul className="list-disc pl-4 space-y-1 text-[#F5EFE6]">
                       {evalResult.strengths.map((s, i) => (
                         <li key={i}>{s}</li>
                       ))}
                     </ul>
                   </div>
-                  <div className="rounded-xl bg-amber-950/20 border border-amber-500/20 p-3.5 text-xs">
-                    <div className="flex items-center gap-1.5 font-bold text-amber-300 mb-1.5">
-                      <Wrench className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <div className="rounded-xl border-2 border-[#F3C969] bg-[#1D1C19] p-3.5 text-xs">
+                    <div className="flex items-center gap-1.5 font-extrabold text-[#F3C969] mb-1.5">
+                      <Wrench className="h-3.5 w-3.5 shrink-0" />
                       <span>Góp ý chỉnh sửa để đạt 100%:</span>
                     </div>
-                    <ul className="list-disc pl-4 space-y-1 text-slate-200">
+                    <ul className="list-disc pl-4 space-y-1 text-[#F5EFE6]">
                       {evalResult.improvements.map((imp, i) => (
                         <li key={i}>{imp}</li>
                       ))}
@@ -379,13 +380,13 @@ export default function TranslationTab({
                 </div>
 
                 {/* Suggested Optimal Translation */}
-                <div className="flex items-start gap-2 rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3.5 text-xs">
-                  <Sparkles className="h-3.5 w-3.5 text-indigo-400 shrink-0 mt-0.5" />
+                <div className="flex items-start gap-2 rounded-xl border-2 border-[#C8B6FF] bg-[#1D1C19] p-3.5 text-xs">
+                  <Sparkles className="h-3.5 w-3.5 text-[#C8B6FF] shrink-0 mt-0.5" />
                   <div>
-                    <span className="font-bold text-indigo-300">
+                    <span className="font-extrabold text-[#C8B6FF]">
                       Bản dịch chuẩn gợi ý:{" "}
                     </span>
-                    <span className="text-slate-100">
+                    <span className="text-[#F5EFE6]">
                       &ldquo;{evalResult.suggestedTranslation}&rdquo;
                     </span>
                   </div>
@@ -397,26 +398,26 @@ export default function TranslationTab({
                     <div className="overflow-x-auto">
                       <table className="w-full text-left text-xs">
                         <thead>
-                          <tr className="border-b border-slate-800 text-slate-400">
+                          <tr className="border-b-2 border-[#3A3832] text-[#B8B2A6]">
                             <th className="py-2 pr-3">Cụm từ gốc</th>
                             <th className="py-2 pr-3">Bạn dịch</th>
                             <th className="py-2 pr-3">Gợi ý tối ưu</th>
                             <th className="py-2">Nhận xét</th>
                           </tr>
                         </thead>
-                        <tbody className="divide-y divide-slate-800/60">
+                        <tbody className="divide-y divide-[#3A3832]">
                           {evalResult.wordByWordBreakdown.map((row, rIdx) => (
                             <tr key={rIdx}>
-                              <td className="py-2 pr-3 font-medium text-indigo-300">
+                              <td className="py-2 pr-3 font-bold text-[#C8B6FF]">
                                 {row.sourcePhrase}
                               </td>
-                              <td className="py-2 pr-3 text-slate-300">
+                              <td className="py-2 pr-3 text-[#F5EFE6]">
                                 {row.userRendered}
                               </td>
-                              <td className="py-2 pr-3 font-medium text-emerald-300">
+                              <td className="py-2 pr-3 font-bold text-[#A7D7A9]">
                                 {row.betterChoice}
                               </td>
-                              <td className="py-2 text-slate-400">
+                              <td className="py-2 text-[#B8B2A6]">
                                 {row.note}
                               </td>
                             </tr>

@@ -382,47 +382,21 @@ export default function AngryPixelChibiGuard() {
           setPreviewAngry(false);
         }
       }}
-      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#060911]/75 backdrop-blur-sm p-4 animate-in fade-in duration-200"
+      className="fixed inset-0 z-[80] flex items-center justify-center bg-[#141413]/85 p-4 animate-in fade-in duration-200"
     >
       <div
         onClick={(e) => e.stopPropagation()}
-        className={`relative overflow-hidden rounded-3xl border-2 p-6 sm:p-7 shadow-2xl backdrop-blur-xl transition-colors w-full max-w-sm sm:max-w-md text-center animate-in zoom-in-95 duration-200 ${
-          mood === "party"
-            ? "border-amber-400/80 bg-[#171225]/95 shadow-amber-950/70"
-            : mood === "angry"
-            ? "border-rose-500/75 bg-[#120B16]/95 shadow-rose-950/70"
-            : "border-emerald-500/65 bg-[#0B1715]/95 shadow-emerald-950/70"
-        }`}
+        className="relative overflow-hidden rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 sm:p-7 shadow-[6px_6px_0_0_#F5EFE6] w-full max-w-sm sm:max-w-md text-center animate-in zoom-in-95 duration-200"
       >
-        {/* Pixel corner decorations */}
-        <span
-          className={`pointer-events-none absolute left-2.5 top-2.5 h-2 w-2 ${
-            mood === "party"
-              ? "bg-amber-400"
-              : mood === "angry"
-              ? "bg-rose-400"
-              : "bg-emerald-400"
-          }`}
-        />
-        <span
-          className={`pointer-events-none absolute right-2.5 top-2.5 h-2 w-2 ${
-            mood === "party"
-              ? "bg-pink-400"
-              : mood === "angry"
-              ? "bg-amber-400"
-              : "bg-emerald-400"
-          }`}
-        />
-
         {/* Top Badge Row */}
         <div className="flex items-center justify-center gap-2">
           <span
-            className={`inline-flex items-center gap-1.5 rounded-lg px-3 py-1 font-mono text-xs font-black uppercase tracking-wider ${
+            className={`inline-flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] px-3.5 py-1 font-mono text-xs font-extrabold uppercase tracking-wider text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] ${
               mood === "party"
-                ? "bg-amber-500/20 text-amber-300 border border-amber-400/40"
+                ? "bg-[#F3C969]"
                 : mood === "angry"
-                ? "bg-rose-500/20 text-rose-300 border border-rose-500/40"
-                : "bg-emerald-500/20 text-emerald-300 border border-emerald-500/40"
+                ? "bg-[#FF8A8A]"
+                : "bg-[#A7D7A9]"
             }`}
           >
             {mood === "party"
@@ -439,15 +413,7 @@ export default function AngryPixelChibiGuard() {
         </div>
 
         {/* Speech Bubble */}
-        <div
-          className={`rounded-2xl border px-4 py-3 text-sm sm:text-base font-bold leading-snug ${
-            mood === "party"
-              ? "border-amber-400/35 bg-amber-500/10 text-amber-100"
-              : mood === "angry"
-              ? "border-rose-500/30 bg-rose-950/40 text-rose-100"
-              : "border-emerald-500/30 bg-emerald-950/40 text-emerald-100"
-          }`}
-        >
+        <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] px-4 py-3 text-sm sm:text-base font-bold leading-snug text-[#F5EFE6]">
           {mood === "party"
             ? partyMessage
             : mood === "angry"
@@ -456,21 +422,21 @@ export default function AngryPixelChibiGuard() {
         </div>
 
         {mood === "party" && partyState?.subtext && (
-          <p className="mt-2.5 flex items-center justify-center gap-1.5 text-xs font-medium text-indigo-200/90">
-            <Music className="h-3.5 w-3.5 shrink-0 text-pink-400" />
+          <p className="mt-2.5 flex items-center justify-center gap-1.5 text-xs font-bold text-[#C8B6FF]">
+            <Music className="h-3.5 w-3.5 shrink-0 text-[#F3C969]" />
             <span>{partyState.subtext}</span>
           </p>
         )}
 
         {/* Action Button */}
-        <div className="mt-5 space-y-2">
+        <div className="mt-5 space-y-2.5">
           {mood === "angry" ? (
             <>
               <button
                 type="button"
                 disabled={isCheckingIn}
                 onClick={handleCheckInNow}
-                className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-2xl bg-gradient-to-r from-rose-600 to-amber-500 px-4 py-2.5 text-sm font-extrabold text-white shadow-lg shadow-rose-900/50 transition hover:from-rose-500 hover:to-amber-400 active:scale-95 disabled:opacity-60 cursor-pointer"
+                className="flex min-h-[46px] w-full items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-4 py-2.5 text-sm font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#f7d683] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-60 cursor-pointer"
               >
                 <Flame className="h-4 w-4 fill-current" />
                 <span>
@@ -485,7 +451,7 @@ export default function AngryPixelChibiGuard() {
                 <button
                   type="button"
                   onClick={() => setPreviewAngry(false)}
-                  className="w-full py-1.5 text-xs font-semibold text-slate-400 hover:text-white cursor-pointer"
+                  className="w-full py-1.5 text-xs font-bold text-[#B8B2A6] hover:text-[#F5EFE6] cursor-pointer"
                 >
                   Đóng xem thử
                 </button>
@@ -498,16 +464,16 @@ export default function AngryPixelChibiGuard() {
                 if (partyTimerRef.current) clearTimeout(partyTimerRef.current);
                 setPartyState(null);
               }}
-              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-2xl border border-amber-400/45 bg-amber-500/20 px-4 py-2.5 text-sm font-bold text-amber-200 transition hover:bg-amber-500/30 active:scale-95 cursor-pointer"
+              className="flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-4 py-2.5 text-sm font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#b8e2ba] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
             >
-              <PartyPopper className="h-4 w-4 text-amber-300" />
+              <PartyPopper className="h-4 w-4" />
               <span>Cảm ơn Chibi! Tiếp tục học ✨</span>
             </button>
           ) : (
-            <div className="flex items-center justify-center gap-2 py-1 text-xs font-semibold text-emerald-300">
+            <div className="flex items-center justify-center gap-2 py-1 text-xs font-bold text-[#A7D7A9]">
               <CheckCircle2 className="h-4 w-4 shrink-0" />
               <span>Đã ghi nhận chuỗi học hôm nay</span>
-              <Sparkles className="h-3.5 w-3.5 text-amber-300" />
+              <Sparkles className="h-3.5 w-3.5 text-[#F3C969]" />
             </div>
           )}
         </div>

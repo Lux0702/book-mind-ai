@@ -334,26 +334,26 @@ export default function CreateCourseModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/75 p-4 backdrop-blur-sm">
-      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-2xl border border-slate-800 bg-slate-900 text-slate-100 shadow-2xl">
+    <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#141413]/85 p-4">
+      <div className="relative flex max-h-[92vh] w-full max-w-4xl flex-col overflow-hidden rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] text-[#F5EFE6] shadow-[6px_6px_0_0_#F5EFE6]">
         {/* Header */}
-        <div className="flex items-center justify-between border-b border-slate-800 px-6 py-4">
+        <div className="flex items-center justify-between border-b-2 border-[#F5EFE6] bg-[#141413] px-5 py-4">
           <div className="flex items-center gap-3">
-            <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-indigo-500/20 text-indigo-400">
+            <div className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413]">
               <BookOpen className="h-5 w-5" />
             </div>
             <div>
-              <h2 className="text-lg font-bold text-white">
+              <h2 className="text-lg font-extrabold text-[#F5EFE6]">
                 Thêm Sách / Tài liệu mới (Tạo Course & Lọc Mục Lục)
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#B8B2A6]">
                 Đọc PDF 80MB+ trực tiếp, hỗ trợ AI quét Mục lục (TOC) và xóa/chỉnh sửa các chương thừa trước khi học
               </p>
             </div>
           </div>
           <button
             onClick={onClose}
-            className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white"
+            className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-1.5 text-[#F5EFE6] hover:bg-[#FF8A8A] hover:text-[#141413] transition-colors cursor-pointer"
           >
             <X className="h-5 w-5" />
           </button>
@@ -362,14 +362,14 @@ export default function CreateCourseModal({
         {/* Body */}
         <div className="flex-1 space-y-5 overflow-y-auto p-6">
           {/* Mode Selector */}
-          <div className="grid grid-cols-2 gap-3 rounded-xl bg-slate-950 p-1.5">
+          <div className="grid grid-cols-2 gap-3 rounded-xl border-2 border-[#3A3832] bg-[#141413] p-1.5">
             <button
               type="button"
               onClick={() => setMode("file")}
-              className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition ${
+              className={`flex items-center justify-center gap-2 rounded-lg border-2 py-2.5 text-sm font-extrabold transition-colors cursor-pointer ${
                 mode === "file"
-                  ? "bg-indigo-600 text-white shadow"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413]"
+                  : "border-transparent text-[#B8B2A6] hover:text-[#F5EFE6]"
               }`}
             >
               <Upload className="h-4 w-4" />
@@ -378,10 +378,10 @@ export default function CreateCourseModal({
             <button
               type="button"
               onClick={() => setMode("paste")}
-              className={`flex items-center justify-center gap-2 rounded-lg py-2.5 text-sm font-medium transition ${
+              className={`flex items-center justify-center gap-2 rounded-lg border-2 py-2.5 text-sm font-extrabold transition-colors cursor-pointer ${
                 mode === "paste"
-                  ? "bg-indigo-600 text-white shadow"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413]"
+                  : "border-transparent text-[#B8B2A6] hover:text-[#F5EFE6]"
               }`}
             >
               <FileText className="h-4 w-4" />
@@ -392,7 +392,7 @@ export default function CreateCourseModal({
           {/* Course Metadata Inputs */}
           <div className="grid grid-cols-1 gap-4 md:grid-cols-3">
             <div className="md:col-span-2">
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-[#B8B2A6]">
                 Tên Khóa học / Tên Sách
               </label>
               <input
@@ -400,11 +400,11 @@ export default function CreateCourseModal({
                 value={title}
                 onChange={(e) => setTitle(e.target.value)}
                 placeholder="VD: Giáo trình Tiếng Trung Đương Đại 1, Clean Code..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-3.5 py-2.5 text-sm text-[#F5EFE6] placeholder-[#B8B2A6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
               />
             </div>
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-[#B8B2A6]">
                 Cấp độ mục tiêu
               </label>
               <CustomSelect
@@ -446,16 +446,16 @@ export default function CreateCourseModal({
           {/* File Upload Area */}
           {mode === "file" ? (
             <div className="space-y-4">
-              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-indigo-500/30 bg-indigo-950/20 px-4 py-3 text-xs text-indigo-200">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-4 py-3 text-xs text-[#F5EFE6]">
                 <div className="flex items-center gap-2.5">
-                  <Cpu className="h-4 w-4 shrink-0 text-indigo-400" />
+                  <Cpu className="h-4 w-4 shrink-0 text-[#B8D8F8]" />
                   <span>
                     Sau khi chọn file, bạn có thể bấm{" "}
-                    <strong>&ldquo;AI Đọc Mục Lục (TOC)&rdquo;</strong> hoặc tự xóa/chỉnh số trang từng bài học.
+                    <strong className="text-[#F3C969]">&ldquo;AI Đọc Mục Lục (TOC)&rdquo;</strong> hoặc tự xóa/chỉnh số trang từng bài học.
                   </span>
                 </div>
                 <div className="flex items-center gap-2">
-                  <span className="text-slate-400">Số trang/chương mặc định:</span>
+                  <span className="text-[#B8B2A6]">Số trang/chương mặc định:</span>
                   <input
                     type="number"
                     min={3}
@@ -464,14 +464,14 @@ export default function CreateCourseModal({
                     onChange={(e) =>
                       setPagesPerChunk(Number(e.target.value) || 15)
                     }
-                    className="w-16 rounded-lg border border-slate-700 bg-slate-900 px-2 py-1 text-center text-xs text-white"
+                    className="w-16 rounded-lg border-2 border-[#F5EFE6] bg-[#1D1C19] px-2 py-1 text-center text-xs font-bold text-[#F5EFE6] focus:border-[#F3C969] focus:outline-none"
                   />
                 </div>
               </div>
 
-              <label className="flex cursor-pointer flex-col items-center justify-center rounded-2xl border-2 border-dashed border-slate-700 bg-slate-950/60 p-6 text-center transition hover:border-indigo-500 hover:bg-slate-900/60">
-                <Upload className="mb-2 h-8 w-8 text-indigo-400" />
-                <span className="text-sm font-semibold text-white">
+              <label className="flex cursor-pointer flex-col items-center justify-center rounded-xl border-2 border-dashed border-[#F5EFE6] bg-[#141413] p-6 text-center transition-colors hover:bg-[#2A2823]">
+                <Upload className="mb-2 h-8 w-8 text-[#F3C969]" />
+                <span className="text-sm font-extrabold text-[#F5EFE6]">
                   {selectedFile
                     ? `${selectedFile.name} (${(
                         selectedFile.size /
@@ -489,10 +489,10 @@ export default function CreateCourseModal({
 
               {/* Progress bar when parsing heavy PDF */}
               {isParsing && parseProgress && (
-                <div className="space-y-2 rounded-xl border border-slate-800 bg-slate-950 p-4">
-                  <div className="flex items-center justify-between text-xs text-indigo-300">
+                <div className="space-y-2 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] p-4">
+                  <div className="flex items-center justify-between text-xs font-bold text-[#F3C969]">
                     <span>{parseProgress.statusText}</span>
-                    <span className="font-bold">
+                    <span>
                       {Math.round(
                         (parseProgress.currentPage / parseProgress.totalPages) *
                           100
@@ -500,9 +500,9 @@ export default function CreateCourseModal({
                       %
                     </span>
                   </div>
-                  <div className="h-2 w-full overflow-hidden rounded-full bg-slate-800">
+                  <div className="h-3 w-full overflow-hidden rounded-full border-2 border-[#F5EFE6] bg-[#1D1C19]">
                     <div
-                      className="h-full bg-gradient-to-r from-indigo-500 to-purple-500 transition-all duration-200"
+                      className="h-full bg-[#F3C969] transition-all duration-200"
                       style={{
                         width: `${Math.round(
                           (parseProgress.currentPage /
@@ -517,24 +517,24 @@ export default function CreateCourseModal({
 
               {/* Hybrid PDF (Text + Image) Vision Toggle */}
               {selectedFile && selectedFile.name.toLowerCase().endsWith(".pdf") && (
-                <label className="flex cursor-pointer items-start gap-3 rounded-xl border border-amber-500/40 bg-amber-950/20 p-3.5 text-xs transition hover:border-amber-500/70">
+                <label className="flex cursor-pointer items-start gap-3 rounded-xl border-2 border-[#F3C969] bg-[#141413] p-3.5 text-xs">
                   <input
                     type="checkbox"
                     checked={isHybridVisionMode}
                     onChange={(e) => setIsHybridVisionMode(e.target.checked)}
-                    className="mt-0.5 h-4 w-4 rounded border-amber-500/50 bg-slate-900 text-amber-500 focus:ring-amber-500"
+                    className="mt-0.5 h-4 w-4 rounded border-2 border-[#F5EFE6] bg-[#1D1C19] accent-[#F3C969]"
                   />
                   <div className="space-y-1">
-                    <div className="flex flex-wrap items-center gap-2 font-bold text-amber-300">
+                    <div className="flex flex-wrap items-center gap-2 font-extrabold text-[#F3C969]">
                       <span>
                         Chế độ Đọc Kết Hợp Chữ + Ảnh (Hybrid PDF / Gemini Vision)
                       </span>
-                      <span className="rounded-md bg-amber-500/20 px-2 py-0.5 text-[10px] text-amber-200 border border-amber-500/30">
+                      <span className="rounded-full border border-[#141413] bg-[#F3C969] px-2 py-0.5 text-[10px] font-extrabold text-[#141413]">
                         Khuyên bật khi PDF có nội dung chính là Ảnh
                       </span>
                     </div>
-                    <p className="text-[11px] leading-relaxed text-slate-300">
-                      Nếu file PDF của bạn chỉ lấy được vài dòng chữ tiêu đề/số trang còn <strong>nội dung chính (hội thoại, bảng từ vựng, bài đọc) nằm trong hình ảnh</strong>, hãy bật ô này. Hệ thống sẽ tự động chụp từng trang PDF gửi kèm cho <strong>Gemini Vision</strong> đọc 100% chữ trong ảnh khi tạo bài học!
+                    <p className="text-[11px] leading-relaxed text-[#B8B2A6]">
+                      Nếu file PDF của bạn chỉ lấy được vài dòng chữ tiêu đề/số trang còn <strong className="text-[#F5EFE6]">nội dung chính (hội thoại, bảng từ vựng, bài đọc) nằm trong hình ảnh</strong>, hãy bật ô này. Hệ thống sẽ tự động chụp từng trang PDF gửi kèm cho <strong className="text-[#F5EFE6]">Gemini Vision</strong> đọc 100% chữ trong ảnh khi tạo bài học!
                     </p>
                   </div>
                 </label>
@@ -542,9 +542,9 @@ export default function CreateCourseModal({
 
               {/* Preview & Edit/Filter extracted chapters */}
               {!isParsing && extractedChapters.length > 0 && (
-                <div className="space-y-3 rounded-xl border border-emerald-500/30 bg-emerald-950/10 p-4">
+                <div className="space-y-3 rounded-xl border-2 border-[#A7D7A9] bg-[#141413] p-4">
                   <div className="flex flex-wrap items-center justify-between gap-2">
-                    <div className="flex items-center gap-2 text-sm font-semibold text-emerald-400">
+                    <div className="flex items-center gap-2 text-sm font-extrabold text-[#A7D7A9]">
                       <CheckCircle2 className="h-4 w-4" />
                       <span>
                         Danh sách Chương / Bài học ({extractedChapters.length} bài{" "}
@@ -558,7 +558,7 @@ export default function CreateCourseModal({
                           type="button"
                           disabled={isDetectingToc}
                           onClick={handleAiDetectToc}
-                          className="flex items-center gap-1.5 rounded-xl bg-gradient-to-r from-amber-500 to-orange-600 px-3.5 py-1.5 text-xs font-bold text-white shadow hover:from-amber-400 hover:to-orange-500 disabled:opacity-50"
+                          className="flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3.5 py-1.5 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] disabled:opacity-50 cursor-pointer"
                         >
                           {isDetectingToc ? (
                             <>
@@ -576,18 +576,18 @@ export default function CreateCourseModal({
                       <button
                         type="button"
                         onClick={handleAddCustomChapter}
-                        className="flex items-center gap-1 rounded-xl border border-slate-700 bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-200 hover:bg-slate-800"
+                        className="flex items-center gap-1 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-3 py-1.5 text-xs font-bold text-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
                       >
-                        <Plus className="h-3.5 w-3.5 text-indigo-400" />
+                        <Plus className="h-3.5 w-3.5 text-[#A7D7A9]" />
                         Thêm chương
                       </button>
                     </div>
                   </div>
 
-                  <p className="flex items-center gap-1.5 text-[11px] text-slate-400">
-                    <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <p className="flex items-center gap-1.5 text-[11px] text-[#B8B2A6]">
+                    <Lightbulb className="h-3.5 w-3.5 text-[#F3C969] shrink-0" />
                     <span>
-                      Bạn có thể <strong>Xóa</strong> các chương dẫn nhập không cần thiết, hoặc <strong>sửa trực tiếp Tên bài & Số trang bắt đầu – kết thúc</strong> ở bảng dưới đây:
+                      Bạn có thể <strong className="text-[#F5EFE6]">Xóa</strong> các chương dẫn nhập không cần thiết, hoặc <strong className="text-[#F5EFE6]">sửa trực tiếp Tên bài & Số trang bắt đầu – kết thúc</strong> ở bảng dưới đây:
                     </span>
                   </p>
 
@@ -595,9 +595,9 @@ export default function CreateCourseModal({
                     {extractedChapters.map((ch, idx) => (
                       <div
                         key={idx}
-                        className="flex flex-wrap items-center gap-2 rounded-xl border border-slate-800 bg-slate-950/90 p-2.5 text-xs"
+                        className="flex flex-wrap items-center gap-2 rounded-lg border-2 border-[#3A3832] bg-[#1D1C19] p-2.5 text-xs"
                       >
-                        <span className="w-6 text-center font-bold text-indigo-400">
+                        <span className="w-6 text-center font-extrabold text-[#F3C969]">
                           #{idx + 1}
                         </span>
                         <input
@@ -611,9 +611,9 @@ export default function CreateCourseModal({
                               ch.endPage
                             )
                           }
-                          className="min-w-[200px] flex-1 rounded-lg border border-slate-800 bg-slate-900 px-2.5 py-1.5 text-xs text-white focus:border-indigo-500 focus:outline-none"
+                          className="min-w-[200px] flex-1 rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2.5 py-1.5 text-xs text-[#F5EFE6] focus:border-[#F3C969] focus:outline-none"
                         />
-                        <div className="flex items-center gap-1 text-slate-400">
+                        <div className="flex items-center gap-1 text-[#B8B2A6]">
                           <span>Trang</span>
                           <input
                             type="number"
@@ -628,7 +628,7 @@ export default function CreateCourseModal({
                                 ch.endPage
                               )
                             }
-                            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-center text-white"
+                            className="w-16 rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2 py-1 text-center font-bold text-[#F5EFE6]"
                           />
                           <span>→</span>
                           <input
@@ -644,13 +644,13 @@ export default function CreateCourseModal({
                                 Number(e.target.value) || ch.startPage
                               )
                             }
-                            className="w-16 rounded-lg border border-slate-800 bg-slate-900 px-2 py-1 text-center text-white"
+                            className="w-16 rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2 py-1 text-center font-bold text-[#F5EFE6]"
                           />
                         </div>
                         <button
                           type="button"
                           onClick={() => handleDeleteExtractedChapter(idx)}
-                          className="rounded-lg p-1.5 text-slate-500 hover:bg-rose-950/60 hover:text-rose-400"
+                          className="rounded-lg p-1.5 text-[#B8B2A6] hover:bg-[#FF8A8A] hover:text-[#141413] transition-colors cursor-pointer"
                           title="Xóa chương không cần thiết này"
                         >
                           <Trash2 className="h-4 w-4" />
@@ -663,7 +663,7 @@ export default function CreateCourseModal({
             </div>
           ) : (
             <div>
-              <label className="mb-1.5 block text-xs font-semibold uppercase tracking-wider text-slate-400">
+              <label className="mb-1.5 block text-xs font-extrabold uppercase tracking-wider text-[#B8B2A6]">
                 Nội dung văn bản Sách / Tài liệu (Có thể bao gồm nhiều chương)
               </label>
               <textarea
@@ -671,25 +671,25 @@ export default function CreateCourseModal({
                 value={pastedText}
                 onChange={(e) => setPastedText(e.target.value)}
                 placeholder="Dán nội dung cuốn sách, truyện hoặc bài báo vào đây..."
-                className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3.5 text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] p-3.5 text-sm text-[#F5EFE6] placeholder-[#B8B2A6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
               />
             </div>
           )}
 
           {errorMsg && (
-            <div className="flex items-center gap-2 rounded-xl border border-rose-500/40 bg-rose-950/30 px-4 py-3 text-xs text-rose-300">
-              <AlertCircle className="h-4 w-4 shrink-0 text-rose-400" />
+            <div className="flex items-center gap-2 rounded-lg border-2 border-[#FF8A8A] bg-[#141413] px-4 py-3 text-xs font-bold text-[#FF8A8A]">
+              <AlertCircle className="h-4 w-4 shrink-0 text-[#FF8A8A]" />
               <span>{errorMsg}</span>
             </div>
           )}
         </div>
 
         {/* Footer */}
-        <div className="flex items-center justify-end gap-3 border-t border-slate-800 bg-slate-950/60 px-6 py-4">
+        <div className="flex items-center justify-end gap-3 border-t-2 border-[#3A3832] bg-[#141413] px-6 py-4">
           <button
             type="button"
             onClick={onClose}
-            className="rounded-xl border border-slate-700 px-4 py-2.5 text-sm font-medium text-slate-300 hover:bg-slate-800"
+            className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-4 py-2.5 text-sm font-bold text-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
           >
             Hủy
           </button>
@@ -697,7 +697,7 @@ export default function CreateCourseModal({
             type="button"
             disabled={isParsing || isDetectingToc}
             onClick={handleCreateCourse}
-            className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-5 py-2.5 text-sm font-semibold text-white shadow-lg shadow-indigo-600/25 transition hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
+            className="flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-5 py-2.5 text-sm font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
           >
             <Sparkles className="h-4 w-4" />
             Lưu Danh sách Chương & Tạo Course

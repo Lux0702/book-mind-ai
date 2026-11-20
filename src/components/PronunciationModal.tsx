@@ -282,8 +282,8 @@ export default function PronunciationModal({
   };
 
   return (
-    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/80 backdrop-blur-md animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-3xl border border-indigo-500/30 bg-slate-900/95 p-6 sm:p-8 shadow-2xl text-left">
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[#141413]/85">
+      <div className="relative w-full max-w-2xl max-h-[90vh] overflow-y-auto rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 sm:p-8 shadow-[6px_6px_0_0_#F5EFE6] text-left">
         {/* Close Button */}
         <button
           type="button"
@@ -292,84 +292,79 @@ export default function PronunciationModal({
             stopAllSpeech();
             onClose();
           }}
-          className="absolute top-5 right-5 rounded-full p-2 text-slate-400 hover:bg-slate-800 hover:text-white transition"
+          className="absolute top-5 right-5 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] p-2 text-[#F5EFE6] hover:bg-[#FF8A8A] hover:text-[#141413] transition-colors cursor-pointer"
         >
           <X className="h-5 w-5" />
         </button>
 
         {/* Modal Header */}
         <div className="flex items-center gap-3 mb-6">
-          <div className="flex h-11 w-11 items-center justify-center rounded-2xl bg-gradient-to-br from-indigo-500 via-indigo-600 to-purple-600 text-white shadow-lg shadow-indigo-600/30">
+          <div className="flex h-11 w-11 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
             <Mic className="h-5 w-5" />
           </div>
           <div>
-            <h3 className="text-lg font-bold text-white flex items-center gap-2">
+            <h3 className="text-lg font-extrabold text-[#F5EFE6] flex items-center gap-2">
               Gia Sư AI Chấm Điểm Phát Âm
-              <span className="rounded-md bg-indigo-500/20 px-2 py-0.5 text-[10px] font-black text-indigo-300 border border-indigo-500/30">
+              <span className="rounded-full border-2 border-[#F5EFE6] bg-[#F3C969] px-2 py-0.5 text-[10px] font-black text-[#141413]">
                 PRO
               </span>
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[#B8B2A6]">
               Đọc to từ/câu để AI phân tích khẩu hình, thanh điệu, chấm % và chỉ ra sai chỗ nào
             </p>
           </div>
         </div>
 
         {/* Target Phrase Card */}
-        <div className="rounded-2xl border border-indigo-500/20 bg-slate-950 p-5 space-y-3">
+        <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-5 space-y-3">
           <div className="flex items-start justify-between gap-3">
             <div>
-              <span className="text-[11px] font-bold uppercase tracking-wider text-indigo-400 block mb-1">
+              <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#B8D8F8] block mb-1">
                 Văn bản mẫu cần đọc:
               </span>
-              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white font-serif">
+              <p className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#F5EFE6] font-serif">
                 {targetText}
               </p>
             </div>
             <AudioSpeakButton
               text={targetText}
               label="Nghe mẫu"
-              className="rounded-xl bg-slate-800 px-3 py-2 text-xs font-semibold text-indigo-300 hover:bg-slate-700 shrink-0"
+              className="rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] px-3 py-2 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] shrink-0"
             />
           </div>
 
           {phonetic && (
-            <div className="text-sm font-mono text-indigo-300 font-semibold">
+            <div className="text-sm font-mono text-[#F3C969] font-bold">
               Phiên âm: {phonetic}
             </div>
           )}
 
           {vietnameseMeaning && (
-            <div className="text-xs text-slate-300 border-t border-slate-850 pt-2">
-              Nghĩa tiếng Việt: <strong className="text-emerald-400">{vietnameseMeaning}</strong>
+            <div className="text-xs text-[#B8B2A6] border-t-2 border-[#3A3832] pt-2">
+              Nghĩa tiếng Việt: <strong className="text-[#A7D7A9]">{vietnameseMeaning}</strong>
             </div>
           )}
 
           {contextHint && (
-            <div className="flex items-center gap-1.5 text-[11px] text-amber-300/90 italic">
-              <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+            <div className="flex items-center gap-1.5 text-[11px] text-[#F3C969] italic">
+              <Lightbulb className="h-3.5 w-3.5 text-[#F3C969] shrink-0" />
               <span>{contextHint}</span>
             </div>
           )}
         </div>
 
         {/* Recording Section */}
-        <div className="mt-6 rounded-2xl border border-slate-800 bg-slate-950/60 p-6 text-center space-y-4">
+        <div className="mt-6 rounded-xl border-2 border-[#3A3832] bg-[#141413] p-6 text-center space-y-4">
           <div className="relative mx-auto flex items-center justify-center h-20 w-20">
             {isRecording && (
-              <>
-                <div className="absolute inset-0 rounded-full bg-rose-500/25 animate-ping duration-1000" />
-                <div className="absolute -inset-2 rounded-full border border-rose-500/40 animate-pulse" />
-              </>
+              <div className="absolute inset-0 rounded-xl bg-[#FF8A8A]/35 animate-ping duration-1000" />
             )}
 
             <button
               type="button"
               onClick={isRecording ? stopRecording : startRecording}
-              className={`relative flex h-16 w-16 items-center justify-center rounded-2xl text-white shadow-xl transition-all transform active:scale-95 cursor-pointer ${
-                isRecording
-                  ? "bg-rose-600 hover:bg-rose-500 shadow-rose-600/30"
-                  : "bg-gradient-to-br from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 shadow-indigo-600/30"
+              className={`relative flex h-16 w-16 items-center justify-center rounded-xl border-2 border-[#F5EFE6] text-[#141413] shadow-[4px_4px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer ${
+                isRecording ? "bg-[#FF8A8A]" : "bg-[#F3C969]"
               }`}
             >
               {isRecording ? (
@@ -381,27 +376,27 @@ export default function PronunciationModal({
           </div>
 
           <div>
-            <p className="flex items-center justify-center gap-2 text-sm font-bold text-white">
+            <p className="flex items-center justify-center gap-2 text-sm font-extrabold text-[#F5EFE6]">
               {isRecording ? (
                 <>
-                  <span className="h-2.5 w-2.5 rounded-full bg-rose-500 animate-ping" />
+                  <span className="h-2.5 w-2.5 rounded-full bg-[#FF8A8A] animate-ping" />
                   <span>Đang lắng nghe giọng bạn... Hãy đọc to và rõ ràng!</span>
                 </>
               ) : (
                 "Bấm vào Micro để bắt đầu đọc"
               )}
             </p>
-            <p className="text-xs text-slate-400 mt-0.5">
+            <p className="text-xs text-[#B8B2A6] mt-0.5">
               Hỗ trợ tự động nhận dạng ngôn ngữ tương ứng
             </p>
           </div>
 
-          {/* Live Transcript / Speech Display (Read-Only: chỉ hiển thị chữ thu từ Micro, không cho nhập phím) */}
+          {/* Live Transcript / Speech Display */}
           <div className="text-left">
-            <div className="flex items-center justify-between text-xs font-semibold text-slate-400 mb-1.5">
-              <span className="flex items-center gap-2">
+            <div className="flex flex-wrap items-center justify-between gap-2 text-xs font-bold text-[#B8B2A6] mb-1.5">
+              <span className="flex flex-wrap items-center gap-2">
                 <span>Âm thanh ghi nhận được từ micro của bạn:</span>
-                <span className="rounded-md border border-slate-700 bg-slate-900 px-2 py-0.5 text-[10px] font-medium text-slate-400">
+                <span className="rounded-md border border-[#3A3832] bg-[#1D1C19] px-2 py-0.5 text-[10px] font-semibold text-[#B8B2A6]">
                   Chỉ nhận giọng đọc từ Micro • Không cho gõ phím
                 </span>
               </span>
@@ -412,7 +407,7 @@ export default function PronunciationModal({
                     setSpokenTranscript("");
                     setAudioBase64("");
                   }}
-                  className="text-xs text-slate-500 hover:text-white cursor-pointer"
+                  className="text-xs font-bold text-[#F3C969] hover:underline cursor-pointer"
                 >
                   Thu âm lại
                 </button>
@@ -420,24 +415,24 @@ export default function PronunciationModal({
             </div>
             <div
               aria-readonly="true"
-              className={`min-h-[52px] w-full rounded-xl border px-4 py-3 text-sm select-none cursor-default transition ${
+              className={`min-h-[52px] w-full rounded-lg border-2 px-4 py-3 text-sm select-none cursor-default ${
                 isRecording
-                  ? "border-emerald-500/50 bg-slate-900/95 text-white shadow-inner"
+                  ? "border-[#A7D7A9] bg-[#1D1C19] text-[#F5EFE6]"
                   : spokenTranscript
-                  ? "border-indigo-500/40 bg-slate-900/90 text-white"
-                  : "border-slate-800 bg-slate-900/70 text-slate-500"
+                  ? "border-[#F5EFE6] bg-[#1D1C19] text-[#F5EFE6]"
+                  : "border-[#3A3832] bg-[#1D1C19] text-[#B8B2A6]"
               }`}
             >
               {spokenTranscript ? (
-                <p className="font-medium leading-relaxed text-white">
+                <p className="font-semibold leading-relaxed text-[#F5EFE6]">
                   {spokenTranscript}
                 </p>
               ) : isRecording ? (
-                <p className="italic text-emerald-300 animate-pulse">
+                <p className="italic text-[#A7D7A9] animate-pulse">
                   Đang thu sóng âm giọng đọc của bạn qua Micro... Hãy đọc to và rõ ràng!
                 </p>
               ) : (
-                <p className="text-slate-500">
+                <p className="text-[#B8B2A6]">
                   Bấm nút micro ở trên và đọc to rõ ràng. Lời đọc của bạn sẽ tự động chạy chữ tại đây (không cho phép gõ văn bản thủ công)...
                 </p>
               )}
@@ -450,7 +445,7 @@ export default function PronunciationModal({
               type="button"
               disabled={isEvaluating || (!spokenTranscript.trim() && !audioBase64)}
               onClick={handleEvaluate}
-              className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 px-6 py-2.5 text-xs font-bold text-white shadow-lg shadow-emerald-600/25 transition active:scale-95 disabled:opacity-50 cursor-pointer"
+              className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
             >
               {isEvaluating ? (
                 <>
@@ -467,7 +462,7 @@ export default function PronunciationModal({
           </div>
 
           {errorMessage && (
-            <div className="rounded-xl border border-rose-500/30 bg-rose-950/40 p-3 text-xs text-rose-300">
+            <div className="rounded-lg border-2 border-[#FF8A8A] bg-[#1D1C19] p-3 text-xs font-bold text-[#FF8A8A]">
               {errorMessage}
             </div>
           )}
@@ -475,57 +470,57 @@ export default function PronunciationModal({
 
         {/* AI EVALUATION RESULT SHOWCASE */}
         {evaluation && (
-          <div className="mt-6 rounded-3xl border border-indigo-500/30 bg-gradient-to-b from-slate-950 to-slate-900 p-6 space-y-6 animate-in fade-in zoom-in-95 duration-200">
+          <div className="mt-6 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] p-6 space-y-6">
             {/* Score Banner */}
-            <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b border-slate-800">
+            <div className="flex flex-wrap items-center justify-between gap-4 pb-5 border-b-2 border-[#3A3832]">
               <div className="flex items-center gap-4">
                 <div
-                  className={`flex h-16 w-16 items-center justify-center rounded-2xl text-2xl font-black shadow-lg ${
+                  className={`flex h-16 w-16 items-center justify-center rounded-xl border-2 border-[#F5EFE6] text-2xl font-black text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] ${
                     evaluation.overallScore >= 85
-                      ? "bg-emerald-500/20 text-emerald-400 ring-2 ring-emerald-500/40"
+                      ? "bg-[#A7D7A9]"
                       : evaluation.overallScore >= 65
-                      ? "bg-amber-500/20 text-amber-400 ring-2 ring-amber-500/40"
-                      : "bg-rose-500/20 text-rose-400 ring-2 ring-rose-500/40"
+                      ? "bg-[#F3C969]"
+                      : "bg-[#FF8A8A]"
                   }`}
                 >
                   {evaluation.overallScore}%
                 </div>
                 <div>
-                  <span className="text-xs font-semibold uppercase tracking-wider text-slate-400">
+                  <span className="text-xs font-bold uppercase tracking-wider text-[#B8B2A6]">
                     Độ chính xác phát âm
                   </span>
-                  <h4 className="text-base font-extrabold text-white flex items-center gap-1.5">
+                  <h4 className="text-base font-extrabold text-[#F5EFE6] flex items-center gap-1.5">
                     {evaluation.accuracyGrade}
                     {evaluation.overallScore >= 85 && (
-                      <Award className="h-4 w-4 text-amber-400" />
+                      <Award className="h-4 w-4 text-[#F3C969]" />
                     )}
                   </h4>
                 </div>
               </div>
 
               {/* Sub Scores */}
-              <div className="flex items-center gap-4 text-xs">
-                <div className="rounded-xl bg-slate-900 border border-slate-800 px-3 py-1.5 text-center">
-                  <span className="text-slate-400 block text-[10px]">Độ lưu loát</span>
-                  <strong className="text-indigo-300 font-bold">{evaluation.fluencyScore}%</strong>
+              <div className="flex items-center gap-3 text-xs">
+                <div className="rounded-lg bg-[#1D1C19] border-2 border-[#3A3832] px-3 py-1.5 text-center">
+                  <span className="text-[#B8B2A6] block text-[10px]">Độ lưu loát</span>
+                  <strong className="text-[#B8D8F8] font-extrabold">{evaluation.fluencyScore}%</strong>
                 </div>
-                <div className="rounded-xl bg-slate-900 border border-slate-800 px-3 py-1.5 text-center">
-                  <span className="text-slate-400 block text-[10px]">Đọc đủ từ</span>
-                  <strong className="text-emerald-300 font-bold">{evaluation.completenessScore}%</strong>
+                <div className="rounded-lg bg-[#1D1C19] border-2 border-[#3A3832] px-3 py-1.5 text-center">
+                  <span className="text-[#B8B2A6] block text-[10px]">Đọc đủ từ</span>
+                  <strong className="text-[#A7D7A9] font-extrabold">{evaluation.completenessScore}%</strong>
                 </div>
               </div>
             </div>
 
-            {/* Word by Word Breakdown (Correct vs Mispronounced) */}
+            {/* Word by Word Breakdown */}
             <div className="space-y-3">
-              <h5 className="text-xs font-bold uppercase tracking-wider text-indigo-300">
+              <h5 className="text-xs font-extrabold uppercase tracking-wider text-[#B8D8F8]">
                 1. Chi tiết từng từ trong câu:
               </h5>
               <div className="flex flex-wrap gap-2">
                 {evaluation.correctWords.map((word, i) => (
                   <span
                     key={`c-${i}`}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-emerald-500/15 border border-emerald-500/30 text-emerald-300 text-xs font-bold"
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full border-2 border-[#F5EFE6] bg-[#A7D7A9] text-[#141413] text-xs font-extrabold"
                   >
                     <CheckCircle2 className="h-3 w-3" />
                     {word} (Đúng)
@@ -534,7 +529,7 @@ export default function PronunciationModal({
                 {evaluation.mispronouncedWords.map((m, i) => (
                   <span
                     key={`m-${i}`}
-                    className="inline-flex items-center gap-1 px-3 py-1 rounded-xl bg-rose-500/15 border border-rose-500/30 text-rose-300 text-xs font-bold line-through"
+                    className="inline-flex items-center gap-1 px-3 py-1 rounded-full border-2 border-[#F5EFE6] bg-[#FF8A8A] text-[#141413] text-xs font-extrabold line-through"
                   >
                     <AlertCircle className="h-3 w-3" />
                     {m.word} (Sai)
@@ -543,34 +538,34 @@ export default function PronunciationModal({
               </div>
             </div>
 
-            {/* Mispronounced Words Breakdown: Sai chỗ nào & Cần cải thiện gì */}
+            {/* Mispronounced Words Breakdown */}
             {evaluation.mispronouncedWords.length > 0 ? (
               <div className="space-y-3">
-                <h5 className="text-xs font-bold uppercase tracking-wider text-rose-300">
+                <h5 className="text-xs font-extrabold uppercase tracking-wider text-[#FF8A8A]">
                   2. Sai chỗ nào & Cách khắc phục:
                 </h5>
                 <div className="space-y-2.5">
                   {evaluation.mispronouncedWords.map((item, idx) => (
                     <div
                       key={idx}
-                      className="rounded-2xl border border-rose-500/30 bg-rose-950/20 p-4 space-y-2 text-xs"
+                      className="rounded-xl border-2 border-[#FF8A8A] bg-[#1D1C19] p-4 space-y-2 text-xs"
                     >
-                      <div className="flex items-center justify-between">
-                        <strong className="flex items-center gap-1.5 text-rose-200 text-sm">
-                          <XCircle className="h-4 w-4 text-rose-400 shrink-0" />
+                      <div className="flex flex-wrap items-center justify-between gap-2">
+                        <strong className="flex items-center gap-1.5 text-[#FF8A8A] text-sm">
+                          <XCircle className="h-4 w-4 text-[#FF8A8A] shrink-0" />
                           <span>
                             Từ &ldquo;{item.word}&rdquo;
                             {item.expectedPhonetic && ` (${item.expectedPhonetic})`}
                           </span>
                         </strong>
-                        <span className="text-[11px] text-rose-300 bg-rose-950/60 px-2 py-0.5 rounded-lg border border-rose-500/30">
+                        <span className="text-[11px] font-extrabold text-[#141413] bg-[#FF8A8A] px-2 py-0.5 rounded-md">
                           {item.issue}
                         </span>
                       </div>
-                      <div className="flex items-start gap-1.5 text-slate-300 bg-slate-950/80 p-2.5 rounded-xl border border-slate-800">
-                        <Lightbulb className="h-3.5 w-3.5 text-amber-400 shrink-0 mt-0.5" />
+                      <div className="flex items-start gap-1.5 text-[#F5EFE6] bg-[#141413] p-2.5 rounded-lg border-2 border-[#3A3832]">
+                        <Lightbulb className="h-3.5 w-3.5 text-[#F3C969] shrink-0 mt-0.5" />
                         <div>
-                          <strong className="text-amber-300">Mẹo sửa khẩu hình: </strong>
+                          <strong className="text-[#F3C969]">Mẹo sửa khẩu hình: </strong>
                           {item.tip}
                         </div>
                       </div>
@@ -579,16 +574,16 @@ export default function PronunciationModal({
                 </div>
               </div>
             ) : (
-              <div className="rounded-2xl border border-emerald-500/30 bg-emerald-950/20 p-4 text-xs text-emerald-300 flex items-center gap-2">
+              <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] p-4 text-xs font-extrabold text-[#141413] flex items-center gap-2">
                 <CheckCircle2 className="h-4 w-4 shrink-0" />
                 <span>Bạn đã phát âm chính xác tất cả các từ trong văn bản mẫu! Quá xuất sắc!</span>
               </div>
             )}
 
             {/* General Feedback */}
-            <div className="rounded-2xl border border-slate-800 bg-slate-950/80 p-4 space-y-1.5 text-xs leading-relaxed text-slate-200">
-              <strong className="flex items-center gap-1.5 text-indigo-300">
-                <Target className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+            <div className="rounded-xl border-2 border-[#3A3832] bg-[#1D1C19] p-4 space-y-1.5 text-xs leading-relaxed text-[#F5EFE6]">
+              <strong className="flex items-center gap-1.5 text-[#C8B6FF]">
+                <Target className="h-3.5 w-3.5 text-[#C8B6FF] shrink-0" />
                 <span>Nhận xét tổng quan từ Gia sư AI:</span>
               </strong>
               <p>{evaluation.generalFeedback}</p>
@@ -603,7 +598,7 @@ export default function PronunciationModal({
                   setSpokenTranscript("");
                   startRecording();
                 }}
-                className="inline-flex items-center gap-2 rounded-xl bg-slate-800 hover:bg-slate-700 px-5 py-2.5 text-xs font-semibold text-white transition active:scale-95 cursor-pointer"
+                className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
               >
                 <RotateCcw className="h-3.5 w-3.5" />
                 <span>Luyện phát âm lại lần nữa</span>

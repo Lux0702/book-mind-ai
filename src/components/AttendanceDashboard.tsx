@@ -177,15 +177,12 @@ export default function AttendanceDashboard({
   return (
     <div className="mx-auto w-full max-w-5xl flex-1 px-3.5 py-5 sm:px-6 sm:py-8 space-y-6 sm:space-y-8">
       {/* 1. TOP STREAK & ATTENDANCE STUDIO CARD */}
-      <div className="relative overflow-hidden rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-7 shadow-xl">
-        {/* Subtle Warm Editorial Ambient Glow */}
-        <div className="pointer-events-none absolute -right-20 -top-20 h-64 w-64 rounded-full bg-amber-500/[0.07] blur-3xl" />
-
+      <div className="relative rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-7 shadow-[4px_4px_0_0_#F5EFE6]">
         <div className="relative flex flex-col gap-5 lg:flex-row lg:items-center lg:justify-between">
-          <div className="space-y-2.5">
+          <div className="space-y-3">
             <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex items-center gap-1.5 rounded-full border border-amber-500/25 bg-amber-500/10 px-3 py-1 text-[11px] font-semibold tracking-wide text-amber-300">
-                <Flame className="h-3.5 w-3.5 text-amber-400" />
+              <div className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] bg-[#F3C969] px-3 py-1 text-[11px] font-extrabold tracking-wide text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
+                <Flame className="h-3.5 w-3.5" />
                 <span>CHUỖI HỌC TẬP LIÊN TỤC</span>
               </div>
 
@@ -194,18 +191,18 @@ export default function AttendanceDashboard({
                 onClick={() => void handleSyncCloud(true)}
                 disabled={isSyncingCloud}
                 title="Đồng bộ dữ liệu điểm danh 2 chiều với Supabase Cloud"
-                className="inline-flex items-center gap-1.5 rounded-full border border-white/[0.08] bg-slate-900/90 px-2.5 py-1 text-[11px] font-medium text-slate-300 transition hover:border-indigo-500/40 hover:text-white disabled:opacity-60"
+                className="inline-flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] bg-[#141413] px-3 py-1 text-[11px] font-bold text-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[1px] active:translate-y-[1px] active:shadow-none disabled:opacity-60 cursor-pointer"
               >
                 {isSyncingCloud ? (
                   <>
-                    <RefreshCw className="h-3 w-3 animate-spin text-indigo-400" />
+                    <RefreshCw className="h-3 w-3 animate-spin text-[#F3C969]" />
                     <span>Đang đồng bộ Supabase...</span>
                   </>
                 ) : (
                   <>
                     <Cloud
                       className={`h-3 w-3 ${
-                        cloudSynced ? "text-emerald-400" : "text-slate-400"
+                        cloudSynced ? "text-[#A7D7A9]" : "text-[#B8B2A6]"
                       }`}
                     />
                     <span>
@@ -213,7 +210,7 @@ export default function AttendanceDashboard({
                         ? `Cloud đã đồng bộ${lastSyncedTime ? ` (${lastSyncedTime})` : ""}`
                         : "Đồng bộ Cloud"}
                     </span>
-                    <RefreshCw className="h-2.5 w-2.5 text-slate-400" />
+                    <RefreshCw className="h-2.5 w-2.5 text-[#B8B2A6]" />
                   </>
                 )}
               </button>
@@ -224,7 +221,7 @@ export default function AttendanceDashboard({
                   window.dispatchEvent(new CustomEvent("bookmind:preview-chibi"))
                 }
                 title="Xem thử hoạt cảnh Pixel Chibi giận dữ khi bỏ lỡ điểm danh hôm qua"
-                className="inline-flex items-center gap-1 rounded-full border border-rose-500/25 bg-rose-500/10 px-2.5 py-1 text-[11px] font-semibold text-rose-300 transition hover:border-rose-400/50 hover:bg-rose-500/20 cursor-pointer"
+                className="inline-flex items-center gap-1 rounded-full border-2 border-[#F5EFE6] bg-[#FF8A8A] px-2.5 py-1 text-[11px] font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer"
               >
                 <span>💢 Thử Chibi giận</span>
               </button>
@@ -240,23 +237,23 @@ export default function AttendanceDashboard({
                   })
                 }
                 title="Xem thử hoạt cảnh Pixel Chibi nhảy nhót la hát khen ngợi"
-                className="inline-flex items-center gap-1 rounded-full border border-amber-500/30 bg-amber-500/10 px-2.5 py-1 text-[11px] font-semibold text-amber-300 transition hover:border-amber-400/50 hover:bg-amber-500/20 cursor-pointer"
+                className="inline-flex items-center gap-1 rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2.5 py-1 text-[11px] font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] active:shadow-none cursor-pointer"
               >
                 <span>🎉 Thử Chibi khen</span>
               </button>
             </div>
 
             <div className="flex items-baseline gap-2.5 pt-1">
-              <span className="text-4xl font-black tracking-tight text-white sm:text-6xl">
+              <span className="text-4xl font-black tracking-tight text-[#F5EFE6] sm:text-6xl">
                 {streak.currentStreak}
               </span>
-              <span className="flex items-center gap-1.5 text-base sm:text-xl font-semibold text-amber-300/90">
+              <span className="flex items-center gap-1.5 text-base sm:text-xl font-extrabold text-[#F3C969]">
                 <span>ngày liên tiếp</span>
-                <Flame className="h-4 w-4 sm:h-5 sm:w-5 text-amber-400" />
+                <Flame className="h-4 w-4 sm:h-5 sm:w-5" />
               </span>
             </div>
 
-            <p className="max-w-lg text-xs sm:text-sm text-slate-300/90 leading-relaxed">
+            <p className="max-w-lg text-xs sm:text-sm text-[#B8B2A6] leading-relaxed">
               {isCheckedInToday
                 ? "Bạn đã hoàn thành điểm danh hôm nay và lưu an toàn trên Supabase Cloud. Mọi thiết bị (Laptop & Điện thoại) đều được cập nhật tự động."
                 : "Hôm nay bạn chưa điểm danh. Bấm nút điểm danh bên dưới hoặc hoàn thành một bài ôn tập để duy trì chuỗi ngày học!"}
@@ -268,10 +265,10 @@ export default function AttendanceDashboard({
               type="button"
               disabled={isCheckedInToday || isSyncingCloud}
               onClick={handleManualCheckIn}
-              className={`flex min-h-[44px] items-center justify-center gap-2 rounded-xl px-5 py-3 text-xs sm:text-sm font-bold transition ${
+              className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] px-5 py-3 text-xs sm:text-sm font-extrabold transition-transform ${
                 isCheckedInToday
-                  ? "border border-emerald-500/30 bg-emerald-500/10 text-emerald-300 cursor-default"
-                  : "bg-amber-500 text-slate-950 shadow-lg shadow-amber-500/20 hover:bg-amber-400 active:scale-[0.99] cursor-pointer"
+                  ? "bg-[#A7D7A9] text-[#141413] cursor-default"
+                  : "bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] hover:bg-[#f7d683] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
               }`}
             >
               <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
@@ -284,17 +281,17 @@ export default function AttendanceDashboard({
               </span>
             </button>
 
-            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-4 gap-y-1 text-xs text-slate-400">
+            <div className="flex flex-wrap items-center justify-center sm:justify-end gap-x-4 gap-y-1 text-xs font-semibold text-[#B8B2A6]">
               <span>
                 Kỷ lục:{" "}
-                <strong className="font-semibold text-amber-300">
+                <strong className="font-extrabold text-[#F3C969]">
                   {streak.longestStreak} ngày
                 </strong>
               </span>
-              <span className="text-slate-700">•</span>
+              <span className="text-[#5A564D]">•</span>
               <span>
                 Tổng tích lũy:{" "}
-                <strong className="font-semibold text-emerald-300">
+                <strong className="font-extrabold text-[#A7D7A9]">
                   {streak.activeDates.length} ngày
                 </strong>
               </span>
@@ -302,14 +299,14 @@ export default function AttendanceDashboard({
           </div>
         </div>
 
-        {/* 7-Day Visual Calendar Tracker (Mobile Responsive 320px+) */}
-        <div className="mt-6 border-t border-white/[0.07] pt-5">
+        {/* 7-Day Visual Calendar Tracker */}
+        <div className="mt-6 border-t-2 border-[#3A3832] pt-5">
           <div className="mb-3 flex items-center justify-between">
-            <span className="text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+            <span className="text-[11px] font-extrabold uppercase tracking-wider text-[#B8B2A6]">
               Lịch sử 7 ngày gần nhất
             </span>
-            <span className="text-[11px] text-slate-400">
-              Hôm nay: <strong className="text-slate-200">{todayStr}</strong>
+            <span className="text-[11px] font-semibold text-[#B8B2A6]">
+              Hôm nay: <strong className="text-[#F5EFE6]">{todayStr}</strong>
             </span>
           </div>
           <div className="grid grid-cols-7 gap-1.5 sm:gap-3">
@@ -320,27 +317,31 @@ export default function AttendanceDashboard({
               return (
                 <div
                   key={i}
-                  className={`flex flex-col items-center justify-center rounded-xl border py-2 px-1 sm:p-3 text-center transition ${
+                  className={`flex flex-col items-center justify-center rounded-xl border-2 py-2 px-1 sm:p-3 text-center ${
                     isToday
                       ? active
-                        ? "border-amber-500/60 bg-amber-500/15 text-white"
-                        : "border-amber-500/40 bg-slate-900/90 text-amber-300"
+                        ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413]"
+                        : "border-[#F3C969] bg-[#141413] text-[#F3C969]"
                       : active
-                      ? "border-emerald-500/30 bg-emerald-950/25 text-emerald-300"
-                      : "border-white/[0.06] bg-slate-950/50 text-slate-500"
+                      ? "border-[#A7D7A9] bg-[#141413] text-[#A7D7A9]"
+                      : "border-[#3A3832] bg-[#141413] text-[#7A756A]"
                   }`}
                 >
-                  <span className="text-[10px] sm:text-[11px] font-semibold uppercase tracking-tight">
+                  <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight">
                     {d.dayName}
                   </span>
-                  <span className="mt-0.5 text-xs sm:text-base font-bold">
+                  <span className="mt-0.5 text-xs sm:text-base font-black">
                     {d.dayNumber}
                   </span>
                   <div className="mt-1 sm:mt-1.5">
                     {active ? (
-                      <CheckCircle2 className="h-3.5 w-3.5 sm:h-4 sm:w-4 text-emerald-400" />
+                      <CheckCircle2
+                        className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
+                          isToday ? "text-[#141413]" : "text-[#A7D7A9]"
+                        }`}
+                      />
                     ) : (
-                      <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full border border-slate-700/80 bg-slate-900" />
+                      <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full border-2 border-[#3A3832] bg-[#1D1C19]" />
                     )}
                   </div>
                 </div>
@@ -351,17 +352,17 @@ export default function AttendanceDashboard({
       </div>
 
       {/* 2. STATS SUMMARY GRID */}
-      <div className="space-y-3.5">
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2">
+      <div className="space-y-4">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-2.5">
           <div className="flex items-center gap-2.5">
-            <div className="flex h-8 w-8 items-center justify-center rounded-lg bg-indigo-500/10 text-indigo-400 border border-indigo-500/20">
+            <div className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#C8B6FF] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
               <BarChart3 className="h-4 w-4" />
             </div>
             <div>
-              <h2 className="text-base sm:text-lg font-bold text-white">
+              <h2 className="text-base sm:text-lg font-extrabold text-[#F5EFE6]">
                 Tổng Quan Năng Lực Tích Lũy
               </h2>
-              <p className="text-xs text-slate-400">
+              <p className="text-xs text-[#B8B2A6]">
                 Thống kê tiến độ thực tế từ tủ sách và kho thẻ từ SRS của bạn
               </p>
             </div>
@@ -371,7 +372,7 @@ export default function AttendanceDashboard({
             <button
               type="button"
               onClick={onOpenSrs}
-              className="inline-flex min-h-[38px] items-center justify-center gap-1.5 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3.5 py-2 text-xs font-semibold text-indigo-300 transition hover:bg-indigo-500/20"
+              className="inline-flex min-h-[40px] items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
             >
               <span>Ôn ngay {dueVocab} từ đến hạn</span>
               <ArrowUpRight className="h-3.5 w-3.5" />
@@ -380,82 +381,82 @@ export default function AttendanceDashboard({
         </div>
 
         <div className="grid grid-cols-2 gap-3 sm:gap-4 lg:grid-cols-4">
-          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-5 space-y-1.5 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Từ Vựng Đã Lưu</span>
-              <GraduationCap className="h-4 w-4 text-indigo-400 shrink-0" />
+              <GraduationCap className="h-4 w-4 text-[#C8B6FF] shrink-0" />
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white">
+            <div className="text-2xl sm:text-3xl font-black text-[#F5EFE6]">
               {totalVocab}{" "}
-              <span className="text-xs font-normal text-slate-400">từ</span>
+              <span className="text-xs font-semibold text-[#B8B2A6]">từ</span>
             </div>
-            <p className="text-[11px] text-emerald-400/90">
+            <p className="text-[11px] font-bold text-[#A7D7A9]">
               {masteredVocab} từ đã thuộc vững (SRS)
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-5 space-y-1.5 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Chương Đã Phân Tích</span>
-              <Layers className="h-4 w-4 text-emerald-400 shrink-0" />
+              <Layers className="h-4 w-4 text-[#A7D7A9] shrink-0" />
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white">
+            <div className="text-2xl sm:text-3xl font-black text-[#F5EFE6]">
               {totalChapters}{" "}
-              <span className="text-xs font-normal text-slate-400">chương</span>
+              <span className="text-xs font-semibold text-[#B8B2A6]">chương</span>
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] font-semibold text-[#B8B2A6]">
               Từ {totalCourses} cuốn sách trong tủ
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-5 space-y-1.5 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Bài Luyện Tập</span>
-              <Languages className="h-4 w-4 text-sky-400 shrink-0" />
+              <Languages className="h-4 w-4 text-[#B8D8F8] shrink-0" />
             </div>
-            <div className="text-2xl sm:text-3xl font-bold text-white">
+            <div className="text-2xl sm:text-3xl font-black text-[#F5EFE6]">
               {totalExercisesDone}{" "}
-              <span className="text-xs font-normal text-slate-400">bài</span>
+              <span className="text-xs font-semibold text-[#B8B2A6]">bài</span>
             </div>
-            <p className="text-[11px] text-sky-300/90">
-              Quiz, điền từ Cloze & luyện dịch
+            <p className="text-[11px] font-bold text-[#B8D8F8]">
+              Quiz, điền từ Cloze &amp; luyện dịch
             </p>
           </div>
 
-          <div className="rounded-2xl border border-white/[0.07] bg-[#0F1523]/90 p-4 sm:p-5 space-y-1.5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-5 space-y-1.5 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Danh Hiệu Học Thuật</span>
-              <Award className="h-4 w-4 text-amber-400 shrink-0" />
+              <Award className="h-4 w-4 text-[#F3C969] shrink-0" />
             </div>
-            <div className="flex items-center gap-1.5 text-sm sm:text-base font-bold text-amber-300 pt-0.5">
+            <div className="flex items-center gap-1.5 text-sm sm:text-base font-extrabold text-[#F3C969] pt-0.5">
               {streak.currentStreak >= 14 ? (
                 <>
-                  <Trophy className="h-4 w-4 text-amber-400 shrink-0" />
+                  <Trophy className="h-4 w-4 shrink-0" />
                   <span className="truncate">Học Giả Kiên Định</span>
                 </>
               ) : streak.currentStreak >= 7 ? (
                 <>
-                  <Zap className="h-4 w-4 text-amber-400 shrink-0" />
+                  <Zap className="h-4 w-4 shrink-0" />
                   <span className="truncate">Chiến Thần Đọc Sách</span>
                 </>
               ) : streak.currentStreak >= 3 ? (
                 <>
-                  <Rocket className="h-4 w-4 text-amber-400 shrink-0" />
+                  <Rocket className="h-4 w-4 shrink-0" />
                   <span className="truncate">Người Đọc Bền Bỉ</span>
                 </>
               ) : (
                 <>
-                  <Sparkles className="h-4 w-4 text-amber-400 shrink-0" />
+                  <Sparkles className="h-4 w-4 shrink-0" />
                   <span className="truncate">Khởi Đầu Tri Thức</span>
                 </>
               )}
             </div>
-            <p className="text-[11px] text-slate-400">
+            <p className="text-[11px] text-[#B8B2A6]">
               {courses[0] ? (
                 <button
                   type="button"
                   onClick={() => onOpenCourse(courses[0].id)}
-                  className="text-indigo-400 hover:underline"
+                  className="font-bold text-[#C8B6FF] hover:underline cursor-pointer"
                 >
                   Đọc tiếp: {courses[0].title.slice(0, 22)}...
                 </button>
@@ -468,19 +469,19 @@ export default function AttendanceDashboard({
       </div>
 
       {/* 3. RECENT ACTIVITY TIMELINE */}
-      <div className="rounded-2xl sm:rounded-3xl border border-white/[0.08] bg-[#0F1523]/90 p-4 sm:p-6 space-y-4">
-        <div className="flex items-center justify-between border-b border-white/[0.07] pb-3.5">
-          <div className="flex items-center gap-2 text-sm sm:text-base font-bold text-white">
-            <Clock className="h-4 w-4 text-indigo-400 shrink-0" />
+      <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-6 space-y-4 shadow-[4px_4px_0_0_#F5EFE6]">
+        <div className="flex items-center justify-between border-b-2 border-[#3A3832] pb-3.5">
+          <div className="flex items-center gap-2 text-sm sm:text-base font-extrabold text-[#F5EFE6]">
+            <Clock className="h-4 w-4 text-[#C8B6FF] shrink-0" />
             <span>Nhật Ký Hoạt Động Gần Đây</span>
           </div>
-          <span className="text-xs text-slate-400">
+          <span className="rounded-full border-2 border-[#3A3832] bg-[#141413] px-2.5 py-0.5 text-xs font-bold text-[#B8B2A6]">
             {activities.length} sự kiện
           </span>
         </div>
 
         {activities.length === 0 ? (
-          <div className="py-10 text-center text-xs sm:text-sm text-slate-500">
+          <div className="py-10 text-center text-xs sm:text-sm text-[#B8B2A6]">
             Chưa có hoạt động nào được ghi nhận. Hãy bấm Điểm danh hoặc học một chương sách!
           </div>
         ) : (
@@ -489,28 +490,36 @@ export default function AttendanceDashboard({
               (act) => (
                 <div
                   key={act.id}
-                  className="flex items-start sm:items-center gap-3 rounded-xl border border-white/[0.06] bg-slate-950/60 p-3 sm:p-3.5 text-xs transition hover:border-white/[0.12]"
+                  className="flex items-start sm:items-center gap-3 rounded-xl border-2 border-[#3A3832] bg-[#141413] p-3 sm:p-3.5 text-xs"
                 >
-                  <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg bg-slate-900 border border-white/[0.07] text-indigo-300">
+                  <div
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-[#F5EFE6] text-[#141413] ${
+                      act.type === "vocab_review"
+                        ? "bg-[#C8B6FF]"
+                        : act.type === "check_in"
+                        ? "bg-[#F3C969]"
+                        : "bg-[#A7D7A9]"
+                    }`}
+                  >
                     {act.type === "vocab_review" ? (
-                      <Sparkles className="h-3.5 w-3.5 text-indigo-400" />
+                      <Sparkles className="h-3.5 w-3.5" />
                     ) : act.type === "check_in" ? (
-                      <Flame className="h-3.5 w-3.5 text-amber-400" />
+                      <Flame className="h-3.5 w-3.5" />
                     ) : (
-                      <BookOpen className="h-3.5 w-3.5 text-emerald-400" />
+                      <BookOpen className="h-3.5 w-3.5" />
                     )}
                   </div>
 
                   <div className="min-w-0 flex-1 space-y-0.5">
                     <div className="flex flex-wrap items-center justify-between gap-1">
-                      <span className="font-semibold text-slate-100 truncate">
+                      <span className="font-bold text-[#F5EFE6] truncate">
                         {act.title}
                       </span>
-                      <span className="text-[11px] text-slate-500 shrink-0">
+                      <span className="text-[11px] font-semibold text-[#B8B2A6] shrink-0">
                         {formatTimeAgo(act.timestamp)}
                       </span>
                     </div>
-                    <p className="text-slate-400 leading-relaxed break-words">
+                    <p className="text-[#B8B2A6] leading-relaxed break-words">
                       {act.details}
                     </p>
                   </div>
@@ -521,7 +530,7 @@ export default function AttendanceDashboard({
               <button
                 type="button"
                 onClick={() => setShowAllActivities(!showAllActivities)}
-                className="flex min-h-[40px] w-full items-center justify-center rounded-xl border border-white/[0.08] bg-slate-950/60 px-4 py-2 text-xs font-semibold text-indigo-300 transition hover:bg-slate-900 hover:text-white cursor-pointer"
+                className="flex min-h-[42px] w-full items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2 text-xs font-extrabold text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
               >
                 {showAllActivities
                   ? "Thu gọn"

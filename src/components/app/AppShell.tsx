@@ -101,8 +101,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
   }, [isUserMenuOpen]);
 
   return (
-    <div className="min-h-screen flex flex-col bg-[#090D16] pb-20 lg:pb-0">      {/* Top Navbar */}
-      <header className="sticky top-0 z-30 border-b border-white/[0.07] bg-[#090D16]/90 backdrop-blur-xl">
+    <div className="min-h-screen flex flex-col bg-transparent pb-20 lg:pb-0">
+      {/* Top Navbar — Dark Soft Neo-Brutalism */}
+      <header className="sticky top-0 z-30 border-b-2 border-[#F5EFE6] bg-[#1D1C19]">
         <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between gap-2 px-3.5 sm:px-6">
           {/* Left: Brand Logo & Optional Breadcrumb */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
@@ -111,16 +112,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => {
                 router.push(ROUTES.books);
               }}
-              className="group flex items-center gap-2 sm:gap-2.5 text-left transition cursor-pointer shrink-0"
+              className="group flex items-center gap-2 sm:gap-2.5 text-left transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer shrink-0"
             >
-              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-sm shadow-indigo-600/20 group-hover:bg-indigo-500 transition">
+              <div className="flex h-8 w-8 sm:h-9 sm:w-9 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
                 <BookOpen className="h-4 w-4 sm:h-4.5 sm:w-4.5" />
               </div>
               <div className="flex items-center gap-1.5">
-                <span className="text-sm sm:text-base font-bold tracking-tight text-white">
+                <span className="text-sm sm:text-base font-extrabold tracking-tight text-[#F5EFE6]">
                   BookMind
                 </span>
-                <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[9px] sm:text-[10px] font-semibold tracking-wider text-indigo-300 border border-white/[0.08]">
+                <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold tracking-wider text-[#141413]">
                   STUDIO
                 </span>
               </div>
@@ -128,29 +129,35 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
             {/* Context breadcrumb when viewing a course */}
             {activeCourse && (
-              <div className="hidden md:flex items-center gap-2 pl-3 ml-1 border-l border-white/[0.08] text-xs min-w-0">
-                <span className="text-slate-600">/</span>
-                <span className="max-w-[200px] lg:max-w-[260px] truncate text-slate-300 font-medium">
+              <div className="hidden md:flex items-center gap-2 pl-3 ml-1 border-l-2 border-[#3A3832] text-xs min-w-0">
+                <span className="text-[#8F8A7E]">/</span>
+                <span className="max-w-[200px] lg:max-w-[260px] truncate text-[#F5EFE6] font-bold">
                   {activeCourse.title}
                 </span>
               </div>
             )}
           </div>
 
-          {/* Center: Clean Editorial Segmented Navigation Bar (Desktop) */}
-          <nav className="hidden lg:flex items-center gap-1 p-1 rounded-xl bg-[#0F1523] border border-white/[0.07] shrink-0">
+          {/* Center: Dark Soft Neo-Brutalism Segmented Navigation Bar (Desktop) */}
+          <nav className="hidden lg:flex items-center gap-2 shrink-0">
             {/* 1. Điểm danh */}
             <Link
               href={ROUTES.home}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("attendance")
-                  ? "bg-amber-500/15 text-amber-300 border border-amber-500/30"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <Flame className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+              <Flame className="h-3.5 w-3.5 shrink-0" />
               <span>Điểm danh</span>
-              <span className="rounded-md bg-amber-500/15 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
+                  isNavActive("attendance")
+                    ? "bg-[#141413] text-[#F3C969]"
+                    : "bg-[#F3C969] text-[#141413]"
+                }`}
+              >
                 {streakData.currentStreak}d
               </span>
             </Link>
@@ -158,15 +165,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* 2. Tủ sách cá nhân */}
             <Link
               href={ROUTES.books}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("dashboard")
-                  ? "bg-white/[0.08] text-white border border-white/[0.1]"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <BookOpen className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+              <BookOpen className="h-3.5 w-3.5 shrink-0" />
               <span>Tủ sách</span>
-              <span className="rounded-md bg-white/[0.06] px-1.5 py-0.5 text-[10px] text-slate-300 font-semibold">
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
+                  isNavActive("dashboard")
+                    ? "bg-[#141413] text-[#F3C969]"
+                    : "bg-[#C8B6FF] text-[#141413]"
+                }`}
+              >
                 {courses.length}
               </span>
             </Link>
@@ -174,15 +187,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* 3. Thư viện sách cộng đồng */}
             <Link
               href={ROUTES.library}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("library")
-                  ? "bg-white/[0.08] text-white border border-white/[0.1]"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <Library className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <Library className="h-3.5 w-3.5 shrink-0" />
               <span>Thư viện</span>
-              <span className="rounded-md bg-emerald-500/15 px-1.5 py-0.5 text-[10px] text-emerald-300 font-semibold">
+              <span
+                className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
+                  isNavActive("library")
+                    ? "bg-[#141413] text-[#F3C969]"
+                    : "bg-[#A7D7A9] text-[#141413]"
+                }`}
+              >
                 {libraryCourses.length}
               </span>
             </Link>
@@ -190,16 +209,22 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* 4. Ôn tập & Thi */}
             <Link
               href={ROUTES.srs}
-              className={`flex items-center gap-1.5 rounded-lg px-3 py-1.5 text-xs font-semibold whitespace-nowrap shrink-0 transition cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("srs_global")
-                  ? "bg-white/[0.08] text-white border border-white/[0.1]"
-                  : "text-slate-400 hover:text-slate-200 hover:bg-white/[0.04] border border-transparent"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <GraduationCap className="h-3.5 w-3.5 text-indigo-300 shrink-0" />
+              <GraduationCap className="h-3.5 w-3.5 shrink-0" />
               <span>Ôn tập &amp; Thi</span>
               {dueFlashcards.length > 0 && (
-                <span className="rounded-full bg-amber-500/20 px-1.5 py-0.5 text-[10px] font-bold text-amber-300">
+                <span
+                  className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
+                    isNavActive("srs_global")
+                      ? "bg-[#141413] text-[#F3C969]"
+                      : "bg-[#B8D8F8] text-[#141413]"
+                  }`}
+                >
                   {dueFlashcards.length}
                 </span>
               )}
@@ -212,23 +237,23 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setIsUpgradeModalOpen(true)}
-              className={`flex items-center gap-1 sm:gap-1.5 rounded-xl border px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-bold transition cursor-pointer shrink-0 ${
+              className={`flex items-center gap-1 sm:gap-1.5 rounded-xl border-2 border-[#F5EFE6] px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-extrabold shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer shrink-0 ${
                 quotaAccount &&
                 quotaAccount.plan !== "unlimited" &&
                 quotaAccount.maxCalls !== -1 &&
                 quotaAccount.usedCalls >= quotaAccount.maxCalls
-                  ? "border-rose-500/50 bg-rose-500/20 text-rose-300 hover:bg-rose-500/30 animate-pulse"
+                  ? "bg-[#FF8A8A] text-[#141413]"
                   : quotaAccount?.plan === "unlimited"
-                  ? "border-purple-500/40 bg-purple-500/15 text-purple-300 hover:bg-purple-500/25"
+                  ? "bg-[#C8B6FF] text-[#141413]"
                   : quotaAccount?.plan === "pro"
-                  ? "border-amber-500/40 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
-                  : "border-indigo-500/30 bg-indigo-500/15 text-indigo-300 hover:bg-indigo-500/25"
+                  ? "bg-[#F3C969] text-[#141413]"
+                  : "bg-[#B8D8F8] text-[#141413]"
               }`}
               title="Xem số dư AI Credit hôm nay, bảng quy đổi 1-5 Credit & nâng cấp gói"
             >
               {quotaAccount?.plan === "unlimited" ? (
                 <>
-                  <InfinityIcon className="h-3.5 w-3.5 text-purple-400 shrink-0" />
+                  <InfinityIcon className="h-3.5 w-3.5 shrink-0" />
                   <span className="sm:hidden">VIP</span>
                   <span className="hidden sm:inline">
                     VIP: {quotaAccount.usedCalls}/{quotaAccount.fupDailyLimit || 500} Credit
@@ -238,7 +263,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 quotaAccount.maxCalls !== -1 &&
                 quotaAccount.usedCalls >= quotaAccount.maxCalls ? (
                 <>
-                  <Zap className="h-3.5 w-3.5 text-rose-400 shrink-0" />
+                  <Zap className="h-3.5 w-3.5 shrink-0" />
                   <span className="sm:hidden">Hết Credit</span>
                   <span className="hidden sm:inline">
                     Hết Credit ({quotaAccount.usedCalls}/{quotaAccount.maxCalls}) • Nâng cấp
@@ -246,7 +271,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 </>
               ) : (
                 <>
-                  <Zap className="h-3.5 w-3.5 text-amber-400 shrink-0" />
+                  <Zap className="h-3.5 w-3.5 shrink-0" />
                   <span className="sm:hidden">
                     {quotaAccount?.usedCalls ?? 0}/{quotaAccount?.maxCalls ?? 30}
                   </span>
@@ -265,12 +290,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 setNewEmailToast(null);
                 setIsInboxModalOpen(true);
               }}
-              className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition shadow-sm cursor-pointer"
+              className="relative flex h-8 w-8 sm:h-9 sm:w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#141413] text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
               title="Hộp thư Email nhận Mã BookMind API Key"
             >
-              <Mail className="h-4 w-4 text-indigo-400" />
+              <Mail className="h-4 w-4 text-[#B8D8F8]" />
               {unreadEmailCount > 0 && (
-                <span className="absolute -top-1 -right-1 flex h-4 min-w-[16px] items-center justify-center rounded-full bg-rose-500 px-1 text-[10px] font-black text-white shadow">
+                <span className="absolute -top-1.5 -right-1.5 flex h-4 min-w-[16px] items-center justify-center rounded-full border-2 border-[#141413] bg-[#FF8A8A] px-1 text-[10px] font-black text-[#141413]">
                   {unreadEmailCount}
                 </span>
               )}
@@ -280,7 +305,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setIsCreateOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 shrink-0 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-3.5 py-2 text-xs font-semibold text-white shadow-sm transition active:scale-95 cursor-pointer"
+              className="hidden sm:flex items-center gap-1.5 shrink-0 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#b8e2ba] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5 shrink-0" />
               <span>Nạp sách mới</span>
@@ -290,13 +315,13 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setIsSettingsOpen(true)}
-              className="hidden sm:flex relative h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-slate-800 bg-slate-900/80 hover:bg-slate-800 text-slate-300 hover:text-white transition shadow-sm cursor-pointer"
+              className="hidden sm:flex relative h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#141413] text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
               title="Cài đặt Gemini API & Supabase Cloud"
             >
               <Settings className="h-4 w-4" />
               <span
-                className={`absolute top-1.5 right-1.5 h-2 w-2 rounded-full ${
-                  hasApiKey ? "bg-emerald-400" : "bg-amber-400 ring-2 ring-slate-900"
+                className={`absolute top-1 right-1 h-2 w-2 rounded-full ${
+                  hasApiKey ? "bg-[#A7D7A9]" : "bg-[#F3C969]"
                 }`}
               />
             </button>
@@ -306,7 +331,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               <button
                 type="button"
                 onClick={() => setIsUserMenuOpen(!isUserMenuOpen)}
-                className="flex items-center gap-1 sm:gap-1.5 rounded-xl border border-slate-800 bg-slate-900/80 p-1 pr-1.5 sm:pr-2 hover:border-slate-700 hover:bg-slate-800 transition cursor-pointer"
+                className="flex items-center gap-1 sm:gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] p-1 pr-1.5 sm:pr-2 shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
                 title="Tài khoản của bạn"
               >
                 {currentUser?.user_metadata?.avatar_url && !avatarImgError ? (
@@ -315,63 +340,63 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                     alt=""
                     referrerPolicy="no-referrer"
                     onError={() => setAvatarImgError(true)}
-                    className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg object-cover ring-1 ring-indigo-500/50 shrink-0"
+                    className="h-6 w-6 sm:h-7 sm:w-7 rounded-lg border-2 border-[#F5EFE6] object-cover shrink-0"
                   />
                 ) : (
-                  <div className="flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-lg bg-gradient-to-br from-indigo-600 to-purple-600 text-white font-bold text-xs shadow-sm">
+                  <div className="flex h-6 w-6 sm:h-7 sm:w-7 shrink-0 items-center justify-center rounded-lg border-2 border-[#F5EFE6] bg-[#C8B6FF] text-[#141413] font-extrabold text-xs">
                     {currentUser?.user_metadata?.full_name
                       ? currentUser.user_metadata.full_name.charAt(0).toUpperCase()
                       : currentUser?.email?.charAt(0).toUpperCase() || "U"}
                   </div>
                 )}
-                <span className="hidden md:inline max-w-[90px] truncate text-xs font-semibold text-slate-200">
+                <span className="hidden md:inline max-w-[90px] truncate text-xs font-bold text-[#F5EFE6]">
                   {currentUser?.user_metadata?.full_name ||
                     currentUser?.email?.split("@")[0] ||
                     "Học viên"}
                 </span>
-                <ChevronDown className="h-3 w-3 text-slate-400" />
+                <ChevronDown className="h-3 w-3 text-[#B8B2A6]" />
               </button>
 
               {/* Dropdown Popover */}
               {isUserMenuOpen && (
-                <div className="absolute right-0 mt-2 w-[calc(100vw-1.5rem)] max-w-[16.5rem] rounded-2xl border border-slate-800 bg-slate-900/95 p-2 shadow-2xl backdrop-blur-xl z-50 animate-in fade-in zoom-in-95 duration-150">
-                  <div className="px-3 py-2.5 border-b border-slate-800/80">
+                <div className="absolute right-0 mt-2.5 w-[calc(100vw-1.5rem)] max-w-[16.5rem] rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-2 shadow-[4px_4px_0_0_#F5EFE6] z-50 animate-in fade-in zoom-in-95 duration-150">
+                  <div className="px-3 py-2.5 border-b-2 border-[#3A3832]">
                     <div className="flex items-center justify-between gap-2">
-                      <p className="text-xs font-bold text-white truncate">
+                      <p className="text-xs font-extrabold text-[#F5EFE6] truncate">
                         {currentUser?.user_metadata?.full_name || "Học viên BookMind"}
                       </p>
                       <span
-                        className={`shrink-0 rounded-md px-1.5 py-0.5 text-[9px] font-black uppercase ${
+                        className={`shrink-0 rounded-full border-2 border-[#F5EFE6] px-2 py-0.5 text-[9px] font-black uppercase ${
                           quotaAccount?.role === "admin"
-                            ? "bg-amber-500/20 text-amber-300 border border-amber-500/30"
-                            : "bg-slate-800 text-slate-300 border border-slate-700"
+                            ? "bg-[#F3C969] text-[#141413]"
+                            : "bg-[#B8D8F8] text-[#141413]"
                         }`}
                       >
                         {quotaAccount?.role === "admin" ? "Admin" : "User"}
                       </span>
                     </div>
-                    <p className="text-[11px] text-slate-400 truncate mt-0.5">
+                    <p className="text-[11px] text-[#B8B2A6] truncate mt-0.5">
                       {currentUser?.email || "Chế độ lưu cục bộ"}
                     </p>
-                    <div className="mt-2 inline-flex items-center gap-1.5 px-2 py-0.5 rounded-full text-[10px] font-medium bg-indigo-500/10 text-indigo-300 border border-indigo-500/20">
-                      <span className="h-1.5 w-1.5 rounded-full bg-emerald-400" />
+                    <div className="mt-2 inline-flex items-center gap-1.5 px-2.5 py-0.5 rounded-full text-[10px] font-bold bg-[#A7D7A9] text-[#141413] border-2 border-[#F5EFE6]">
+                      <span className="h-1.5 w-1.5 rounded-full bg-[#141413]" />
                       {currentUser?.app_metadata?.provider === "local"
                         ? "Học viên Offline / IndexedDB"
                         : "Đã liên kết Cloud"}
                     </div>
                   </div>
 
-                  <div className="py-1">
+                  <div className="py-1 space-y-0.5">
                     <button
                       type="button"
                       onClick={() => {
                         setIsUserMenuOpen(false);
                         router.push(ROUTES.home);
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-[#F5EFE6] hover:bg-[#2A2823] text-left cursor-pointer"
                     >
-                      <Flame className="h-3.5 w-3.5 text-amber-400" />
-                      <span>Nhật ký & Chuỗi học ({streakData.currentStreak} ngày)</span>
+                      <Flame className="h-3.5 w-3.5 text-[#F3C969]" />
+                      <span>Nhật ký &amp; Chuỗi học ({streakData.currentStreak} ngày)</span>
                     </button>
 
                     <button
@@ -380,10 +405,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         setIsUserMenuOpen(false);
                         setIsUpgradeModalOpen(true);
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-[#F5EFE6] hover:bg-[#2A2823] text-left cursor-pointer"
                     >
-                      <Crown className="h-3.5 w-3.5 text-amber-400" />
-                      <span>Gói AI Credit & Nâng cấp (30 / 120 / VIP)</span>
+                      <Crown className="h-3.5 w-3.5 text-[#F3C969]" />
+                      <span>Gói AI Credit &amp; Nâng cấp (30 / 120 / VIP)</span>
                     </button>
 
                     <button
@@ -392,18 +417,18 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         setIsUserMenuOpen(false);
                         setIsInboxModalOpen(true);
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-[#F5EFE6] hover:bg-[#2A2823] text-left cursor-pointer"
                     >
-                      <Mail className="h-3.5 w-3.5 text-emerald-400" />
+                      <Mail className="h-3.5 w-3.5 text-[#A7D7A9]" />
                       <span>Hộp thư thông báo tài khoản</span>
                     </button>
 
                     {quotaAccount?.role === "admin" && (
                       <a
                         href="/admin"
-                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-amber-300 hover:bg-amber-950/40 hover:text-amber-200 transition text-left cursor-pointer font-semibold"
+                        className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs text-[#F3C969] hover:bg-[#2A2823] text-left cursor-pointer font-bold"
                       >
-                        <Key className="h-3.5 w-3.5 text-amber-400" />
+                        <Key className="h-3.5 w-3.5 text-[#F3C969]" />
                         <span>Trang Quản Trị Admin (/admin)</span>
                       </a>
                     )}
@@ -414,21 +439,21 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         setIsUserMenuOpen(false);
                         setIsSettingsOpen(true);
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-slate-300 hover:bg-slate-800 hover:text-white transition text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-[#F5EFE6] hover:bg-[#2A2823] text-left cursor-pointer"
                     >
-                      <Settings className="h-3.5 w-3.5 text-indigo-400" />
-                      <span>Cài đặt Mô hình AI & Sao lưu</span>
+                      <Settings className="h-3.5 w-3.5 text-[#C8B6FF]" />
+                      <span>Cài đặt Mô hình AI &amp; Sao lưu</span>
                     </button>
                   </div>
 
-                  <div className="border-t border-slate-800/80 pt-1">
+                  <div className="border-t-2 border-[#3A3832] pt-1">
                     <button
                       type="button"
                       onClick={() => {
                         setIsUserMenuOpen(false);
                         handleLogout();
                       }}
-                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-xl text-xs text-rose-400 hover:bg-rose-950/40 hover:text-rose-300 transition text-left cursor-pointer"
+                      className="w-full flex items-center gap-2.5 px-3 py-2 rounded-lg text-xs font-bold text-[#FF8A8A] hover:bg-[#2A1C1C] text-left cursor-pointer"
                     >
                       <LogOut className="h-3.5 w-3.5" />
                       <span>Đăng xuất tài khoản</span>
@@ -445,20 +470,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
       {/* Floating Account Confirmation Toast */}
       {newEmailToast && (
-        <div className="fixed bottom-5 right-5 z-40 max-w-sm rounded-2xl border border-emerald-500/50 bg-slate-900/95 p-4 shadow-2xl shadow-emerald-950/80 backdrop-blur-xl animate-in slide-in-from-bottom-5 duration-200">
+        <div className="fixed bottom-5 right-5 z-40 max-w-sm rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 shadow-[4px_4px_0_0_#F5EFE6] animate-in slide-in-from-bottom-5 duration-200">
           <div className="flex items-start justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400 border border-emerald-500/30">
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] text-[#141413]">
                 <CheckCircle2 className="h-4 w-4" />
               </div>
               <div>
-                <p className="text-xs font-extrabold text-white">
+                <p className="text-xs font-extrabold text-[#F5EFE6]">
                   {newEmailToast.paymentMethod === "momo" ||
                   newEmailToast.paymentMethod === "vnpay"
                     ? "Đã nâng cấp gói AI thành công!"
                     : "Đăng ký tài khoản thành công!"}
                 </p>
-                <p className="text-[11px] text-slate-400 truncate max-w-[210px]">
+                <p className="text-[11px] text-[#B8B2A6] truncate max-w-[210px]">
                   Tài khoản: {newEmailToast.toEmail}
                 </p>
               </div>
@@ -466,12 +491,12 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             <button
               type="button"
               onClick={() => setNewEmailToast(null)}
-              className="text-xs text-slate-400 hover:text-white"
+              className="text-xs font-bold text-[#B8B2A6] hover:text-[#F5EFE6]"
             >
               Đóng
             </button>
           </div>
-          <div className="mt-2.5 rounded-xl border border-slate-800 bg-slate-950 px-3 py-2 text-xs text-emerald-300 text-center font-semibold">
+          <div className="mt-2.5 rounded-lg border-2 border-[#3A3832] bg-[#141413] px-3 py-2 text-xs text-[#A7D7A9] text-center font-bold">
             Đã tự động kích hoạt {PLAN_CONFIG[newEmailToast.plan].name}
           </div>
           <div className="mt-3 flex items-center gap-2">
@@ -481,7 +506,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 setNewEmailToast(null);
                 setIsInboxModalOpen(true);
               }}
-              className="flex-1 rounded-xl bg-indigo-600 hover:bg-indigo-500 py-2 text-xs font-bold text-white transition cursor-pointer"
+              className="flex-1 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
             >
               Xem thông báo
             </button>
@@ -491,7 +516,7 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 setNewEmailToast(null);
                 setIsUpgradeModalOpen(true);
               }}
-              className="rounded-xl border border-amber-500/40 bg-amber-500/15 hover:bg-amber-500/25 px-3 py-2 text-xs font-bold text-amber-300 transition cursor-pointer"
+              className="rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
             >
               Chi tiết gói
             </button>
@@ -499,25 +524,25 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       )}
 
-      {/* Mobile Fixed Bottom Navigation Bar (Chỉ hiển thị ở màn hình chính; khi đang mở sách sẽ nhường chỗ cho Thanh 6 Tab Chương) */}
+      {/* Mobile Fixed Bottom Navigation Bar */}
       {!activeCourse && (
         <nav
           aria-label="Điều hướng di động"
-          className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#090D16]/95 backdrop-blur-xl pb-safe lg:hidden"
+          className="fixed bottom-0 inset-x-0 z-40 border-t-2 border-[#F5EFE6] bg-[#1D1C19] pb-safe lg:hidden"
         >
-          <div className="mx-auto grid max-w-lg grid-cols-5 items-center px-1.5 pt-1.5 pb-1">
+          <div className="mx-auto grid max-w-lg grid-cols-5 items-center gap-1 px-1.5 pt-1.5 pb-1">
             <Link
               href={ROUTES.home}
-              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl border-2 py-1 text-[10px] font-bold transition-transform active:translate-y-[1px] ${
                 isNavActive("attendance")
-                  ? "text-amber-400"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]"
+                  : "border-transparent text-[#B8B2A6] hover:text-[#F5EFE6]"
               }`}
             >
               <div className="relative flex items-center justify-center">
                 <Flame className="h-4 w-4" />
                 {streakData.currentStreak > 0 && (
-                  <span className="ml-0.5 text-[9px] font-extrabold text-amber-300">
+                  <span className="ml-0.5 text-[9px] font-extrabold">
                     {streakData.currentStreak}
                   </span>
                 )}
@@ -527,10 +552,10 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
             <Link
               href={ROUTES.books}
-              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl border-2 py-1 text-[10px] font-bold transition-transform active:translate-y-[1px] ${
                 isNavActive("dashboard")
-                  ? "text-indigo-400"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]"
+                  : "border-transparent text-[#B8B2A6] hover:text-[#F5EFE6]"
               }`}
             >
               <BookOpen className="h-4 w-4" />
@@ -542,20 +567,20 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
               onClick={() => setIsCreateOpen(true)}
               className="flex min-h-[44px] flex-col items-center justify-center gap-0.5"
             >
-              <div className="flex h-9 w-9 items-center justify-center rounded-xl bg-indigo-600 text-white shadow-md shadow-indigo-600/30 active:scale-95 transition">
+              <div className="flex h-9 w-9 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] active:shadow-none">
                 <Plus className="h-4.5 w-4.5" />
               </div>
-              <span className="text-[10px] font-semibold text-indigo-300">
+              <span className="text-[10px] font-bold text-[#A7D7A9]">
                 Nạp sách
               </span>
             </button>
 
             <Link
               href={ROUTES.library}
-              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+              className={`flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl border-2 py-1 text-[10px] font-bold transition-transform active:translate-y-[1px] ${
                 isNavActive("library")
-                  ? "text-emerald-400"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]"
+                  : "border-transparent text-[#B8B2A6] hover:text-[#F5EFE6]"
               }`}
             >
               <Library className="h-4 w-4" />
@@ -564,16 +589,16 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
             <Link
               href={ROUTES.srs}
-              className={`relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl py-1 text-[10px] font-semibold transition ${
+              className={`relative flex min-h-[44px] flex-col items-center justify-center gap-0.5 rounded-xl border-2 py-1 text-[10px] font-bold transition-transform active:translate-y-[1px] ${
                 isNavActive("srs_global")
-                  ? "text-indigo-400"
-                  : "text-slate-400 hover:text-slate-200"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]"
+                  : "border-transparent text-[#B8B2A6] hover:text-[#F5EFE6]"
               }`}
             >
               <div className="relative">
                 <GraduationCap className="h-4 w-4" />
                 {dueFlashcards.length > 0 && (
-                  <span className="absolute -right-2.5 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full bg-amber-500 px-1 text-[8px] font-black text-slate-950">
+                  <span className="absolute -right-2.5 -top-1 flex h-3.5 min-w-[14px] items-center justify-center rounded-full border border-[#141413] bg-[#F3C969] px-1 text-[8px] font-black text-[#141413]">
                     {dueFlashcards.length}
                   </span>
                 )}

@@ -33,23 +33,23 @@ export default function HomePage() {
         {dueFlashcards.length > 0 && (
           <Link
             href={`${ROUTES.srs}?mode=flashcards`}
-            className="flex items-center justify-between gap-3 rounded-2xl border border-amber-500/30 bg-amber-500/[0.08] px-4 py-3 text-xs sm:text-sm transition hover:border-amber-400/50 hover:bg-amber-500/[0.12]"
+            className="flex items-center justify-between gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-4 py-3 text-xs sm:text-sm shadow-[4px_4px_0_0_#F5EFE6] transition-transform hover:bg-[#25241F] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6]"
           >
             <div className="flex items-center gap-2.5 min-w-0">
-              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-xl bg-amber-500/20 text-amber-300">
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413]">
                 <GraduationCap className="h-4 w-4" />
               </div>
-              <span className="truncate text-slate-200">
+              <span className="truncate font-semibold text-[#F5EFE6]">
                 Hôm nay bạn có{" "}
-                <strong className="text-amber-300">
+                <strong className="text-[#F3C969]">
                   {dueFlashcards.length} thẻ từ vựng
                 </strong>{" "}
                 đến hạn ôn tập SRS
               </span>
             </div>
-            <span className="inline-flex shrink-0 items-center gap-1 font-bold text-amber-300">
+            <span className="inline-flex shrink-0 items-center gap-1 rounded-full border-2 border-[#F5EFE6] bg-[#F3C969] px-3 py-1 text-xs font-bold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
               <span>Ôn ngay</span>
-              <ChevronRight className="h-4 w-4" />
+              <ChevronRight className="h-3.5 w-3.5" />
             </span>
           </Link>
         )}

@@ -66,40 +66,40 @@ export default function CustomSelect({
 
   const accentStyles = {
     indigo: {
-      activeBorder: "border-indigo-500/60 ring-2 ring-indigo-500/20",
-      hoverBorder: "hover:border-indigo-500/40",
-      iconBg: "bg-indigo-500/15 text-indigo-400 border-indigo-500/25",
+      activeBorder: "border-[#F3C969] shadow-[2px_2px_0_0_#F3C969]",
+      hoverBorder: "hover:border-[#F3C969]",
+      iconBg: "bg-[#B8D8F8] text-[#141413] border-[#141413]",
       selectedItem:
-        "bg-indigo-500/15 border-indigo-500/30 text-white font-semibold",
-      checkText: "text-indigo-400",
-      badgeBg: "bg-indigo-500/20 text-indigo-300 border-indigo-500/30",
+        "bg-[#F3C969] border-[#F5EFE6] text-[#141413] font-extrabold",
+      checkText: "text-[#141413]",
+      badgeBg: "bg-[#B8D8F8] text-[#141413] border-[#141413]",
     },
     emerald: {
-      activeBorder: "border-emerald-500/60 ring-2 ring-emerald-500/20",
-      hoverBorder: "hover:border-emerald-500/40",
-      iconBg: "bg-emerald-500/15 text-emerald-400 border-emerald-500/25",
+      activeBorder: "border-[#A7D7A9] shadow-[2px_2px_0_0_#A7D7A9]",
+      hoverBorder: "hover:border-[#A7D7A9]",
+      iconBg: "bg-[#A7D7A9] text-[#141413] border-[#141413]",
       selectedItem:
-        "bg-emerald-500/15 border-emerald-500/30 text-white font-semibold",
-      checkText: "text-emerald-400",
-      badgeBg: "bg-emerald-500/20 text-emerald-300 border-emerald-500/30",
+        "bg-[#A7D7A9] border-[#F5EFE6] text-[#141413] font-extrabold",
+      checkText: "text-[#141413]",
+      badgeBg: "bg-[#A7D7A9] text-[#141413] border-[#141413]",
     },
     amber: {
-      activeBorder: "border-amber-500/60 ring-2 ring-amber-500/20",
-      hoverBorder: "hover:border-amber-500/40",
-      iconBg: "bg-amber-500/15 text-amber-400 border-amber-500/25",
+      activeBorder: "border-[#F3C969] shadow-[2px_2px_0_0_#F3C969]",
+      hoverBorder: "hover:border-[#F3C969]",
+      iconBg: "bg-[#F3C969] text-[#141413] border-[#141413]",
       selectedItem:
-        "bg-amber-500/15 border-amber-500/30 text-white font-semibold",
-      checkText: "text-amber-400",
-      badgeBg: "bg-amber-500/20 text-amber-300 border-amber-500/30",
+        "bg-[#F3C969] border-[#F5EFE6] text-[#141413] font-extrabold",
+      checkText: "text-[#141413]",
+      badgeBg: "bg-[#F3C969] text-[#141413] border-[#141413]",
     },
     purple: {
-      activeBorder: "border-purple-500/60 ring-2 ring-purple-500/20",
-      hoverBorder: "hover:border-purple-500/40",
-      iconBg: "bg-purple-500/15 text-purple-400 border-purple-500/25",
+      activeBorder: "border-[#C8B6FF] shadow-[2px_2px_0_0_#C8B6FF]",
+      hoverBorder: "hover:border-[#C8B6FF]",
+      iconBg: "bg-[#C8B6FF] text-[#141413] border-[#141413]",
       selectedItem:
-        "bg-purple-500/15 border-purple-500/30 text-white font-semibold",
-      checkText: "text-purple-400",
-      badgeBg: "bg-purple-500/20 text-purple-300 border-purple-500/30",
+        "bg-[#C8B6FF] border-[#F5EFE6] text-[#141413] font-extrabold",
+      checkText: "text-[#141413]",
+      badgeBg: "bg-[#C8B6FF] text-[#141413] border-[#141413]",
     },
   }[accentColor];
 
@@ -109,18 +109,18 @@ export default function CustomSelect({
       <button
         type="button"
         onClick={() => setIsOpen((prev) => !prev)}
-        className={`group flex w-full items-center justify-between gap-2.5 rounded-xl border bg-slate-950/90 text-left transition-all duration-150 cursor-pointer ${
-          size === "sm" ? "px-3 py-1.5 text-xs" : "px-3.5 py-2.5 text-xs"
+        className={`group flex w-full items-center justify-between gap-2.5 rounded-lg border-2 bg-[#141413] text-left transition-colors cursor-pointer ${
+          size === "sm" ? "px-3 py-1.5 text-xs" : "min-h-[54px] px-3.5 py-2 text-xs"
         } ${
           isOpen
             ? accentStyles.activeBorder
-            : `border-slate-800 ${accentStyles.hoverBorder} hover:bg-slate-900/90`
+            : `border-[#F5EFE6] ${accentStyles.hoverBorder}`
         }`}
       >
         <div className="flex min-w-0 flex-1 items-center gap-2.5">
           {(selectedOption?.icon || icon) && (
             <span
-              className={`flex shrink-0 items-center justify-center rounded-lg border leading-none ${
+              className={`flex shrink-0 items-center justify-center rounded-md border leading-none ${
                 size === "sm"
                   ? "h-6 w-6"
                   : selectedOption?.subLabel
@@ -132,18 +132,18 @@ export default function CustomSelect({
             </span>
           )}
           <div className="min-w-0 flex-1">
-            <div className="truncate font-semibold text-slate-100 group-hover:text-white">
+            <div className="truncate font-bold text-[#F5EFE6]">
               {selectedOption ? selectedOption.label : placeholder}
             </div>
             {selectedOption?.subLabel && (
-              <div className="truncate text-[10px] text-slate-400">
+              <div className="truncate text-[10px] text-[#B8B2A6]">
                 {selectedOption.subLabel}
               </div>
             )}
           </div>
           {selectedOption?.badge && (
             <span
-              className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${accentStyles.badgeBg}`}
+              className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-extrabold ${accentStyles.badgeBg}`}
             >
               {selectedOption.badge}
             </span>
@@ -151,15 +151,15 @@ export default function CustomSelect({
         </div>
 
         <ChevronDown
-          className={`h-4 w-4 shrink-0 text-slate-400 transition-transform duration-200 group-hover:text-slate-200 ${
-            isOpen ? "rotate-180 text-white" : ""
+          className={`h-4 w-4 shrink-0 text-[#F5EFE6] transition-transform duration-150 ${
+            isOpen ? "rotate-180 text-[#F3C969]" : ""
           }`}
         />
       </button>
 
       {/* Dropdown Menu Popover */}
       {isOpen && (
-        <div className="absolute left-0 right-0 z-50 mt-2 min-w-[220px] origin-top overflow-hidden rounded-2xl border border-slate-700/80 bg-slate-900/95 p-1.5 shadow-2xl shadow-black/80 backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+        <div className="absolute left-0 right-0 z-50 mt-2 min-w-[220px] origin-top overflow-hidden rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-1.5 shadow-[4px_4px_0_0_#F5EFE6]">
           <div className="max-h-64 space-y-1 overflow-y-auto pr-0.5">
             {options.map((opt) => {
               const isSelected = String(opt.value) === String(value);
@@ -171,38 +171,42 @@ export default function CustomSelect({
                     onChange(String(opt.value));
                     setIsOpen(false);
                   }}
-                  className={`flex w-full items-center justify-between gap-2.5 rounded-xl border px-3 py-2 text-left text-xs transition cursor-pointer ${
+                  className={`flex w-full items-center justify-between gap-2.5 rounded-lg border-2 px-3 py-2 text-left text-xs transition-colors cursor-pointer ${
                     isSelected
                       ? accentStyles.selectedItem
-                      : "border-transparent text-slate-300 hover:bg-slate-800/80 hover:text-white"
+                      : "border-transparent text-[#F5EFE6] hover:border-[#3A3832] hover:bg-[#141413]"
                   }`}
                 >
                   <div className="flex min-w-0 flex-1 items-center gap-2.5">
                     {(opt.icon || icon) && (
                       <span
-                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border ${
+                        className={`flex h-6 w-6 shrink-0 items-center justify-center rounded-md border ${
                           isSelected
                             ? accentStyles.iconBg
-                            : "border-slate-800 bg-slate-950 text-slate-400"
+                            : "border-[#3A3832] bg-[#141413] text-[#B8B2A6]"
                         }`}
                       >
                         {opt.icon || icon}
                       </span>
                     )}
                     <div className="min-w-0 flex-1">
-                      <div className="truncate">{opt.label}</div>
+                      <div className="truncate font-bold">{opt.label}</div>
                       {opt.subLabel && (
-                        <div className="truncate text-[10px] text-slate-400 font-normal">
+                        <div
+                          className={`truncate text-[10px] font-medium ${
+                            isSelected ? "text-[#141413]/80" : "text-[#B8B2A6]"
+                          }`}
+                        >
                           {opt.subLabel}
                         </div>
                       )}
                     </div>
                     {opt.badge && (
                       <span
-                        className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-semibold ${
+                        className={`shrink-0 rounded-md border px-1.5 py-0.5 text-[10px] font-extrabold ${
                           isSelected
                             ? accentStyles.badgeBg
-                            : "border-slate-700 bg-slate-800 text-slate-400"
+                            : "border-[#3A3832] bg-[#141413] text-[#B8B2A6]"
                         }`}
                       >
                         {opt.badge}

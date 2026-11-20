@@ -250,28 +250,28 @@ export default function FlashcardArena({
   return (
     <div className="space-y-4">
       {/* Top Status & Quick Word Selector Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-slate-800 bg-slate-900/80 px-4 py-2.5 text-xs">
-        <div className="flex items-center gap-3">
-          <span className="font-bold text-indigo-300">
+      <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-4 py-2.5 text-xs shadow-[4px_4px_0_0_#F5EFE6]">
+        <div className="flex flex-wrap items-center gap-2.5">
+          <span className="font-extrabold text-[#F3C969]">
             Từ {safeIndex + 1} / {deck.length}
           </span>
-          <span className="rounded-full bg-emerald-500/15 px-2.5 py-0.5 text-emerald-300">
+          <span className="rounded-full border-2 border-[#F5EFE6] bg-[#A7D7A9] px-2.5 py-0.5 font-extrabold text-[#141413]">
             Đã đánh giá SRS: {sessionReviewed}
           </span>
           <button
             type="button"
             onClick={handleShuffle}
-            className="flex items-center gap-1 rounded-lg bg-slate-800 px-2.5 py-1 text-slate-300 hover:bg-slate-700 hover:text-white"
+            className="flex items-center gap-1 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] px-2.5 py-1 font-bold text-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform hover:bg-[#C8B6FF] hover:text-[#141413] active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
             title="Trộn ngẫu nhiên thứ tự thẻ"
           >
-            <Shuffle className="h-3.5 w-3.5 text-indigo-400" />
+            <Shuffle className="h-3.5 w-3.5" />
             Trộn thẻ
           </button>
         </div>
-        <div className="flex items-center gap-2 text-slate-400">
-          <Clock className="h-3.5 w-3.5 text-amber-400" />
+        <div className="flex items-center gap-2 text-[#B8B2A6]">
+          <Clock className="h-3.5 w-3.5 text-[#F3C969]" />
           <span>
-            Chu kỳ nhớ: <strong>{currentCard.interval} ngày</strong> (Hệ số:{" "}
+            Chu kỳ nhớ: <strong className="text-[#F5EFE6]">{currentCard.interval} ngày</strong> (Hệ số:{" "}
             {currentCard.efactor})
           </span>
         </div>
@@ -290,10 +290,10 @@ export default function FlashcardArena({
               setCurrentIndex(idx);
               setIsFlipped(false);
             }}
-            className={`shrink-0 rounded-lg border px-2.5 py-1 text-xs font-medium transition ${
+            className={`shrink-0 rounded-lg border-2 px-2.5 py-1 text-xs font-bold transition-colors cursor-pointer ${
               idx === safeIndex
-                ? "border-indigo-500 bg-indigo-600 text-white"
-                : "border-slate-800 bg-slate-900 text-slate-400 hover:border-slate-700 hover:text-slate-200"
+                ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413]"
+                : "border-[#3A3832] bg-[#1D1C19] text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6]"
             }`}
           >
             {idx + 1}. {c.word}
@@ -322,13 +322,13 @@ export default function FlashcardArena({
           transition:
             touchDeltaX !== 0 ? "none" : "transform 200ms cubic-bezier(0.22, 1, 0.36, 1)",
         }}
-        className="group relative min-h-[270px] sm:min-h-[290px] touch-pan-y cursor-pointer select-none rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-4 sm:p-7 shadow-xl transition hover:border-indigo-500/40"
+        className="group relative min-h-[270px] sm:min-h-[290px] touch-pan-y cursor-pointer select-none rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-7 shadow-[4px_4px_0_0_#F5EFE6]"
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="rounded-lg border border-indigo-500/25 bg-indigo-500/10 px-2.5 py-1 text-xs font-semibold text-indigo-300">
+          <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-3 py-0.5 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
             CEFR {currentCard.cefrLevel} • {currentCard.partOfSpeech}
           </span>
-          <span className="flex items-center gap-1.5 text-[11px] sm:text-xs text-slate-400 group-hover:text-indigo-300">
+          <span className="flex items-center gap-1.5 text-[11px] sm:text-xs font-semibold text-[#B8B2A6] group-hover:text-[#F3C969]">
             <RotateCw className="h-3.5 w-3.5 shrink-0" />
             <span className="hidden sm:inline">
               {isFlipped
@@ -345,13 +345,13 @@ export default function FlashcardArena({
           /* Front of Card */
           <div className="flex min-h-[200px] flex-col items-center justify-center text-center py-2">
             <div className="flex flex-wrap items-center justify-center gap-2.5">
-              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-white md:text-4xl break-words">
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight text-[#F5EFE6] md:text-4xl break-words">
                 {currentCard.word}
               </h2>
               <AudioSpeakButton
                 text={currentCard.word}
                 showLabel={false}
-                className="rounded-xl bg-indigo-600/25 p-2.5 text-indigo-300 transition hover:bg-indigo-600 hover:text-white"
+                className="rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] p-2.5 text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px]"
               />
               <button
                 type="button"
@@ -360,40 +360,40 @@ export default function FlashcardArena({
                   stopAllSpeech();
                   setIsPronounceOpen(true);
                 }}
-                className="flex items-center gap-1.5 rounded-xl bg-emerald-500/15 border border-emerald-500/30 px-3 py-2 text-xs font-bold text-emerald-300 hover:bg-emerald-500/25 transition cursor-pointer"
+                className="flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3 py-2 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
                 title="Bấm để luyện đọc từ này cho AI chấm điểm"
               >
                 <Mic className="h-4 w-4 shrink-0" />
                 <span>Luyện nói</span>
               </button>
             </div>
-            <p className="mt-2 font-mono text-sm sm:text-base text-indigo-300">
+            <p className="mt-2 font-mono text-sm sm:text-base font-bold text-[#F3C969]">
               {currentCard.ipa}
             </p>
-            <div className="mt-5 flex items-center justify-between gap-3 w-full max-w-xl rounded-xl border border-white/[0.07] bg-slate-950/70 px-3.5 py-3 text-xs sm:text-sm italic text-slate-300 text-left">
+            <div className="mt-5 flex items-center justify-between gap-3 w-full max-w-xl rounded-lg border-2 border-[#3A3832] bg-[#141413] px-3.5 py-3 text-xs sm:text-sm italic text-[#F5EFE6] text-left">
               <span className="flex-1 break-words">&ldquo;{currentCard.quoteFromBook}&rdquo;</span>
               <AudioSpeakButton
                 text={currentCard.quoteFromBook}
                 showLabel={false}
-                className="shrink-0 rounded-lg bg-slate-800 p-1.5 text-indigo-400 hover:bg-indigo-600 hover:text-white"
+                className="shrink-0 rounded-lg border-2 border-[#F5EFE6] bg-[#B8D8F8] p-1.5 text-[#141413]"
               />
             </div>
           </div>
         ) : (
           /* Back of Card */
           <div className="mt-4 space-y-4">
-            <div className="flex flex-wrap items-center justify-between gap-2 border-b border-white/[0.07] pb-3">
+            <div className="flex flex-wrap items-center justify-between gap-2 border-b-2 border-[#3A3832] pb-3">
               <div className="flex flex-wrap items-center gap-2">
-                <span className="text-lg sm:text-xl font-bold text-white break-words">
+                <span className="text-lg sm:text-xl font-extrabold text-[#F5EFE6] break-words">
                   {currentCard.word}
                 </span>
-                <span className="font-mono text-xs sm:text-sm text-indigo-300">
+                <span className="font-mono text-xs sm:text-sm font-bold text-[#F3C969]">
                   {currentCard.ipa}
                 </span>
                 <AudioSpeakButton
                   text={currentCard.word}
                   showLabel={false}
-                  className="rounded-lg bg-slate-800 p-1.5 text-indigo-300 hover:bg-indigo-600 hover:text-white"
+                  className="rounded-lg border-2 border-[#F5EFE6] bg-[#B8D8F8] p-1.5 text-[#141413]"
                 />
                 <button
                   type="button"
@@ -402,7 +402,7 @@ export default function FlashcardArena({
                     stopAllSpeech();
                     setIsPronounceOpen(true);
                   }}
-                  className="flex items-center gap-1 rounded-lg bg-emerald-500/15 px-2 py-1 text-xs font-semibold text-emerald-300 hover:bg-emerald-500/25 border border-emerald-500/30"
+                  className="flex items-center gap-1 rounded-lg border-2 border-[#F5EFE6] bg-[#A7D7A9] px-2.5 py-1 text-xs font-extrabold text-[#141413]"
                   title="Luyện nói từ này"
                 >
                   <Mic className="h-3 w-3 shrink-0" />
@@ -412,15 +412,15 @@ export default function FlashcardArena({
               <AudioSpeakButton
                 text={currentCard.quoteFromBook}
                 label="Đọc câu gốc"
-                className="rounded-lg bg-slate-800 px-3 py-1 text-xs text-indigo-300 hover:bg-slate-700"
+                className="rounded-xl border-2 border-[#F5EFE6] bg-[#141413] px-3 py-1 text-xs font-bold text-[#F5EFE6] hover:bg-[#B8D8F8] hover:text-[#141413]"
               />
             </div>
 
             <div>
-              <div className="text-xs font-semibold uppercase tracking-wider text-emerald-400">
+              <div className="text-xs font-extrabold uppercase tracking-wider text-[#A7D7A9]">
                 Nghĩa tiếng Việt trong ngữ cảnh:
               </div>
-              <p className="mt-1 text-lg font-bold text-white">
+              <p className="mt-1 text-lg font-extrabold text-[#F5EFE6]">
                 {currentCard.vietnameseMeaning}
               </p>
             </div>
@@ -429,16 +429,16 @@ export default function FlashcardArena({
               key={`flash-back-${currentCard.id}`}
               className="space-y-3 bm-flashcard-3d"
             >
-              <div className="rounded-xl bg-slate-950/80 p-3.5 text-xs leading-relaxed text-slate-300">
-                <strong className="text-indigo-300">Giải thích sâu: </strong>
+              <div className="rounded-lg border-2 border-[#3A3832] bg-[#141413] p-3.5 text-xs leading-relaxed text-[#F5EFE6]">
+                <strong className="text-[#C8B6FF]">Giải thích sâu: </strong>
                 {currentCard.explanationInContext}
               </div>
 
-              <div className="rounded-xl border border-indigo-500/20 bg-indigo-950/20 p-3.5 text-xs">
-                <p className="italic text-slate-200">
+              <div className="rounded-lg border-2 border-[#3A3832] bg-[#141413] p-3.5 text-xs">
+                <p className="italic text-[#F5EFE6]">
                   &ldquo;{currentCard.quoteFromBook}&rdquo;
                 </p>
-                <p className="mt-1 text-slate-400">
+                <p className="mt-1 text-[#B8B2A6]">
                   → {currentCard.quoteTranslation}
                 </p>
               </div>
@@ -448,7 +448,7 @@ export default function FlashcardArena({
                   {currentCard.collocations.map((col, idx) => (
                     <span
                       key={idx}
-                      className="rounded-md bg-slate-800 px-2.5 py-1 text-[11px] text-slate-300"
+                      className="rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2.5 py-1 text-[11px] font-semibold text-[#F5EFE6]"
                     >
                       {col}
                     </span>
@@ -466,8 +466,8 @@ export default function FlashcardArena({
           normalizeStarVocabKey(currentCard.word)
         );
         return (
-          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-white/[0.08] bg-[#0F1523]/80 px-3 py-2">
-            <div className="inline-flex items-center gap-1 rounded-lg bg-slate-950/80 p-1">
+          <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-3 py-2 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="inline-flex items-center gap-1.5 rounded-lg border-2 border-[#3A3832] bg-[#141413] p-1">
               <button
                 type="button"
                 onClick={() => {
@@ -475,10 +475,10 @@ export default function FlashcardArena({
                   setCurrentIndex(0);
                   setIsFlipped(false);
                 }}
-                className={`min-h-[34px] rounded-md px-3 py-1 text-xs font-semibold transition ${
+                className={`min-h-[34px] rounded-md px-3 py-1 text-xs font-extrabold transition-colors cursor-pointer ${
                   vocabFilter === "all"
-                    ? "bg-indigo-600 text-white shadow-sm"
-                    : "text-slate-400 hover:text-white"
+                    ? "bg-[#F3C969] text-[#141413]"
+                    : "text-[#B8B2A6] hover:text-[#F5EFE6]"
                 }`}
               >
                 Tất cả ({cards.length})
@@ -497,13 +497,13 @@ export default function FlashcardArena({
                     ? "Hãy bấm nút ⭐ Đánh dấu từ khó để lọc danh sách ôn tập riêng"
                     : "Chỉ ôn các từ khó đã đánh dấu sao"
                 }
-                className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-3 py-1 text-xs font-semibold transition disabled:opacity-40 disabled:cursor-not-allowed ${
+                className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-md px-3 py-1 text-xs font-extrabold transition-colors disabled:opacity-40 disabled:cursor-not-allowed cursor-pointer ${
                   vocabFilter === "starred"
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                    : "text-slate-400 hover:text-amber-200"
+                    ? "bg-[#F3C969] text-[#141413]"
+                    : "text-[#B8B2A6] hover:text-[#F3C969]"
                 }`}
               >
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                <Star className={`h-3.5 w-3.5 ${vocabFilter === "starred" ? "fill-[#141413] text-[#141413]" : "fill-[#F3C969] text-[#F3C969]"}`} />
                 <span>Từ khó ({starredCardsCount})</span>
               </button>
             </div>
@@ -514,17 +514,17 @@ export default function FlashcardArena({
                 const res = toggleStarredVocabId(currentCard.word);
                 setStarredKeys(res.starredIds);
               }}
-              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border px-3.5 py-1.5 text-xs font-semibold transition active:scale-95 ${
+              className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] px-3.5 py-1.5 text-xs font-extrabold shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer ${
                 isCurrentStarred
-                  ? "border-amber-500/50 bg-amber-500/15 text-amber-300"
-                  : "border-white/[0.08] bg-slate-950/80 text-slate-300 hover:border-amber-500/40 hover:text-amber-200"
+                  ? "bg-[#F3C969] text-[#141413]"
+                  : "bg-[#141413] text-[#F5EFE6] hover:bg-[#2A2823]"
               }`}
             >
               <Star
                 className={`h-3.5 w-3.5 ${
                   isCurrentStarred
-                    ? "fill-amber-400 text-amber-400"
-                    : "text-slate-400"
+                    ? "fill-[#141413] text-[#141413]"
+                    : "text-[#F3C969]"
                 }`}
               />
               <span>
@@ -536,20 +536,20 @@ export default function FlashcardArena({
       })()}
 
       {/* Explicit Previous / Flip / Next Navigation Controls */}
-      <div className="grid grid-cols-3 gap-2 rounded-xl border border-white/[0.08] bg-[#0F1523]/90 p-2">
+      <div className="grid grid-cols-3 gap-2.5 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-2.5 shadow-[4px_4px_0_0_#F5EFE6]">
         <button
           type="button"
           onClick={handlePrev}
-          className="flex min-h-[40px] items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-slate-950 px-2.5 sm:px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-indigo-500/50 hover:bg-slate-900"
+          className="flex min-h-[42px] items-center justify-center gap-1 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] px-2.5 sm:px-4 py-2 text-xs font-bold text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#2A2823] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
-          <ChevronLeft className="h-4 w-4 text-indigo-400 shrink-0" />
+          <ChevronLeft className="h-4 w-4 text-[#F3C969] shrink-0" />
           <span className="truncate">Từ trước</span>
         </button>
 
         <button
           type="button"
           onClick={() => setIsFlipped(!isFlipped)}
-          className="flex min-h-[40px] items-center justify-center gap-1 rounded-xl bg-white/[0.07] px-2.5 sm:px-4 py-2 text-xs font-semibold text-indigo-300 hover:bg-white/[0.12]"
+          className="flex min-h-[42px] items-center justify-center gap-1 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-2.5 sm:px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
           <RotateCw className="h-3.5 w-3.5 shrink-0" />
           <span className="truncate">
@@ -560,38 +560,38 @@ export default function FlashcardArena({
         <button
           type="button"
           onClick={handleNext}
-          className="flex min-h-[40px] items-center justify-center gap-1 rounded-xl border border-white/[0.08] bg-slate-950 px-2.5 sm:px-4 py-2 text-xs font-semibold text-slate-200 transition hover:border-indigo-500/50 hover:bg-slate-900"
+          className="flex min-h-[42px] items-center justify-center gap-1 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] px-2.5 sm:px-4 py-2 text-xs font-bold text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#2A2823] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
           <span className="truncate">Tiếp theo</span>
-          <ChevronRight className="h-4 w-4 text-indigo-400 shrink-0" />
+          <ChevronRight className="h-4 w-4 text-[#F3C969] shrink-0" />
         </button>
       </div>
 
       {/* SRS Rating Buttons */}
-      <div className="grid grid-cols-2 gap-2.5 md:grid-cols-4">
+      <div className="grid grid-cols-2 gap-3 md:grid-cols-4">
         <button
           type="button"
           onClick={() => handleGrade(0)}
-          className="flex flex-col items-center rounded-xl border border-rose-500/30 bg-rose-950/30 py-2.5 text-rose-300 transition hover:bg-rose-900/50"
+          className="flex flex-col items-center rounded-xl border-2 border-[#F5EFE6] bg-[#FF8A8A] py-2.5 px-2 text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
-          <span className="text-xs font-bold">Quên (Again)</span>
-          <span className="text-[11px] text-rose-400/80">Ôn lại sau 10 phút</span>
+          <span className="text-xs font-extrabold">Quên (Again)</span>
+          <span className="text-[11px] font-semibold text-[#141413]/80">Ôn lại sau 10 phút</span>
         </button>
         <button
           type="button"
           onClick={() => handleGrade(3)}
-          className="flex flex-col items-center rounded-xl border border-amber-500/30 bg-amber-950/30 py-2.5 text-amber-300 transition hover:bg-amber-900/50"
+          className="flex flex-col items-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] py-2.5 px-2 text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
-          <span className="text-xs font-bold">Nhớ mang máng (Hard)</span>
-          <span className="text-[11px] text-amber-400/80">Ôn sau 1 ngày</span>
+          <span className="text-xs font-extrabold">Nhớ mang máng (Hard)</span>
+          <span className="text-[11px] font-semibold text-[#141413]/80">Ôn sau 1 ngày</span>
         </button>
         <button
           type="button"
           onClick={() => handleGrade(4)}
-          className="flex flex-col items-center rounded-xl border border-emerald-500/30 bg-emerald-950/30 py-2.5 text-emerald-300 transition hover:bg-emerald-900/50"
+          className="flex flex-col items-center rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] py-2.5 px-2 text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
-          <span className="text-xs font-bold">Nhớ tốt (Good)</span>
-          <span className="text-[11px] text-emerald-400/80">
+          <span className="text-xs font-extrabold">Nhớ tốt (Good)</span>
+          <span className="text-[11px] font-semibold text-[#141413]/80">
             Ôn sau{" "}
             {currentCard.repetition === 0
               ? 1
@@ -604,13 +604,13 @@ export default function FlashcardArena({
         <button
           type="button"
           onClick={() => handleGrade(5)}
-          className="flex flex-col items-center rounded-xl border border-indigo-500/30 bg-indigo-950/30 py-2.5 text-indigo-300 transition hover:bg-indigo-900/50"
+          className="flex flex-col items-center rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] py-2.5 px-2 text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
-          <span className="flex items-center gap-1 text-xs font-bold">
+          <span className="flex items-center gap-1 text-xs font-extrabold">
             <Sparkles className="h-3.5 w-3.5" />
             Thuộc làu (Easy)
           </span>
-          <span className="text-[11px] text-indigo-400/80">
+          <span className="text-[11px] font-semibold text-[#141413]/80">
             Tăng mạnh chu kỳ SRS
           </span>
         </button>

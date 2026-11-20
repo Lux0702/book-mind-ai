@@ -274,14 +274,14 @@ export default function SelectionAiPopover({
           : "fixed bottom-[4.75rem] lg:bottom-6 left-1/2 -translate-x-1/2 z-[85] w-[min(460px,calc(100vw-1.5rem))] max-w-[calc(100vw-1.5rem)]"
       }
     >
-      <div className="rounded-2xl border border-indigo-500/45 bg-[#0B101B]/95 p-3 sm:p-3.5 shadow-[0_18px_50px_rgba(0,0,0,0.65)] backdrop-blur-xl animate-in fade-in zoom-in-95 duration-150">
+      <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-3 sm:p-3.5 shadow-[4px_4px_0_0_#F5EFE6] animate-in fade-in zoom-in-95 duration-150">
         {/* Top bar: selected text + actions */}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="min-w-0 flex-1">
-            <span className="block text-[10px] font-bold uppercase tracking-wider text-indigo-400">
+            <span className="block text-[10px] font-bold uppercase tracking-wider text-[#F3C969]">
               Văn bản vừa chọn
             </span>
-            <p className="truncate font-serif text-xs sm:text-sm font-semibold text-white">
+            <p className="truncate font-serif text-xs sm:text-sm font-bold text-[#F5EFE6]">
               &ldquo;{selectedText}&rdquo;
             </p>
           </div>
@@ -290,10 +290,10 @@ export default function SelectionAiPopover({
             <button
               type="button"
               onClick={() => speakSmart(selectedText)}
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border border-white/[0.1] bg-slate-900 px-3 py-1.5 text-xs font-semibold text-slate-200 transition hover:border-indigo-400/50 hover:text-white active:scale-95 cursor-pointer"
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] px-3 py-1.5 text-xs font-bold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
               title="Nghe phát âm chuẩn đoạn vừa chọn"
             >
-              <Volume2 className="h-3.5 w-3.5 text-indigo-400" />
+              <Volume2 className="h-3.5 w-3.5" />
               <span>Nghe</span>
             </button>
 
@@ -301,7 +301,7 @@ export default function SelectionAiPopover({
               type="button"
               disabled={isExplaining}
               onClick={handleExplainSelection}
-              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 py-1.5 text-xs font-bold text-white shadow transition hover:bg-indigo-500 disabled:opacity-50 active:scale-95 cursor-pointer"
+              className="inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 py-1.5 text-xs font-bold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform disabled:opacity-50 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
             >
               {isExplaining ? (
                 <Loader2 className="h-3.5 w-3.5 animate-spin" />
@@ -315,7 +315,7 @@ export default function SelectionAiPopover({
               type="button"
               onClick={handleClose}
               aria-label="Đóng thanh giải thích nhanh"
-              className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border border-white/[0.08] bg-slate-900/90 text-slate-400 transition hover:bg-slate-800 hover:text-white cursor-pointer"
+              className="inline-flex min-h-[38px] min-w-[38px] items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#141413] text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
             >
               <X className="h-4 w-4" />
             </button>
@@ -324,13 +324,13 @@ export default function SelectionAiPopover({
 
         {/* AI Explanation Result */}
         {aiAnswer && (
-          <div className="mt-2.5 max-h-56 overflow-y-auto rounded-xl border border-indigo-500/20 bg-slate-950/90 p-3 text-xs sm:text-sm leading-relaxed text-slate-200 whitespace-pre-wrap animate-in fade-in duration-200">
+          <div className="mt-2.5 max-h-56 overflow-y-auto rounded-lg border-2 border-[#3A3832] bg-[#141413] p-3 text-xs sm:text-sm leading-relaxed text-[#F5EFE6] whitespace-pre-wrap animate-in fade-in duration-200">
             {aiAnswer}
           </div>
         )}
 
         {aiError && (
-          <div className="mt-2 rounded-xl border border-rose-500/30 bg-rose-950/40 px-3 py-2 text-xs text-rose-200">
+          <div className="mt-2 rounded-lg border-2 border-[#FF8A8A] bg-[#261919] px-3 py-2 text-xs font-semibold text-[#FF8A8A]">
             {aiError}
           </div>
         )}

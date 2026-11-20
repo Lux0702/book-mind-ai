@@ -131,14 +131,14 @@ export default function GlobalFeedbackOverlay() {
   const renderVariantIcon = (variant: FeedbackVariant) => {
     switch (variant) {
       case "delete":
-        return <Trash2 className="h-5 w-5 text-white animate-bounce" />;
+        return <Trash2 className="h-5 w-5 text-[#141413] animate-bounce" />;
       case "edit":
-        return <PenLine className="h-5 w-5 text-white animate-pulse" />;
+        return <PenLine className="h-5 w-5 text-[#141413] animate-pulse" />;
       case "sync":
-        return <RefreshCw className="h-5 w-5 text-white animate-spin" />;
+        return <RefreshCw className="h-5 w-5 text-[#141413] animate-spin" />;
       case "api":
       default:
-        return <Cpu className="h-5 w-5 text-white animate-pulse" />;
+        return <Cpu className="h-5 w-5 text-[#141413] animate-pulse" />;
     }
   };
 
@@ -151,10 +151,18 @@ export default function GlobalFeedbackOverlay() {
           aria-modal="true"
           aria-busy="true"
           aria-label={currentLoading.title}
-          className="fixed inset-0 z-[95] flex items-center justify-center bg-[#060911]/80 backdrop-blur-md p-4 pointer-events-auto select-none animate-in fade-in duration-200"
+          className="fixed inset-0 z-[95] flex items-center justify-center bg-[#141413]/85 p-4 pointer-events-auto select-none animate-in fade-in duration-200"
         >
           {(() => {
             const style = VARIANT_STYLES[currentLoading.variant];
+            const flatAccentBg =
+              currentLoading.variant === "delete"
+                ? "bg-[#FF8A8A]"
+                : currentLoading.variant === "edit"
+                ? "bg-[#F3C969]"
+                : currentLoading.variant === "sync"
+                ? "bg-[#A7D7A9]"
+                : "bg-[#C8B6FF]";
             const STEP_MESSAGES: Record<FeedbackVariant, string[]> = {
               api: [
                 "Đang kết nối bộ định tuyến AI & phân tích ngữ cảnh...",
@@ -182,21 +190,14 @@ export default function GlobalFeedbackOverlay() {
             const stepIndex = Math.floor(elapsedNum / 3) % steps.length;
 
             return (
-              <div
-                className={`relative overflow-hidden rounded-3xl border bg-[#0B101B]/95 p-6 sm:p-7 shadow-2xl max-w-md w-full animate-in zoom-in-95 duration-200 ${style.borderGlow}`}
-              >
+              <div className="relative overflow-hidden rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 sm:p-7 shadow-[6px_6px_0_0_#F5EFE6] max-w-md w-full animate-in zoom-in-95 duration-200">
                 {/* Top Status Row: Orbital Icon + Badge + Timer */}
                 <div className="flex items-start gap-4">
                   {/* Unique Animated Orbital Icon */}
                   <div className="relative flex h-14 w-14 shrink-0 items-center justify-center">
+                    <div className="absolute inset-0 rounded-full border-2 border-dashed border-[#F5EFE6] animate-spin" />
                     <div
-                      className={`absolute inset-0 rounded-full border-2 animate-spin ${style.ringOuter}`}
-                    />
-                    <div
-                      className={`absolute -inset-1.5 rounded-full border border-dashed animate-[spin_4s_linear_infinite_reverse] ${style.ringInner}`}
-                    />
-                    <div
-                      className={`relative flex h-10 w-10 items-center justify-center rounded-2xl bg-gradient-to-br shadow-lg ${style.orbBg}`}
+                      className={`relative flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#F5EFE6] text-[#141413] ${flatAccentBg}`}
                     >
                       {renderVariantIcon(currentLoading.variant)}
                     </div>
@@ -206,21 +207,20 @@ export default function GlobalFeedbackOverlay() {
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center justify-between gap-2">
                       <span
-                        className={`inline-flex items-center gap-1.5 text-[10px] font-extrabold uppercase tracking-wider ${style.accentText}`}
+                        className={`inline-flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] px-2.5 py-0.5 text-[10px] font-extrabold uppercase tracking-wider text-[#141413] ${flatAccentBg}`}
                       >
-                        <span className={`h-1.5 w-1.5 rounded-full animate-ping ${style.barColor}`} />
                         {style.badge}
                       </span>
-                      <span className="rounded-lg border border-white/[0.08] bg-white/[0.04] px-2 py-0.5 font-mono text-[11px] font-bold text-slate-300 tabular-nums">
+                      <span className="rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2 py-0.5 font-mono text-[11px] font-bold text-[#F3C969] tabular-nums">
                         {elapsedSec}s
                       </span>
                     </div>
 
-                    <h3 className="text-sm sm:text-base font-bold text-white mt-1.5 leading-snug">
+                    <h3 className="text-sm sm:text-base font-extrabold text-[#F5EFE6] mt-2 leading-snug">
                       {currentLoading.title}
                     </h3>
                     {currentLoading.subtitle && (
-                      <p className="text-xs text-slate-400 mt-1 line-clamp-2">
+                      <p className="text-xs text-[#B8B2A6] mt-1 line-clamp-2">
                         {currentLoading.subtitle}
                       </p>
                     )}
@@ -228,38 +228,38 @@ export default function GlobalFeedbackOverlay() {
                 </div>
 
                 {/* Dynamic 3s Step Message & Animated Wave Bars */}
-                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border border-white/[0.06] bg-white/[0.03] px-3.5 py-2.5">
-                  <p className="text-[11px] sm:text-xs font-medium text-slate-300 leading-relaxed">
+                <div className="mt-5 flex items-center justify-between gap-3 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-3.5 py-2.5">
+                  <p className="text-[11px] sm:text-xs font-semibold text-[#F5EFE6] leading-relaxed">
                     {steps[stepIndex]}
                   </p>
-                  <div className="flex items-end gap-0.5 h-4 shrink-0 pl-1">
+                  <div className="flex items-end gap-1 h-4 shrink-0 pl-1">
                     <span
-                      className={`w-1 h-2 rounded-full animate-[bounce_0.7s_infinite_100ms] ${style.barColor}`}
+                      className={`w-1.5 h-2 rounded-sm animate-[bounce_0.7s_infinite_100ms] ${flatAccentBg}`}
                     />
                     <span
-                      className={`w-1 h-4 rounded-full animate-[bounce_0.7s_infinite_250ms] ${style.barColor}`}
+                      className={`w-1.5 h-4 rounded-sm animate-[bounce_0.7s_infinite_250ms] ${flatAccentBg}`}
                     />
                     <span
-                      className={`w-1 h-2.5 rounded-full animate-[bounce_0.7s_infinite_400ms] ${style.barColor}`}
+                      className={`w-1.5 h-2.5 rounded-sm animate-[bounce_0.7s_infinite_400ms] ${flatAccentBg}`}
                     />
                   </div>
                 </div>
 
                 {/* Smooth Shimmer Progress Track */}
-                <div className="mt-4 h-1.5 w-full rounded-full bg-slate-800/90 overflow-hidden">
+                <div className="mt-4 h-2.5 w-full rounded-full border-2 border-[#F5EFE6] bg-[#141413] overflow-hidden">
                   <div
-                    className={`h-full w-2/5 rounded-full bm-shimmer-bar ${style.barColor}`}
+                    className={`h-full w-2/5 bm-shimmer-bar ${flatAccentBg}`}
                   />
                 </div>
 
                 {/* Safety Focus Lock Notice */}
-                <div className="mt-3.5 flex items-center justify-center gap-2 text-[11px] text-slate-400">
+                <div className="mt-3.5 flex items-center justify-center gap-2 text-[11px] font-semibold text-[#B8B2A6]">
                   <svg
-                    className="h-3.5 w-3.5 shrink-0 text-amber-400/90"
+                    className="h-3.5 w-3.5 shrink-0 text-[#F3C969]"
                     viewBox="0 0 24 24"
                     fill="none"
                     stroke="currentColor"
-                    strokeWidth="2"
+                    strokeWidth="2.2"
                     strokeLinecap="round"
                     strokeLinejoin="round"
                   >
@@ -274,53 +274,47 @@ export default function GlobalFeedbackOverlay() {
         </div>
       )}
 
-      {/* 2. AUTO-DISMISSING TOAST NOTIFICATIONS (1.8s Auto-Close) */}
+      {/* 2. AUTO-DISMISSING TOAST NOTIFICATIONS (Dark Soft Neo-Brutalism) */}
       {toasts.length > 0 && (
-        <div className="fixed top-3 right-3 left-3 sm:left-auto sm:top-5 sm:right-5 z-[100] flex flex-col gap-2 sm:w-88 pointer-events-none">
+        <div className="fixed top-3 right-3 left-3 sm:left-auto sm:top-5 sm:right-5 z-[100] flex flex-col gap-2.5 sm:w-88 pointer-events-none">
           {toasts.map((t) => {
             const isError = t.type === "error";
             const isDelete = t.type === "delete";
             const isInfo = t.type === "info";
 
-            const borderClass = isError
-              ? "border-rose-500/50 bg-[#180C12]/95 text-rose-100 shadow-rose-950/50"
+            const accentBg = isError
+              ? "bg-[#FF8A8A]"
               : isDelete
-              ? "border-amber-500/45 bg-[#17110B]/95 text-amber-100 shadow-amber-950/50"
+              ? "bg-[#F3C969]"
               : isInfo
-              ? "border-indigo-500/45 bg-[#0D1322]/95 text-indigo-100 shadow-indigo-950/50"
-              : "border-emerald-500/45 bg-[#0B1714]/95 text-emerald-100 shadow-emerald-950/50";
-
-            const barClass = isError
-              ? "bg-rose-500"
-              : isDelete
-              ? "bg-amber-400"
-              : isInfo
-              ? "bg-indigo-400"
-              : "bg-emerald-400";
+              ? "bg-[#B8D8F8]"
+              : "bg-[#A7D7A9]";
 
             return (
               <div
                 key={t.id}
-                className={`pointer-events-auto relative overflow-hidden flex items-start gap-3 rounded-2xl border px-4 py-3 shadow-2xl backdrop-blur-xl animate-in fade-in slide-in-from-top-2 duration-200 ${borderClass}`}
+                className="pointer-events-auto relative overflow-hidden flex items-start gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-4 py-3 text-[#F5EFE6] shadow-[4px_4px_0_0_#F5EFE6] animate-in fade-in slide-in-from-top-2 duration-200"
               >
-                <div className="mt-0.5 shrink-0">
+                <div
+                  className={`mt-0.5 flex h-7 w-7 shrink-0 items-center justify-center rounded-lg border-2 border-[#F5EFE6] text-[#141413] ${accentBg}`}
+                >
                   {isError ? (
-                    <AlertCircle className="h-4.5 w-4.5 text-rose-400" />
+                    <AlertCircle className="h-4 w-4" />
                   ) : isDelete ? (
-                    <Trash2 className="h-4.5 w-4.5 text-amber-400" />
+                    <Trash2 className="h-4 w-4" />
                   ) : isInfo ? (
-                    <Sparkles className="h-4.5 w-4.5 text-indigo-400" />
+                    <Sparkles className="h-4 w-4" />
                   ) : (
-                    <CheckCircle2 className="h-4.5 w-4.5 text-emerald-400" />
+                    <CheckCircle2 className="h-4 w-4" />
                   )}
                 </div>
 
                 <div className="min-w-0 flex-1">
-                  <p className="text-xs sm:text-sm font-bold text-white leading-snug">
+                  <p className="text-xs sm:text-sm font-extrabold text-[#F5EFE6] leading-snug">
                     {t.title}
                   </p>
                   {t.message && (
-                    <p className="mt-0.5 text-[11px] text-slate-300 leading-relaxed line-clamp-2">
+                    <p className="mt-0.5 text-[11px] text-[#B8B2A6] leading-relaxed line-clamp-2">
                       {t.message}
                     </p>
                   )}
@@ -331,16 +325,16 @@ export default function GlobalFeedbackOverlay() {
                   onClick={() =>
                     setToasts((prev) => prev.filter((item) => item.id !== t.id))
                   }
-                  className="rounded-lg p-1 text-slate-400 hover:bg-white/10 hover:text-white transition cursor-pointer shrink-0"
+                  className="rounded-lg p-1 text-[#B8B2A6] hover:bg-[#2A2823] hover:text-[#F5EFE6] cursor-pointer shrink-0"
                   aria-label="Đóng thông báo"
                 >
                   <X className="h-3.5 w-3.5" />
                 </button>
 
-                {/* Auto-dismiss shrinking bar (1.8s) */}
-                <div className="absolute inset-x-0 bottom-0 h-0.5 bg-white/10">
+                {/* Auto-dismiss shrinking bar */}
+                <div className="absolute inset-x-0 bottom-0 h-1 bg-[#141413]">
                   <div
-                    className={`h-full ${barClass}`}
+                    className={`h-full ${accentBg}`}
                     style={{
                       width: "100%",
                       animation: `bookmindToastShrink ${t.durationMs}ms linear forwards`,

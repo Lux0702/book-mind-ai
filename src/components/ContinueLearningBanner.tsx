@@ -77,39 +77,36 @@ export default function ContinueLearningBanner({
 
   return (
     <div
-      className={`bm-card-interactive relative overflow-hidden rounded-2xl border border-indigo-500/30 bg-gradient-to-r from-[#11182A] via-[#121B31] to-[#171C2E] p-4 sm:p-5 shadow-lg ${className}`}
+      className={`relative rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-5 shadow-[4px_4px_0_0_#F5EFE6] ${className}`}
     >
-      {/* Subtle warm editorial corner highlight */}
-      <div className="pointer-events-none absolute -right-12 -top-12 h-36 w-36 rounded-full bg-indigo-500/10 blur-2xl" />
-
       <div className="relative flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
         <div className="flex items-start gap-3.5 min-w-0">
-          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border border-indigo-400/25 bg-indigo-500/15 text-indigo-300 shadow-inner">
+          <div className="flex h-11 w-11 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#C8B6FF] text-[#141413]">
             <BookOpen className="h-5 w-5" />
           </div>
 
-          <div className="min-w-0 flex-1 space-y-1">
+          <div className="min-w-0 flex-1 space-y-1.5">
             <div className="flex flex-wrap items-center gap-2">
-              <span className="inline-flex items-center gap-1 rounded-full border border-indigo-400/25 bg-indigo-500/15 px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-indigo-300">
+              <span className="inline-flex items-center gap-1 rounded-full border-2 border-[#F5EFE6] bg-[#F3C969] px-2.5 py-0.5 text-[10px] font-bold uppercase tracking-wider text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
                 <Sparkles className="h-3 w-3" />
                 Học tiếp vị trí đang dở
               </span>
-              <span className="inline-flex items-center gap-1 text-[11px] font-medium text-slate-400">
-                <Clock className="h-3 w-3 text-slate-400" />
+              <span className="inline-flex items-center gap-1 text-[11px] font-semibold text-[#B8B2A6]">
+                <Clock className="h-3 w-3 text-[#B8B2A6]" />
                 {formatRelativeTime(session.updatedAt)}
               </span>
             </div>
 
-            <h3 className="truncate text-sm sm:text-base font-bold text-white">
+            <h3 className="truncate text-sm sm:text-base font-extrabold text-[#F5EFE6]">
               {displayTitle}
             </h3>
 
-            <p className="truncate text-xs text-slate-300">
-              <span className="font-semibold text-amber-300">
+            <p className="truncate text-xs text-[#B8B2A6]">
+              <span className="font-bold text-[#F3C969]">
                 {displayChapterTitle}
               </span>
-              <span className="mx-1.5 text-slate-600">•</span>
-              <span className="text-slate-400">Đang mở: {tabLabel}</span>
+              <span className="mx-1.5 text-[#5A564D]">•</span>
+              <span>Đang mở: {tabLabel}</span>
             </p>
           </div>
         </div>
@@ -117,7 +114,7 @@ export default function ContinueLearningBanner({
         <button
           type="button"
           onClick={() => onResumeSession(session)}
-          className="inline-flex min-h-[44px] w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-xl bg-indigo-600 px-5 py-2.5 text-xs sm:text-sm font-bold text-white shadow-lg shadow-indigo-950/50 transition hover:bg-indigo-500 active:scale-[0.98]"
+          className="inline-flex min-h-[44px] w-full sm:w-auto shrink-0 items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-5 py-2.5 text-xs sm:text-sm font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#b8e2ba] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
           <Play className="h-4 w-4 fill-current" />
           <span>Học Tiếp Ngay</span>

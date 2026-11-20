@@ -654,34 +654,34 @@ SET role = 'admin',
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col">
+    <div className="min-h-screen text-[#F5EFE6] flex flex-col">
       {/* Top Admin Navbar */}
-      <header className="sticky top-0 z-30 border-b border-slate-800/80 bg-slate-950/90 backdrop-blur-md">
+      <header className="sticky top-0 z-30 border-b-2 border-[#F5EFE6] bg-[#1D1C19]">
         <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between gap-2 px-3 sm:px-6">
           <div className="flex items-center gap-2.5 sm:gap-3 min-w-0">
-            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl bg-gradient-to-br from-amber-500 to-orange-600 text-slate-950 shadow-lg shadow-amber-500/20">
+            <div className="flex h-9 w-9 sm:h-10 sm:w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
               <ShieldCheck className="h-5 w-5" />
             </div>
             <div className="min-w-0">
               <div className="flex items-center gap-2">
-                <h1 className="text-sm sm:text-lg font-extrabold text-white truncate">
+                <h1 className="text-sm sm:text-lg font-extrabold text-[#F5EFE6] truncate">
                   BookMind AI • Admin
                 </h1>
-                <span className="hidden md:inline-block shrink-0 rounded-md bg-amber-500/20 border border-amber-500/30 px-2 py-0.5 text-[10px] font-black uppercase text-amber-300">
+                <span className="hidden md:inline-block shrink-0 rounded-full border-2 border-[#F5EFE6] bg-[#F3C969] px-2.5 py-0.5 text-[10px] font-black uppercase text-[#141413]">
                   Supabase Verified Admin ({authSource === "supabase_auth_metadata" ? "auth.users" : "user_quotas"})
                 </span>
               </div>
-              <p className="text-xs text-slate-400 hidden sm:block truncate">
+              <p className="text-xs text-[#B8B2A6] hidden sm:block truncate">
                 Quản lý Tài khoản Học viên, API Key gián tiếp, AI Credit mỗi ngày & Gói cước (Quyền Admin chỉ cấp từ Supabase)
               </p>
             </div>
           </div>
 
-          <div className="flex items-center gap-1.5 sm:gap-2.5 shrink-0">
+          <div className="flex items-center gap-2 sm:gap-2.5 shrink-0">
             <button
               type="button"
               onClick={() => setIsCreateUserOpen(true)}
-              className="flex items-center gap-1.5 rounded-xl bg-indigo-600 hover:bg-indigo-500 px-2.5 sm:px-3.5 py-2 text-xs font-bold text-white shadow-md shadow-indigo-600/20 transition cursor-pointer"
+              className="flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-2.5 sm:px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer"
             >
               <Plus className="h-3.5 w-3.5 shrink-0" />
               <span className="hidden sm:inline">Thêm Tài Khoản User</span>
@@ -690,9 +690,9 @@ SET role = 'admin',
 
             <Link
               href="/"
-              className="flex items-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-2.5 sm:px-3.5 py-2 text-xs font-bold text-slate-200 transition"
+              className="flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] hover:bg-[#2A2823] px-2.5 sm:px-3.5 py-2 text-xs font-bold text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px]"
             >
-              <ArrowLeft className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+              <ArrowLeft className="h-3.5 w-3.5 text-[#F3C969] shrink-0" />
               <span className="hidden sm:inline">Về Trang Học Tập</span>
               <span className="sm:hidden">Trang chủ</span>
             </Link>
@@ -704,66 +704,66 @@ SET role = 'admin',
       <main className="mx-auto w-full max-w-7xl flex-1 px-4 py-8 sm:px-6 space-y-6">
         {/* KPI Overview Cards */}
         <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-5 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Tổng Tài Khoản User</span>
-              <Users className="h-4 w-4 text-indigo-400" />
+              <Users className="h-4 w-4 text-[#B8D8F8]" />
             </div>
-            <div className="mt-2 text-2xl font-extrabold text-white">
+            <div className="mt-2 text-2xl font-extrabold text-[#F5EFE6]">
               {totalUsers} Users
             </div>
-            <div className="mt-1 flex items-center gap-2 text-[11px] text-slate-400">
-              <span className="text-emerald-400">{freeCount} Free</span>•
-              <span className="text-amber-400">{proCount} Pro</span>•
-              <span className="text-purple-400">{unlimitedCount} VIP</span>
+            <div className="mt-1 flex items-center gap-2 text-[11px] font-bold text-[#B8B2A6]">
+              <span className="text-[#A7D7A9]">{freeCount} Free</span>•
+              <span className="text-[#F3C969]">{proCount} Pro</span>•
+              <span className="text-[#C8B6FF]">{unlimitedCount} VIP</span>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-5 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Lượt Gọi AI Hôm Nay ({getTodayDateString()})</span>
-              <Zap className="h-4 w-4 text-amber-400" />
+              <Zap className="h-4 w-4 text-[#F3C969]" />
             </div>
-            <div className="mt-2 text-2xl font-extrabold text-white">
+            <div className="mt-2 text-2xl font-extrabold text-[#F5EFE6]">
               {todayTotalCalls} lượt
             </div>
-            <div className="mt-1 text-[11px] text-slate-400">
-              Tổng tích lũy: <strong className="text-indigo-300">{allTimeTotalCalls} lượt gọi</strong>
+            <div className="mt-1 text-[11px] text-[#B8B2A6]">
+              Tổng tích lũy: <strong className="text-[#B8D8F8]">{allTimeTotalCalls} lượt gọi</strong>
             </div>
           </div>
 
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5">
-            <div className="flex items-center justify-between text-xs text-slate-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-5 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Doanh Thu Nâng Cấp (Ảo)</span>
-              <Receipt className="h-4 w-4 text-emerald-400" />
+              <Receipt className="h-4 w-4 text-[#A7D7A9]" />
             </div>
-            <div className="mt-2 text-2xl font-extrabold text-emerald-400">
+            <div className="mt-2 text-2xl font-extrabold text-[#A7D7A9]">
               {totalRevenueVnd.toLocaleString("vi-VN")}đ
             </div>
-            <div className="mt-1 text-[11px] text-slate-400">
+            <div className="mt-1 text-[11px] text-[#B8B2A6]">
               {transactions.length} giao dịch qua QR MoMo / VNPay
             </div>
           </div>
 
           <div
             onClick={() => setActiveTab("master_key")}
-            className="rounded-2xl border border-slate-800 bg-slate-900/60 p-5 cursor-pointer hover:border-amber-500/40 transition"
+            className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-5 shadow-[4px_4px_0_0_#F5EFE6] cursor-pointer hover:bg-[#2A2823] transition-colors"
           >
-            <div className="flex items-center justify-between text-xs text-slate-400">
+            <div className="flex items-center justify-between text-xs font-bold text-[#B8B2A6]">
               <span>Master Key & Supabase Cloud</span>
-              <Key className="h-4 w-4 text-amber-400" />
+              <Key className="h-4 w-4 text-[#F3C969]" />
             </div>
-            <div className="mt-2 text-sm font-bold text-white">
+            <div className="mt-2 text-sm font-extrabold text-[#F5EFE6]">
               {settings.masterGeminiApiKey
                 ? `Gemini: ${settings.masterGeminiApiKey.slice(0, 6)}••••`
                 : "Gemini: Theo biến .env"}
             </div>
-            <div className="mt-1 flex items-center gap-2 text-[11px]">
+            <div className="mt-1 flex items-center gap-2 text-[11px] font-bold">
               <span
                 className={`flex items-center gap-1 ${
                   settings.supabaseUrl && settings.supabaseAnonKey
-                    ? "text-emerald-400"
-                    : "text-amber-300"
+                    ? "text-[#A7D7A9]"
+                    : "text-[#F3C969]"
                 }`}
               >
                 <Cloud className="h-3.5 w-3.5" />
@@ -776,15 +776,15 @@ SET role = 'admin',
         </div>
 
         {/* Navigation Tabs */}
-        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-3 border-b border-slate-800 pb-3">
+        <div className="flex flex-col sm:flex-row sm:flex-wrap items-stretch sm:items-center justify-between gap-3 border-b-2 border-[#3A3832] pb-3">
           <div className="flex w-full sm:w-auto overflow-x-auto no-scrollbar items-center gap-2 pb-1 sm:pb-0">
             <button
               type="button"
               onClick={() => setActiveTab("users")}
-              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 text-xs font-bold transition cursor-pointer ${
+              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                 activeTab === "users"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#1D1C19] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
               <Users className="h-4 w-4 shrink-0" />
@@ -794,10 +794,10 @@ SET role = 'admin',
             <button
               type="button"
               onClick={() => setActiveTab("transactions")}
-              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 text-xs font-bold transition cursor-pointer ${
+              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                 activeTab === "transactions"
-                  ? "bg-indigo-600 text-white shadow-md shadow-indigo-600/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white"
+                  ? "border-[#F5EFE6] bg-[#B8D8F8] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#1D1C19] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
               <Receipt className="h-4 w-4 shrink-0" />
@@ -807,10 +807,10 @@ SET role = 'admin',
             <button
               type="button"
               onClick={() => setActiveTab("ai_logs")}
-              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 text-xs font-bold transition cursor-pointer ${
+              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                 activeTab === "ai_logs"
-                  ? "bg-emerald-600 text-white shadow-md shadow-emerald-600/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white"
+                  ? "border-[#F5EFE6] bg-[#A7D7A9] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#1D1C19] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
               <Zap className="h-4 w-4 shrink-0" />
@@ -820,10 +820,10 @@ SET role = 'admin',
             <button
               type="button"
               onClick={() => setActiveTab("master_key")}
-              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-3.5 sm:px-4 py-2 text-xs font-bold transition cursor-pointer ${
+              className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                 activeTab === "master_key"
-                  ? "bg-amber-500 text-slate-950 shadow-md shadow-amber-500/20"
-                  : "bg-slate-900 text-slate-400 hover:text-white"
+                  ? "border-[#F5EFE6] bg-[#C8B6FF] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#1D1C19] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
               <Key className="h-4 w-4 shrink-0" />
@@ -835,9 +835,9 @@ SET role = 'admin',
             <button
               type="button"
               onClick={handleResetAllUsersToday}
-              className="flex items-center justify-center gap-1.5 rounded-xl border border-slate-700 bg-slate-900 hover:bg-slate-800 px-3.5 py-2 text-xs font-semibold text-slate-300 hover:text-white transition cursor-pointer w-full sm:w-auto"
+              className="flex items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] hover:bg-[#2A2823] px-3.5 py-2 text-xs font-bold text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer w-full sm:w-auto"
             >
-              <RefreshCw className="h-3.5 w-3.5 text-emerald-400 shrink-0" />
+              <RefreshCw className="h-3.5 w-3.5 text-[#A7D7A9] shrink-0" />
               <span>Reset Lượt Gọi Hôm Nay Cho Toàn Bộ User</span>
             </button>
           )}
@@ -847,15 +847,15 @@ SET role = 'admin',
         {activeTab === "users" && (
           <div className="space-y-4">
             {/* Search & Filter Bar */}
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/60 p-4">
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center justify-between gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 shadow-[4px_4px_0_0_#F5EFE6]">
               <div className="relative flex-1">
-                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-slate-400" />
+                <Search className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-[#B8B2A6]" />
                 <input
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
                   placeholder="Tìm kiếm theo Email, Tên học viên hoặc Mã API Key (BM-FREE / BM-PRO / BM-VIP)..."
-                  className="w-full rounded-xl border border-slate-800 bg-slate-950 pl-10 pr-4 py-2 text-xs text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+                  className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] pl-10 pr-4 py-2 text-xs text-[#F5EFE6] placeholder-[#B8B2A6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                 />
               </div>
 
@@ -877,10 +877,10 @@ SET role = 'admin',
             </div>
 
             {/* Users Table */}
-            <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
+            <div className="overflow-x-auto rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] shadow-[4px_4px_0_0_#F5EFE6]">
               <table className="w-full text-left border-collapse">
                 <thead>
-                  <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                  <tr className="border-b-2 border-[#F5EFE6] bg-[#141413] text-[11px] font-extrabold uppercase tracking-wider text-[#F3C969]">
                     <th className="py-3.5 px-4">Học Viên & Email</th>
                     <th className="py-3.5 px-4">Gói Đang Dùng</th>
                     <th className="py-3.5 px-4">Mã API Key Đã Cấp (Nội Bộ)</th>
@@ -890,12 +890,12 @@ SET role = 'admin',
                     <th className="py-3.5 px-4 text-right">Thao Tác Quản Trị</th>
                   </tr>
                 </thead>
-                <tbody className="divide-y divide-slate-800/70 text-xs">
+                <tbody className="divide-y divide-[#3A3832] text-xs">
                   {filteredUsers.length === 0 ? (
                     <tr>
                       <td
                         colSpan={7}
-                        className="py-12 text-center text-slate-500"
+                        className="py-12 text-center text-[#B8B2A6]"
                       >
                         Không tìm thấy tài khoản học viên nào phù hợp.
                       </td>
@@ -916,30 +916,26 @@ SET role = 'admin',
                       return (
                         <tr
                           key={u.email}
-                          className="hover:bg-slate-800/40 transition"
+                          className="hover:bg-[#141413]/70 transition-colors"
                         >
-                          {/* 1. User, Email & Read-Only Role Badge (Managed in Supabase only) */}
+                          {/* 1. User, Email & Read-Only Role Badge */}
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-2">
-                              <span className="font-bold text-white">{u.name}</span>
+                              <span className="font-extrabold text-[#F5EFE6]">{u.name}</span>
                               <span
-                                className={`rounded-md px-1.5 py-0.5 text-[10px] font-black uppercase ${
+                                className={`rounded-md border border-[#141413] px-1.5 py-0.5 text-[10px] font-black uppercase ${
                                   u.role === "admin"
-                                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                                    : "bg-slate-800 text-slate-300 border border-slate-700"
+                                    ? "bg-[#F3C969] text-[#141413]"
+                                    : "bg-[#3A3832] text-[#F5EFE6]"
                                 }`}
                                 title="Quyền Admin chỉ có thể được cấp hoặc thu hồi trực tiếp từ cơ sở dữ liệu Supabase"
                               >
                                 {u.role === "admin" ? "Admin" : "User"}
                               </span>
                             </div>
-                            <div className="text-slate-400 font-medium">
+                            <div className="text-[#B8B2A6] font-medium">
                               {u.email}
                             </div>
-                            {/* <div className="text-[10px] text-slate-500 mt-0.5">
-                              Tạo:{" "}
-                              {new Date(u.createdAt).toLocaleDateString("vi-VN")} • Role đồng bộ từ Supabase
-                            </div> */}
                           </td>
 
                           {/* 2. Plan Selector */}
@@ -977,17 +973,17 @@ SET role = 'admin',
                           {/* 3. Assigned Indirect API Key */}
                           <td className="py-3.5 px-4">
                             <div className="flex items-center gap-1.5">
-                              <code className="rounded-lg border border-slate-800 bg-slate-950 px-2.5 py-1 font-mono text-[11px] font-bold text-emerald-400">
+                              <code className="rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2.5 py-1 font-mono text-[11px] font-bold text-[#A7D7A9]">
                                 {u.issuedApiKey}
                               </code>
                               <button
                                 type="button"
                                 onClick={() => handleCopyKey(u.issuedApiKey)}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-white transition cursor-pointer"
+                                className="rounded-lg p-1.5 text-[#B8B2A6] hover:bg-[#141413] hover:text-[#F5EFE6] transition-colors cursor-pointer"
                                 title="Sao chép mã API Key"
                               >
                                 {copiedKeyId === u.issuedApiKey ? (
-                                  <Check className="h-3.5 w-3.5 text-emerald-400" />
+                                  <Check className="h-3.5 w-3.5 text-[#A7D7A9]" />
                                 ) : (
                                   <Copy className="h-3.5 w-3.5" />
                                 )}
@@ -995,7 +991,7 @@ SET role = 'admin',
                               <button
                                 type="button"
                                 onClick={() => handleRegenerateUserKey(u.email)}
-                                className="rounded-lg p-1.5 text-slate-400 hover:bg-slate-800 hover:text-amber-300 transition cursor-pointer"
+                                className="rounded-lg p-1.5 text-[#B8B2A6] hover:bg-[#141413] hover:text-[#F3C969] transition-colors cursor-pointer"
                                 title="Cấp lại Mã API Key mới cho user này"
                               >
                                 <RefreshCw className="h-3.5 w-3.5" />
@@ -1013,20 +1009,20 @@ SET role = 'admin',
                                   onChange={(e) =>
                                     setEditingQuotaValue(e.target.value)
                                   }
-                                  className="w-20 rounded-lg border border-indigo-500 bg-slate-950 px-2 py-1 text-xs text-white"
+                                  className="w-20 rounded-lg border-2 border-[#F3C969] bg-[#141413] px-2 py-1 text-xs text-[#F5EFE6]"
                                   placeholder="Số lượt"
                                 />
                                 <button
                                   type="button"
                                   onClick={() => handleSaveCustomQuota(u.email)}
-                                  className="rounded-lg bg-emerald-600 px-2 py-1 text-[11px] font-bold text-white"
+                                  className="rounded-lg border border-[#F5EFE6] bg-[#A7D7A9] px-2 py-1 text-[11px] font-extrabold text-[#141413]"
                                 >
                                   Lưu
                                 </button>
                                 <button
                                   type="button"
                                   onClick={() => setEditingQuotaEmail(null)}
-                                  className="text-[11px] text-slate-400"
+                                  className="text-[11px] text-[#B8B2A6]"
                                 >
                                   Hủy
                                 </button>
@@ -1035,19 +1031,19 @@ SET role = 'admin',
                               <div className="space-y-1.5">
                                 <div className="flex items-center justify-between">
                                   {isUnlimited ? (
-                                    <span className="flex items-center gap-1 font-bold text-purple-300">
+                                    <span className="flex items-center gap-1 font-extrabold text-[#C8B6FF]">
                                       <InfinityIcon className="h-3.5 w-3.5" />
                                       {u.usedCalls} / {u.fupDailyLimit || VIP_FUP_DAILY_CREDITS} Credit (FUP)
                                     </span>
                                   ) : (
                                     <span
-                                      className={`font-bold ${
+                                      className={`font-extrabold ${
                                         u.usedCalls >= u.maxCalls
-                                          ? "text-rose-400"
-                                          : "text-white"
+                                          ? "text-[#FF8A8A]"
+                                          : "text-[#F5EFE6]"
                                       }`}
                                     >
-                                      {u.usedCalls} / {u.maxCalls} 
+                                      {u.usedCalls} / {u.maxCalls}
                                     </span>
                                   )}
 
@@ -1060,7 +1056,7 @@ SET role = 'admin',
                                           String(u.maxCalls)
                                         );
                                       }}
-                                      className="rounded p-1 text-slate-400 hover:bg-slate-800 hover:text-indigo-300"
+                                      className="rounded p-1 text-[#B8B2A6] hover:bg-[#141413] hover:text-[#F3C969]"
                                       title="Chỉnh sửa giới hạn lượt gọi/ngày"
                                     >
                                       <Sliders className="h-3 w-3" />
@@ -1070,7 +1066,7 @@ SET role = 'admin',
                                       onClick={() =>
                                         handleResetUserDailyCalls(u.email)
                                       }
-                                      className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-slate-800 text-emerald-300 hover:bg-slate-700 cursor-pointer"
+                                      className="rounded border border-[#3A3832] px-1.5 py-0.5 text-[10px] font-bold bg-[#141413] text-[#A7D7A9] hover:border-[#A7D7A9] cursor-pointer"
                                       title="Reset số lượt gọi hôm nay về 0"
                                     >
                                       Reset 0
@@ -1081,7 +1077,7 @@ SET role = 'admin',
                                         onClick={() =>
                                           handleSimulateQuotaExhausted(u)
                                         }
-                                        className="rounded px-1.5 py-0.5 text-[10px] font-semibold bg-rose-500/15 border border-rose-500/30 text-rose-300 hover:bg-rose-500/25 cursor-pointer"
+                                        className="rounded border border-[#FF8A8A] px-1.5 py-0.5 text-[10px] font-bold bg-[#141413] text-[#FF8A8A] hover:bg-[#FF8A8A] hover:text-[#141413] cursor-pointer"
                                         title="Giả lập đã dùng hết sạch lượt hôm nay để test bảng Nâng cấp"
                                       >
                                         Test hết lượt
@@ -1090,14 +1086,14 @@ SET role = 'admin',
                                   </div>
                                 </div>
 
-                                <div className="h-1.5 w-full overflow-hidden rounded-full bg-slate-950">
+                                <div className="h-2 w-full overflow-hidden rounded-full border border-[#3A3832] bg-[#141413]">
                                   <div
                                     className={`h-full ${
                                       isUnlimited
-                                        ? "bg-purple-500 w-full"
+                                        ? "bg-[#C8B6FF] w-full"
                                         : u.usedCalls >= u.maxCalls
-                                        ? "bg-rose-500"
-                                        : "bg-emerald-400"
+                                        ? "bg-[#FF8A8A]"
+                                        : "bg-[#A7D7A9]"
                                     }`}
                                     style={{
                                       width: isUnlimited ? "100%" : `${pct}%`,
@@ -1109,19 +1105,19 @@ SET role = 'admin',
                           </td>
 
                           {/* 5. Total Historical Calls */}
-                          <td className="py-3.5 px-4 font-bold text-slate-200">
+                          <td className="py-3.5 px-4 font-bold text-[#F5EFE6]">
                             {u.totalCalls || u.usedCalls || 0} lượt
                           </td>
 
                           {/* 6. Status */}
                           <td className="py-3.5 px-4">
                             {u.isLocked ? (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-rose-500/20 border border-rose-500/30 px-2.5 py-0.5 text-[10px] font-bold text-rose-300">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-[#141413] bg-[#FF8A8A] px-2.5 py-0.5 text-[10px] font-extrabold text-[#141413]">
                                 <Lock className="h-3 w-3" />
                                 Đã khóa AI
                               </span>
                             ) : (
-                              <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/20 border border-emerald-500/30 px-2.5 py-0.5 text-[10px] font-bold text-emerald-300">
+                              <span className="inline-flex items-center gap-1 rounded-full border border-[#141413] bg-[#A7D7A9] px-2.5 py-0.5 text-[10px] font-extrabold text-[#141413]">
                                 <Check className="h-3 w-3" />
                                 Hoạt động
                               </span>
@@ -1134,10 +1130,8 @@ SET role = 'admin',
                               <button
                                 type="button"
                                 onClick={() => handleToggleLockUser(u)}
-                                className={`rounded-xl border px-2.5 py-1.5 text-[11px] font-bold transition cursor-pointer ${
-                                  u.isLocked
-                                    ? "border-emerald-500/30 bg-emerald-500/15 text-emerald-300 hover:bg-emerald-500/25"
-                                    : "border-amber-500/30 bg-amber-500/15 text-amber-300 hover:bg-amber-500/25"
+                                className={`rounded-xl border-2 border-[#F5EFE6] px-2.5 py-1 text-[11px] font-extrabold text-[#141413] transition-transform active:translate-y-[1px] cursor-pointer ${
+                                  u.isLocked ? "bg-[#A7D7A9]" : "bg-[#F3C969]"
                                 }`}
                                 title={
                                   u.isLocked
@@ -1161,7 +1155,7 @@ SET role = 'admin',
                               <button
                                 type="button"
                                 onClick={() => handleDeleteUser(u.email)}
-                                className="rounded-xl border border-rose-500/30 bg-rose-500/10 p-1.5 text-rose-400 hover:bg-rose-500/25 transition cursor-pointer"
+                                className="rounded-xl border-2 border-[#F5EFE6] bg-[#FF8A8A] p-1.5 text-[#141413] transition-transform active:translate-y-[1px] cursor-pointer"
                                 title="Xóa tài khoản user"
                               >
                                 <Trash2 className="h-3.5 w-3.5" />
@@ -1180,10 +1174,10 @@ SET role = 'admin',
 
         {/* TAB 2: PAYMENT TRANSACTIONS LOG */}
         {activeTab === "transactions" && (
-          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
+          <div className="overflow-x-auto rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] shadow-[4px_4px_0_0_#F5EFE6]">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <tr className="border-b-2 border-[#F5EFE6] bg-[#141413] text-[11px] font-extrabold uppercase tracking-wider text-[#B8D8F8]">
                   <th className="py-3.5 px-4">Mã Đơn Hàng</th>
                   <th className="py-3.5 px-4">Học Viên & Email</th>
                   <th className="py-3.5 px-4">Gói Nâng Cấp</th>
@@ -1193,35 +1187,35 @@ SET role = 'admin',
                   <th className="py-3.5 px-4">Thời Gian</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/70 text-xs">
+              <tbody className="divide-y divide-[#3A3832] text-xs">
                 {transactions.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500">
+                    <td colSpan={7} className="py-12 text-center text-[#B8B2A6]">
                       Chưa có giao dịch nâng cấp gói nào được ghi nhận.
                     </td>
                   </tr>
                 ) : (
                   transactions.map((tx) => (
-                    <tr key={tx.id} className="hover:bg-slate-800/40">
-                      <td className="py-3.5 px-4 font-mono font-bold text-amber-300">
+                    <tr key={tx.id} className="hover:bg-[#141413]/70">
+                      <td className="py-3.5 px-4 font-mono font-extrabold text-[#F3C969]">
                         {tx.orderCode}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-white">{tx.userName}</div>
-                        <div className="text-slate-400">{tx.userEmail}</div>
+                        <div className="font-extrabold text-[#F5EFE6]">{tx.userName}</div>
+                        <div className="text-[#B8B2A6]">{tx.userEmail}</div>
                       </td>
-                      <td className="py-3.5 px-4 font-bold text-indigo-300">
+                      <td className="py-3.5 px-4 font-bold text-[#C8B6FF]">
                         {PLAN_CONFIG[tx.plan]?.name || tx.plan}
                       </td>
-                      <td className="py-3.5 px-4 font-extrabold text-emerald-400">
+                      <td className="py-3.5 px-4 font-extrabold text-[#A7D7A9]">
                         {tx.amountFormatted}
                       </td>
                       <td className="py-3.5 px-4">
                         <span
-                          className={`rounded-lg px-2.5 py-1 text-[10px] font-black uppercase ${
+                          className={`rounded-md border border-[#141413] px-2.5 py-0.5 text-[10px] font-black uppercase text-[#141413] ${
                             tx.paymentMethod === "momo"
-                              ? "bg-[#A50064]/30 text-pink-300 border border-pink-500/30"
-                              : "bg-[#005BAA]/30 text-sky-300 border border-sky-500/30"
+                              ? "bg-[#FF8A8A]"
+                              : "bg-[#B8D8F8]"
                           }`}
                         >
                           {tx.paymentMethod === "momo"
@@ -1229,10 +1223,10 @@ SET role = 'admin',
                             : "VNPay SmartQR"}
                         </span>
                       </td>
-                      <td className="py-3.5 px-4 font-mono text-emerald-400">
+                      <td className="py-3.5 px-4 font-mono font-bold text-[#A7D7A9]">
                         {tx.assignedApiKey}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400">
+                      <td className="py-3.5 px-4 text-[#B8B2A6]">
                         {new Date(tx.createdAt).toLocaleString("vi-VN")}
                       </td>
                     </tr>
@@ -1245,10 +1239,10 @@ SET role = 'admin',
 
         {/* TAB 2B: AI USAGE & REFUND LOGS */}
         {activeTab === "ai_logs" && (
-          <div className="overflow-x-auto rounded-2xl border border-slate-800 bg-slate-900/70 shadow-xl">
+          <div className="overflow-x-auto rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] shadow-[4px_4px_0_0_#F5EFE6]">
             <table className="w-full text-left border-collapse">
               <thead>
-                <tr className="border-b border-slate-800 bg-slate-950/80 text-[11px] font-bold uppercase tracking-wider text-slate-400">
+                <tr className="border-b-2 border-[#F5EFE6] bg-[#141413] text-[11px] font-extrabold uppercase tracking-wider text-[#A7D7A9]">
                   <th className="py-3.5 px-4">Idempotency Key</th>
                   <th className="py-3.5 px-4">Email Học Viên</th>
                   <th className="py-3.5 px-4">Tác Vụ AI & Endpoint</th>
@@ -1258,63 +1252,63 @@ SET role = 'admin',
                   <th className="py-3.5 px-4">Thời Điểm Gọi</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-slate-800/70 text-xs">
+              <tbody className="divide-y divide-[#3A3832] text-xs">
                 {aiLogs.length === 0 ? (
                   <tr>
-                    <td colSpan={7} className="py-12 text-center text-slate-500">
+                    <td colSpan={7} className="py-12 text-center text-[#B8B2A6]">
                       Chưa có nhật ký gọi AI nào trong phiên làm việc này.
                     </td>
                   </tr>
                 ) : (
                   aiLogs.map((log) => (
-                    <tr key={log.id} className="hover:bg-slate-800/40">
-                      <td className="py-3.5 px-4 font-mono text-[11px] text-indigo-300">
+                    <tr key={log.id} className="hover:bg-[#141413]/70">
+                      <td className="py-3.5 px-4 font-mono text-[11px] text-[#B8D8F8]">
                         {log.idempotencyKey}
                       </td>
-                      <td className="py-3.5 px-4 font-semibold text-white">
+                      <td className="py-3.5 px-4 font-bold text-[#F5EFE6]">
                         {log.userEmail}
                       </td>
                       <td className="py-3.5 px-4">
-                        <div className="font-bold text-slate-200">
+                        <div className="font-bold text-[#F5EFE6]">
                           {log.taskLabel}
                         </div>
-                        <div className="font-mono text-[10px] text-slate-500">
+                        <div className="font-mono text-[10px] text-[#B8B2A6]">
                           {log.endpoint}
                         </div>
                       </td>
                       <td className="py-3.5 px-4">
-                        <span className="rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 font-mono font-bold text-amber-300">
+                        <span className="rounded-md border border-[#141413] bg-[#F3C969] px-2.5 py-0.5 font-mono font-extrabold text-[#141413]">
                           {log.creditsCharged} Credit
                         </span>
                       </td>
                       <td className="py-3.5 px-4">
                         {log.status === "success" ? (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-emerald-500/15 border border-emerald-500/30 px-2.5 py-1 text-[11px] font-bold text-emerald-300">
+                          <span className="inline-flex items-center gap-1 rounded-md border border-[#141413] bg-[#A7D7A9] px-2.5 py-0.5 text-[11px] font-extrabold text-[#141413]">
                             <CheckCircle2 className="h-3.5 w-3.5" />
                             Thành công (-{log.creditsCharged} Cr)
                           </span>
                         ) : log.status === "failed_refunded" ? (
                           <div className="space-y-1">
-                            <span className="inline-flex items-center gap-1 rounded-lg bg-rose-500/15 border border-rose-500/30 px-2.5 py-1 text-[11px] font-bold text-rose-300">
+                            <span className="inline-flex items-center gap-1 rounded-md border border-[#141413] bg-[#FF8A8A] px-2.5 py-0.5 text-[11px] font-extrabold text-[#141413]">
                               <RefreshCw className="h-3.5 w-3.5" />
                               Đã hoàn 100% (+{log.creditsCharged} Cr)
                             </span>
                             {log.errorMessage && (
-                              <div className="text-[10px] text-rose-400 max-w-xs truncate">
+                              <div className="text-[10px] text-[#FF8A8A] max-w-xs truncate">
                                 {log.errorMessage}
                               </div>
                             )}
                           </div>
                         ) : (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-amber-500/15 border border-amber-500/30 px-2.5 py-1 text-[11px] font-bold text-amber-300">
+                          <span className="inline-flex items-center gap-1 rounded-md border border-[#141413] bg-[#F3C969] px-2.5 py-0.5 text-[11px] font-extrabold text-[#141413]">
                             Chặn Rate Limit (0 Cr)
                           </span>
                         )}
                       </td>
-                      <td className="py-3.5 px-4 text-slate-300 font-mono">
+                      <td className="py-3.5 px-4 text-[#F5EFE6] font-mono">
                         Retry: {log.retryCount} • {log.latencyMs}ms
                       </td>
-                      <td className="py-3.5 px-4 text-slate-400">
+                      <td className="py-3.5 px-4 text-[#B8B2A6]">
                         {new Date(log.createdAt).toLocaleString("vi-VN")}
                       </td>
                     </tr>
@@ -1332,29 +1326,29 @@ SET role = 'admin',
             className="max-w-4xl space-y-6"
           >
             {/* Card 1: 4-Provider AI Agent Keys Cluster (Admin Only) */}
-            <div className="rounded-3xl border border-amber-500/30 bg-slate-900/80 p-6 space-y-5 shadow-xl">
+            <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 space-y-5 shadow-[4px_4px_0_0_#F5EFE6]">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-amber-500/20 text-amber-400">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413]">
                     <Key className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-extrabold text-white">
+                    <h3 className="text-base font-extrabold text-[#F5EFE6]">
                       1. Quản Lý Cụm 4 API Key Của Các AI Agent (Chỉ Hiển Thị Cho Admin)
                     </h3>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-[#B8B2A6]">
                       Cấu hình các API Key gốc của hệ thống (Groq, OpenRouter, SiliconFlow & Google Gemini). Tài khoản User thông thường sẽ không nhìn thấy các Key này.
                     </p>
                   </div>
                 </div>
-                <span className="rounded-full bg-emerald-500/20 border border-emerald-500/30 px-3 py-1 text-xs font-bold text-emerald-300">
+                <span className="rounded-full border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3 py-0.5 text-xs font-extrabold text-[#141413]">
                   Bảo mật cấp Admin
                 </span>
               </div>
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                  <label className="mb-1.5 block text-xs font-bold text-[#F5EFE6]">
                     1. Groq Cloud API Key (<code>gsk_...</code>)
                   </label>
                   <input
@@ -1367,12 +1361,12 @@ SET role = 'admin',
                       })
                     }
                     placeholder="gsk_..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                  <label className="mb-1.5 block text-xs font-bold text-[#F5EFE6]">
                     2. OpenRouter API Key (<code>sk-or-v1-...</code>)
                   </label>
                   <input
@@ -1385,12 +1379,12 @@ SET role = 'admin',
                       })
                     }
                     placeholder="sk-or-v1-..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                  <label className="mb-1.5 block text-xs font-bold text-[#F5EFE6]">
                     3. SiliconFlow API Key (<code>sk-...</code>)
                   </label>
                   <input
@@ -1403,12 +1397,12 @@ SET role = 'admin',
                       })
                     }
                     placeholder="sk-..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                  <label className="mb-1.5 block text-xs font-bold text-[#F5EFE6]">
                     4. Master Google Gemini API Key (<code>AIzaSy...</code>)
                   </label>
                   <input
@@ -1421,12 +1415,12 @@ SET role = 'admin',
                       })
                     }
                     placeholder="AIzaSy... (Hoặc biến GEMINI_API_KEY trong .env)"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white focus:border-amber-500 focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
 
                 <div className="md:col-span-2">
-                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                  <label className="mb-1.5 block text-xs font-bold text-[#F5EFE6]">
                     Mô hình AI mặc định của toàn hệ thống
                   </label>
                   <CustomSelect
@@ -1472,17 +1466,17 @@ SET role = 'admin',
             </div>
 
             {/* Card 2: Supabase Cloud Database & Auth Configuration */}
-            <div className="rounded-3xl border border-emerald-500/30 bg-slate-900/80 p-6 space-y-5 shadow-xl">
+            <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 space-y-5 shadow-[4px_4px_0_0_#F5EFE6]">
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-center gap-3">
-                  <div className="flex h-10 w-10 items-center justify-center rounded-xl bg-emerald-500/20 text-emerald-400">
+                  <div className="flex h-10 w-10 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] text-[#141413]">
                     <Cloud className="h-5 w-5" />
                   </div>
                   <div>
-                    <h3 className="text-base font-extrabold text-white">
+                    <h3 className="text-base font-extrabold text-[#F5EFE6]">
                       2. Cấu Hình Cơ Sở Dữ Liệu Supabase Cloud (Dành Riêng Cho Admin)
                     </h3>
-                    <p className="text-xs text-slate-400">
+                    <p className="text-xs text-[#B8B2A6]">
                       Kết nối Supabase để lưu trữ đồng bộ User, Google OAuth, Khóa học và Flashcards trên Cloud
                     </p>
                   </div>
@@ -1491,7 +1485,7 @@ SET role = 'admin',
                 <button
                   type="button"
                   onClick={() => setShowSql(!showSql)}
-                  className="rounded-xl border border-emerald-500/30 bg-emerald-500/15 px-3 py-1.5 text-xs font-bold text-emerald-300 hover:bg-emerald-500/25 transition cursor-pointer"
+                  className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3 py-1.5 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
                 >
                   {showSql
                     ? "Ẩn mã SQL khởi tạo bảng"
@@ -1500,7 +1494,7 @@ SET role = 'admin',
               </div>
 
               {showSql && (
-                <div className="relative rounded-2xl border border-slate-800 bg-slate-950 p-4">
+                <div className="relative rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4">
                   <button
                     type="button"
                     onClick={() => {
@@ -1508,12 +1502,12 @@ SET role = 'admin',
                       setCopiedSql(true);
                       setTimeout(() => setCopiedSql(false), 2000);
                     }}
-                    className="absolute right-3 top-3 flex items-center gap-1.5 rounded-xl bg-slate-800 px-3 py-1.5 text-xs font-bold text-slate-200 hover:bg-slate-700 cursor-pointer"
+                    className="absolute right-3 top-3 flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3 py-1.5 text-xs font-extrabold text-[#141413] cursor-pointer"
                   >
                     {copiedSql ? (
                       <>
-                        <Check className="h-3.5 w-3.5 text-emerald-400" />
-                        <span className="text-emerald-300">Đã sao chép SQL</span>
+                        <Check className="h-3.5 w-3.5" />
+                        <span>Đã sao chép SQL</span>
                       </>
                     ) : (
                       <>
@@ -1522,7 +1516,7 @@ SET role = 'admin',
                       </>
                     )}
                   </button>
-                  <pre className="overflow-x-auto text-[11px] leading-relaxed text-emerald-300 font-mono">
+                  <pre className="overflow-x-auto text-[11px] leading-relaxed text-[#A7D7A9] font-mono">
                     {SUPABASE_ADMIN_SQL_SCHEMA}
                   </pre>
                 </div>
@@ -1530,7 +1524,7 @@ SET role = 'admin',
 
               <div className="grid grid-cols-1 gap-4 md:grid-cols-2">
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                  <label className="mb-1.5 block text-xs font-bold text-[#F5EFE6]">
                     Supabase Project URL
                   </label>
                   <input
@@ -1540,12 +1534,12 @@ SET role = 'admin',
                       setSettings({ ...settings, supabaseUrl: e.target.value })
                     }
                     placeholder="https://xyzcompany.supabase.co"
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] placeholder-[#B8B2A6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
 
                 <div>
-                  <label className="mb-1.5 block text-xs font-bold text-slate-300">
+                  <label className="mb-1.5 block text-xs font-bold text-[#F5EFE6]">
                     Supabase Anon / Public Key
                   </label>
                   <input
@@ -1558,15 +1552,15 @@ SET role = 'admin',
                       })
                     }
                     placeholder="eyJhbGciOiJIUzI1NiIsInR..."
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-4 py-2.5 text-sm text-white placeholder-slate-500 focus:border-emerald-500 focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] placeholder-[#B8B2A6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
               </div>
             </div>
 
-            <div className="flex items-center justify-between pt-1">
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-1">
               {savedSettingsNotice ? (
-                <span className="flex items-center gap-1.5 text-xs font-bold text-emerald-400">
+                <span className="flex items-center gap-1.5 text-xs font-extrabold text-[#A7D7A9]">
                   <CheckCircle2 className="h-4 w-4" />
                   Đã lưu cấu hình Master Gemini Key & Supabase thành công!
                 </span>
@@ -1576,7 +1570,7 @@ SET role = 'admin',
 
               <button
                 type="submit"
-                className="rounded-xl bg-amber-500 hover:bg-amber-400 px-6 py-3 text-xs sm:text-sm font-extrabold text-slate-950 shadow-lg shadow-amber-500/20 transition cursor-pointer"
+                className="rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-6 py-3 text-xs sm:text-sm font-extrabold text-[#141413] shadow-[4px_4px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
               >
                 Lưu Cấu Hình Master Key & Supabase
               </button>
@@ -1587,15 +1581,15 @@ SET role = 'admin',
 
       {/* Create New User Modal */}
       {isCreateUserOpen && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-slate-950/80 p-4 backdrop-blur-sm">
-          <div className="w-full max-w-md rounded-3xl border border-slate-800 bg-slate-900 p-6 shadow-2xl space-y-4">
-            <h3 className="text-base font-extrabold text-white">
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-[#141413]/85 p-4">
+          <div className="w-full max-w-md rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 shadow-[6px_6px_0_0_#F5EFE6] space-y-4">
+            <h3 className="text-base font-extrabold text-[#F5EFE6]">
               Thêm Tài Khoản Học Viên & Cấp Gói AI
             </h3>
 
             <form onSubmit={handleCreateNewUser} className="space-y-3.5">
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-300">
+                <label className="mb-1 block text-xs font-bold text-[#F5EFE6]">
                   Họ và tên học viên
                 </label>
                 <input
@@ -1604,12 +1598,12 @@ SET role = 'admin',
                   onChange={(e) => setNewUserName(e.target.value)}
                   placeholder="Ví dụ: Nguyễn Văn A"
                   required
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-white"
+                  className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-3.5 py-2 text-xs text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-300">
+                <label className="mb-1 block text-xs font-bold text-[#F5EFE6]">
                   Email tài khoản
                 </label>
                 <input
@@ -1618,12 +1612,12 @@ SET role = 'admin',
                   onChange={(e) => setNewUserEmail(e.target.value)}
                   placeholder="hocvien@gmail.com"
                   required
-                  className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-white"
+                  className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-3.5 py-2 text-xs text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                 />
               </div>
 
               <div>
-                <label className="mb-1 block text-xs font-semibold text-slate-300">
+                <label className="mb-1 block text-xs font-bold text-[#F5EFE6]">
                   Gói cước áp dụng
                 </label>
                 <CustomSelect
@@ -1643,14 +1637,14 @@ SET role = 'admin',
 
               {newUserPlan !== "unlimited" && (
                 <div>
-                  <label className="mb-1 block text-xs font-semibold text-slate-300">
+                  <label className="mb-1 block text-xs font-bold text-[#F5EFE6]">
                     Số lượt gọi AI mỗi ngày (Tự động reset 00:00)
                   </label>
                   <input
                     type="number"
                     value={newUserCustomQuota}
                     onChange={(e) => setNewUserCustomQuota(e.target.value)}
-                    className="w-full rounded-xl border border-slate-700 bg-slate-950 px-3.5 py-2 text-xs text-white"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-3.5 py-2 text-xs text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
               )}
@@ -1659,13 +1653,13 @@ SET role = 'admin',
                 <button
                   type="button"
                   onClick={() => setIsCreateUserOpen(false)}
-                  className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+                  className="rounded-xl border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2 text-xs font-bold text-[#F5EFE6] cursor-pointer"
                 >
                   Hủy
                 </button>
                 <button
                   type="submit"
-                  className="rounded-xl bg-indigo-600 hover:bg-indigo-500 px-4 py-2 text-xs font-bold text-white"
+                  className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer"
                 >
                   Tạo Tài Khoản & Gắn Key
                 </button>

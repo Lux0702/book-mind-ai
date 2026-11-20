@@ -1162,23 +1162,23 @@ export default function ChapterWorkspace({
           type="button"
           disabled={isRedetectingToc}
           onClick={handleRedetectCourseTocFromSidebar}
-          className="mb-3 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border border-amber-500/35 bg-amber-500/15 px-3 py-2 text-xs font-semibold text-amber-200 transition hover:bg-amber-500/25 disabled:opacity-50 cursor-pointer"
+          className="mb-3 flex min-h-[40px] w-full items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
           title="Dùng Vision AI đọc ảnh 10 trang đầu PDF để chia lại danh sách Bài học theo đúng Mục lục sách"
         >
           {isRedetectingToc ? (
             <>
-              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-amber-400" />
+              <Loader2 className="h-3.5 w-3.5 animate-spin shrink-0 text-[#141413]" />
               <span>Vision AI đang đọc ảnh Mục lục...</span>
             </>
           ) : (
             <>
-              <Sparkles className="h-3.5 w-3.5 shrink-0 text-amber-400" />
+              <Sparkles className="h-3.5 w-3.5 shrink-0 text-[#141413]" />
               <span>AI Đọc Mục Lục (TOC) &amp; Chia Lại Bài</span>
             </>
           )}
         </button>
       )}
-      <div className="mb-2 flex items-center justify-between px-1.5 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+      <div className="mb-2 flex items-center justify-between px-1.5 text-[11px] font-bold uppercase tracking-wider text-[#B8B2A6]">
         <span>Lộ trình Chương ({course.chapters.length})</span>
         <span>
           {course.chapters.filter((c) => c.isGenerated).length}/
@@ -1206,28 +1206,40 @@ export default function ChapterWorkspace({
                   window.scrollTo({ top: 0, behavior: "smooth" });
                 }
               }}
-              className={`w-full rounded-xl border p-3 text-left transition ${
+              className={`w-full rounded-xl border-2 p-3 text-left transition-colors ${
                 isSelected
-                  ? "border-indigo-500/60 bg-indigo-500/15 text-white shadow-sm"
-                  : "border-white/[0.06] bg-slate-950/50 text-slate-300 hover:border-white/[0.14] hover:bg-slate-900"
+                  ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                  : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
               <div className="flex items-start justify-between gap-2">
-                <span className="line-clamp-2 text-xs font-semibold leading-snug">
+                <span className="line-clamp-2 text-xs font-extrabold leading-snug">
                   {ch.title}
                 </span>
                 <div className="flex items-center gap-1 shrink-0">
                   {ch.isGenerated ? (
-                    <CheckCircle2 className="h-4 w-4 text-emerald-400" />
+                    <CheckCircle2
+                      className={`h-4 w-4 ${
+                        isSelected ? "text-[#141413]" : "text-[#A7D7A9]"
+                      }`}
+                    />
                   ) : (
-                    <Sparkles className="h-4 w-4 text-slate-500" />
+                    <Sparkles
+                      className={`h-4 w-4 ${
+                        isSelected ? "text-[#141413]" : "text-[#B8B2A6]"
+                      }`}
+                    />
                   )}
                   {!isClonedBook && (
                     <span
                       role="button"
                       tabIndex={0}
                       onClick={(e) => handleDeleteChapterFromCourse(ch.id, e)}
-                      className="rounded p-1 text-slate-500 hover:bg-rose-950/70 hover:text-rose-400"
+                      className={`rounded p-1 transition-colors ${
+                        isSelected
+                          ? "text-[#141413] hover:bg-[#FF8A8A]"
+                          : "text-[#B8B2A6] hover:bg-[#FF8A8A] hover:text-[#141413]"
+                      }`}
                       title="Xóa chương không cần thiết này"
                     >
                       <Trash2 className="h-3.5 w-3.5" />
@@ -1235,20 +1247,30 @@ export default function ChapterWorkspace({
                   )}
                 </div>
               </div>
-              <div className="mt-2 flex items-center justify-between text-[11px] text-slate-400">
+              <div
+                className={`mt-2 flex items-center justify-between text-[11px] font-semibold ${
+                  isSelected ? "text-[#141413]/85" : "text-[#B8B2A6]"
+                }`}
+              >
                 <span>
                   {ch.startPage && ch.endPage
                     ? `Trang ${ch.startPage}–${ch.endPage}`
                     : `Chương ${ch.index}`}
                 </span>
                 {ch.isGenerated ? (
-                  <span className="rounded bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-300">
+                  <span
+                    className={`rounded-md border px-1.5 py-0.5 text-[10px] font-bold ${
+                      isSelected
+                        ? "border-[#141413] bg-[#141413] text-[#F3C969]"
+                        : "border-[#A7D7A9] bg-[#A7D7A9] text-[#141413]"
+                    }`}
+                  >
                     {doneExercisesCount > 0
                       ? `Đã làm ${doneExercisesCount} bài`
                       : "Sẵn sàng học"}
                   </span>
                 ) : (
-                  <span className="text-[10px] text-slate-500">
+                  <span className="text-[10px] opacity-80">
                     Bấm để AI soạn bài
                   </span>
                 )}
@@ -1270,14 +1292,14 @@ export default function ChapterWorkspace({
   return (
     <div className="flex min-h-[calc(100vh-4rem)] flex-col lg:flex-row">
       {/* MOBILE STICKY APP BAR (Chỉ ~52px, thay cho khối sidebar cồng kềnh trên mobile) */}
-      <div className="sticky top-14 z-20 flex items-center gap-2 border-b border-white/[0.08] bg-[#090D16]/95 px-3 py-2 backdrop-blur-xl lg:hidden">
+      <div className="sticky top-14 z-20 flex items-center gap-2 border-b-2 border-[#F5EFE6] bg-[#1D1C19] px-3 py-2 lg:hidden">
         <button
           type="button"
           onClick={() => {
             stopAllSpeech();
             onBackToDashboard();
           }}
-          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-slate-900/90 text-indigo-300 hover:border-indigo-500/40 hover:text-white transition"
+          className="flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#141413] text-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px]"
           title="Quay lại Tủ sách"
         >
           <ArrowLeft className="h-4 w-4" />
@@ -1286,13 +1308,13 @@ export default function ChapterWorkspace({
         <button
           type="button"
           onClick={() => setIsMobileChapterDrawerOpen(true)}
-          className="flex h-10 min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border border-indigo-500/30 bg-indigo-500/10 px-3 text-left text-xs font-semibold text-indigo-100 transition hover:bg-indigo-500/20"
+          className="flex h-10 min-w-0 flex-1 items-center justify-between gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3 text-left text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px]"
         >
           <span className="truncate">
             Chương {currentChapter.index}/{course.chapters.length}:{" "}
             {currentChapter.title}
           </span>
-          <ChevronDown className="h-4 w-4 shrink-0 text-indigo-300" />
+          <ChevronDown className="h-4 w-4 shrink-0 text-[#141413]" />
         </button>
 
         <button
@@ -1301,10 +1323,10 @@ export default function ChapterWorkspace({
             setShowRawText(!showRawText);
             setEditableRawText(currentChapter.rawText);
           }}
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border transition ${
+          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] ${
             showRawText
-              ? "border-indigo-500/60 bg-indigo-600 text-white"
-              : "border-white/[0.08] bg-slate-900/90 text-slate-300 hover:bg-slate-800"
+              ? "bg-[#B8D8F8] text-[#141413]"
+              : "bg-[#141413] text-[#F5EFE6]"
           }`}
           title={showRawText ? "Ẩn văn bản gốc" : "Xem văn bản gốc"}
         >
@@ -1317,36 +1339,36 @@ export default function ChapterWorkspace({
         <>
           <div
             onClick={() => setIsMobileChapterDrawerOpen(false)}
-            className="fixed inset-0 z-50 bg-black/75 backdrop-blur-sm lg:hidden"
+            className="fixed inset-0 z-50 bg-[#141413]/85 lg:hidden"
           />
-          <div className="fixed bottom-0 inset-x-0 z-50 flex max-h-[82vh] flex-col rounded-t-3xl border-t border-white/[0.12] bg-[#0F1523] p-4 shadow-2xl lg:hidden animate-in slide-in-from-bottom duration-200 pb-safe">
-            <div className="mx-auto mb-3 h-1 w-10 rounded-full bg-slate-700" />
-            <div className="mb-3 flex items-start justify-between gap-3 border-b border-white/[0.07] pb-3">
+          <div className="fixed bottom-0 inset-x-0 z-50 flex max-h-[82vh] flex-col rounded-t-2xl border-t-2 border-x-2 border-[#F5EFE6] bg-[#1D1C19] p-4 lg:hidden pb-safe">
+            <div className="mx-auto mb-3 h-1.5 w-12 rounded-full bg-[#3A3832]" />
+            <div className="mb-3 flex items-start justify-between gap-3 border-b-2 border-[#3A3832] pb-3">
               <div className="min-w-0">
-                <h2 className="truncate text-sm font-bold text-white">
+                <h2 className="truncate text-sm font-extrabold text-[#F5EFE6]">
                   {course.title}
                 </h2>
-                <p className="mt-0.5 text-[11px] text-slate-400">
+                <p className="mt-0.5 text-[11px] font-semibold text-[#B8B2A6]">
                   {course.author} • CEFR {course.level}
                 </p>
               </div>
               <button
                 type="button"
                 onClick={() => setIsMobileChapterDrawerOpen(false)}
-                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border border-white/[0.08] bg-slate-900 text-slate-300 hover:text-white"
+                className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#141413] text-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6]"
                 title="Đóng danh sách chương"
               >
                 <X className="h-4 w-4" />
               </button>
             </div>
-            {renderChapterListContent("flex-1 space-y-1.5 overflow-y-auto pr-1")}
+            {renderChapterListContent("flex-1 space-y-2 overflow-y-auto pr-1 pb-2")}
           </div>
         </>
       )}
 
       {/* DESKTOP LEFT SIDEBAR: Course Roadmap & Chapters */}
-      <aside className="hidden lg:flex lg:w-80 lg:flex-col shrink-0 border-r border-white/[0.08] bg-[#0F1523]/95">
-        <div className="border-b border-white/[0.07] p-4">
+      <aside className="hidden lg:flex lg:w-80 lg:flex-col shrink-0 border-r-2 border-[#F5EFE6] bg-[#1D1C19]">
+        <div className="border-b-2 border-[#3A3832] p-4">
           <div className="flex items-center justify-between gap-2">
             <button
               type="button"
@@ -1354,27 +1376,27 @@ export default function ChapterWorkspace({
                 stopAllSpeech();
                 onBackToDashboard();
               }}
-              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-lg border border-white/[0.08] bg-slate-900/80 px-2.5 py-1.5 text-xs font-semibold text-indigo-300 hover:border-indigo-500/40 hover:text-white transition"
+              className="inline-flex min-h-[36px] items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#141413] px-3 py-1.5 text-xs font-bold text-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform hover:bg-[#F3C969] hover:text-[#141413] active:translate-x-[1px] active:translate-y-[1px]"
             >
               <ArrowLeft className="h-3.5 w-3.5" />
               <span>Quay lại Tủ sách</span>
             </button>
           </div>
 
-          <h2 className="mt-2.5 line-clamp-2 text-base font-bold text-white">
+          <h2 className="mt-3 line-clamp-2 text-base font-extrabold text-[#F5EFE6]">
             {course.title}
           </h2>
-          <p className="mt-0.5 text-xs text-slate-400">
+          <p className="mt-0.5 text-xs font-semibold text-[#B8B2A6]">
             {course.author} • CEFR {course.level}
           </p>
           {course.sourceFileName && (
-            <div className="mt-2 inline-flex items-center gap-1.5 rounded-lg border border-white/[0.07] bg-slate-950/60 px-2.5 py-1 text-[11px] text-slate-300">
-              <FileText className="h-3 w-3 text-indigo-400" />
+            <div className="mt-2.5 inline-flex items-center gap-1.5 rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2.5 py-1 text-[11px] font-semibold text-[#F5EFE6]">
+              <FileText className="h-3 w-3 text-[#B8D8F8]" />
               <span className="max-w-[180px] truncate">
                 {course.sourceFileName}
               </span>
               {course.sourceFileSizeMB && (
-                <span className="text-indigo-300">
+                <span className="text-[#F3C969]">
                   ({course.sourceFileSizeMB} MB)
                 </span>
               )}
@@ -1384,7 +1406,7 @@ export default function ChapterWorkspace({
 
         <div className="p-3">
           {renderChapterListContent(
-            "space-y-1.5 overflow-y-auto pr-1 max-h-[calc(100vh-15rem)]"
+            "space-y-2 overflow-y-auto pr-1 pb-2 max-h-[calc(100vh-15rem)]"
           )}
         </div>
       </aside>
@@ -1420,9 +1442,9 @@ export default function ChapterWorkspace({
             (hasTranslation ? 25 : 0);
 
           return (
-            <div className="mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 rounded-2xl border border-white/[0.08] bg-[#0F1523]/95 p-3.5 sm:p-5">
+            <div className="mb-4 sm:mb-6 flex flex-col lg:flex-row lg:items-center justify-between gap-3 sm:gap-4 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-3.5 sm:p-5 shadow-[4px_4px_0_0_#F5EFE6]">
               <div className="min-w-0 flex-1">
-                <div className="flex flex-wrap items-center gap-2 text-[11px] font-semibold uppercase tracking-wider text-indigo-400">
+                <div className="flex flex-wrap items-center gap-2 text-[11px] font-extrabold uppercase tracking-wider text-[#F3C969]">
                   <Layers className="h-3.5 w-3.5 shrink-0" />
                   <span>
                     Chương {currentChapter.index} / {course.chapters.length}
@@ -1431,50 +1453,50 @@ export default function ChapterWorkspace({
                       : ""}
                   </span>
                   <span
-                    className={`ml-auto sm:ml-1 inline-flex items-center gap-1 rounded-full border px-2 py-0.5 text-[10px] font-bold tracking-normal ${
+                    className={`ml-auto sm:ml-1 inline-flex items-center gap-1 rounded-full border-2 border-[#F5EFE6] px-2.5 py-0.5 text-[10px] font-extrabold tracking-normal shadow-[2px_2px_0_0_#F5EFE6] ${
                       completionPct === 100
-                        ? "border-emerald-500/40 bg-emerald-500/15 text-emerald-300"
+                        ? "bg-[#A7D7A9] text-[#141413]"
                         : completionPct > 0
-                        ? "border-indigo-500/40 bg-indigo-500/15 text-indigo-300"
-                        : "border-white/[0.08] bg-slate-900 text-slate-400"
+                        ? "bg-[#F3C969] text-[#141413]"
+                        : "bg-[#141413] text-[#F5EFE6]"
                     }`}
                   >
                     Tiến độ: {completionPct}%
                   </span>
                 </div>
-                <h1 className="mt-1 text-base sm:text-xl font-bold text-white md:text-2xl break-words">
+                <h1 className="mt-1.5 text-base sm:text-xl font-extrabold text-[#F5EFE6] md:text-2xl break-words">
                   {currentChapter.title}
                 </h1>
                 {/* Visual Completion Progress Bar & 4 Milestones */}
                 <div className="mt-2.5 space-y-1.5 max-w-md">
-                  <div className="h-1.5 w-full rounded-full bg-slate-800/90 overflow-hidden">
+                  <div className="h-2.5 w-full rounded-full border-2 border-[#F5EFE6] bg-[#141413] overflow-hidden">
                     <div
-                      className={`h-full rounded-full transition-all duration-500 ${
+                      className={`h-full transition-all duration-300 ${
                         completionPct === 100
-                          ? "bg-emerald-500"
-                          : "bg-gradient-to-r from-indigo-500 to-amber-400"
+                          ? "bg-[#A7D7A9]"
+                          : "bg-[#F3C969]"
                       }`}
                       style={{ width: `${completionPct}%` }}
                     />
                   </div>
-                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-medium text-slate-400">
-                    <span className={hasLesson ? "text-emerald-400" : ""}>
+                  <div className="flex flex-wrap items-center gap-x-3 gap-y-1 text-[10px] font-bold text-[#B8B2A6]">
+                    <span className={hasLesson ? "text-[#A7D7A9]" : ""}>
                       {hasLesson ? "✓" : "○"} Bài học
                     </span>
-                    <span className={hasCloze ? "text-emerald-400" : ""}>
+                    <span className={hasCloze ? "text-[#A7D7A9]" : ""}>
                       {hasCloze ? "✓" : "○"} Điền từ
                     </span>
-                    <span className={hasQuiz ? "text-emerald-400" : ""}>
+                    <span className={hasQuiz ? "text-[#A7D7A9]" : ""}>
                       {hasQuiz ? "✓" : "○"} Trắc nghiệm
                     </span>
-                    <span className={hasTranslation ? "text-emerald-400" : ""}>
+                    <span className={hasTranslation ? "text-[#A7D7A9]" : ""}>
                       {hasTranslation ? "✓" : "○"} Luyện dịch
                     </span>
                   </div>
                 </div>
               </div>
 
-          <div className="flex flex-row flex-wrap sm:flex-nowrap items-center gap-2 w-full lg:w-auto">
+          <div className="flex flex-row flex-wrap sm:flex-nowrap items-center gap-2.5 w-full lg:w-auto">
             <select
               value={selectedAiModel}
               onChange={(e) => {
@@ -1484,7 +1506,7 @@ export default function ChapterWorkspace({
                 saveAppSettings({ ...cur, geminiModel: val });
               }}
               title="Chọn nguồn AI tạo bài học (Tự động xoay vòng dự phòng nếu hết hạn mức)"
-              className="min-h-[40px] flex-1 sm:flex-initial min-w-0 rounded-xl border border-white/[0.1] bg-slate-950 px-2.5 sm:px-3 py-2 text-xs font-semibold text-slate-200 focus:border-indigo-500 focus:outline-none"
+              className="min-h-[40px] flex-1 sm:flex-initial min-w-0 rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-2.5 sm:px-3 py-2 text-xs font-bold text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
             >
               <option value="qwen-groq">
                 Qwen 3 / Llama 3.3 (Groq Siêu Tốc)
@@ -1508,7 +1530,11 @@ export default function ChapterWorkspace({
                 setShowRawText(!showRawText);
                 setEditableRawText(currentChapter.rawText);
               }}
-              className="hidden lg:inline-flex min-h-[40px] items-center justify-center rounded-xl border border-white/[0.1] bg-slate-950 px-3.5 py-2 text-xs font-medium text-slate-300 hover:bg-slate-800 text-center transition shrink-0"
+              className={`hidden lg:inline-flex min-h-[40px] items-center justify-center rounded-xl border-2 border-[#F5EFE6] px-3.5 py-2 text-xs font-bold shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] text-center shrink-0 cursor-pointer ${
+                showRawText
+                  ? "bg-[#B8D8F8] text-[#141413]"
+                  : "bg-[#141413] text-[#F5EFE6] hover:bg-[#2A2823]"
+              }`}
             >
               {showRawText ? "Ẩn văn bản gốc" : "Văn bản gốc"}
             </button>
@@ -1517,7 +1543,7 @@ export default function ChapterWorkspace({
                 type="button"
                 disabled={isGeneratingLesson}
                 onClick={() => handleGenerateChapterLesson(currentChapter)}
-                className="flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl bg-indigo-600 px-3.5 sm:px-4 py-2 text-xs font-semibold text-white shadow-sm transition hover:bg-indigo-500 disabled:opacity-50 cursor-pointer"
+                className="flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 sm:px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
               >
                 {isGeneratingLesson ? (
                   <>
@@ -1532,8 +1558,8 @@ export default function ChapterWorkspace({
                 )}
               </button>
             ) : (
-              <div className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border border-emerald-500/30 bg-emerald-500/10 px-3 py-2 text-xs font-semibold text-emerald-300">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-emerald-400" />
+              <div className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3 py-2 text-xs font-extrabold text-[#141413]">
+                <CheckCircle2 className="h-4 w-4 shrink-0 text-[#141413]" />
                 <span>Đã soạn</span>
               </div>
             )}
@@ -1544,13 +1570,13 @@ export default function ChapterWorkspace({
 
         {/* Raw Text Drawer */}
         {showRawText && (
-          <div className="mb-6 rounded-2xl border border-slate-800 bg-slate-900 p-4">
-            <div className="mb-2 flex flex-wrap items-center justify-between gap-2">
-              <span className="text-xs font-semibold text-indigo-300">
+          <div className="mb-6 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="mb-2.5 flex flex-wrap items-center justify-between gap-2">
+              <span className="text-xs font-extrabold text-[#B8D8F8]">
                 Văn bản gốc trích xuất từ Sách ({editableRawText.length.toLocaleString()} ký tự)
               </span>
               <div className="flex items-center gap-2">
-                <span className="hidden sm:inline text-xs text-slate-400">
+                <span className="hidden sm:inline text-xs text-[#B8B2A6]">
                   Chỉnh sửa hoặc dán bổ sung nội dung chương
                 </span>
                 <button
@@ -1580,7 +1606,7 @@ export default function ChapterWorkspace({
                       }
                     );
                   }}
-                  className="inline-flex items-center gap-1.5 rounded-lg bg-emerald-600 px-3 py-1.5 text-xs font-bold text-white hover:bg-emerald-500 transition cursor-pointer"
+                  className="inline-flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 py-1.5 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
                 >
                   <Check className="h-3.5 w-3.5" />
                   <span>Lưu văn bản</span>
@@ -1591,16 +1617,16 @@ export default function ChapterWorkspace({
               rows={7}
               value={editableRawText}
               onChange={(e) => setEditableRawText(e.target.value)}
-              className="w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs leading-relaxed text-slate-200 focus:border-indigo-500 focus:outline-none"
+              className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] p-3 font-mono text-xs leading-relaxed text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
             />
           </div>
         )}
 
         {/* Error banner */}
         {genError && (
-          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-rose-500/40 bg-rose-950/30 p-4 text-xs text-rose-200">
+          <div className="mb-6 flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[#FF8A8A] bg-[#1D1C19] p-4 text-xs font-semibold text-[#FF8A8A] shadow-[3px_3px_0_0_#FF8A8A]">
             <div className="flex items-center gap-2.5">
-              <AlertCircle className="h-5 w-5 shrink-0 text-rose-400" />
+              <AlertCircle className="h-5 w-5 shrink-0 text-[#FF8A8A]" />
               <span>{genError}</span>
             </div>
           </div>
@@ -1608,8 +1634,8 @@ export default function ChapterWorkspace({
 
         {/* Live OCR Progress Status Banner */}
         {ocrStatusMsg && (
-          <div className="mb-4 flex items-center gap-3 rounded-2xl border border-indigo-500/40 bg-indigo-950/40 p-4 text-xs font-semibold text-indigo-200 animate-pulse">
-            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-indigo-400" />
+          <div className="mb-4 flex items-center gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] p-4 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]">
+            <Loader2 className="h-5 w-5 shrink-0 animate-spin text-[#141413]" />
             <span>{ocrStatusMsg}</span>
           </div>
         )}
@@ -1621,70 +1647,70 @@ export default function ChapterWorkspace({
             chapterTitle={currentChapter.title}
           />
         ) : !lesson ? (
-          <div className="rounded-2xl border border-slate-800 bg-slate-900/50 p-6 sm:p-10 text-center animate-in fade-in duration-300">
-            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-2xl bg-indigo-500/15 text-indigo-400">
+          <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 sm:p-10 text-center shadow-[4px_4px_0_0_#F5EFE6]">
+            <div className="mx-auto mb-4 flex h-16 w-16 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]">
               <Sparkles className="h-8 w-8" />
             </div>
-            <h2 className="text-lg font-bold text-white">
+            <h2 className="text-lg font-extrabold text-[#F5EFE6]">
               Chương này đã sẵn sàng để AI phân tích chuyên sâu!
             </h2>
-            <p className="mx-auto mt-2 max-w-xl text-sm text-slate-400">
+            <p className="mx-auto mt-2 max-w-xl text-sm text-[#B8B2A6]">
               Hệ thống đã trích xuất sẵn{" "}
-              <strong>{currentChapter.rawText.length.toLocaleString()} ký tự</strong>{" "}
+              <strong className="text-[#F5EFE6]">{currentChapter.rawText.length.toLocaleString()} ký tự</strong>{" "}
               của chương này. Bấm nút bên dưới để AI Agent tự động diễn giải toàn bộ nội dung, bóc tách ngữ pháp, tạo bộ Flashcard từ vựng, bài tập điền từ, trắc nghiệm và câu luyện dịch.
             </p>
-            <div className="mx-auto mt-4 max-w-2xl rounded-xl border border-slate-800 bg-slate-950/80 p-4 text-left font-serif text-xs italic leading-relaxed text-slate-400">
+            <div className="mx-auto mt-4 max-w-2xl rounded-lg border-2 border-[#3A3832] bg-[#141413] p-4 text-left font-serif text-xs italic leading-relaxed text-[#B8B2A6]">
               &ldquo;{currentChapter.rawText.slice(0, 450)}...&rdquo;
             </div>
 
             {/* Dual-Engine OCR & Hybrid PDF Configuration Card */}
-            <div className="mx-auto mt-5 max-w-2xl rounded-xl border border-indigo-500/30 bg-indigo-950/20 p-4 text-left space-y-3">
+            <div className="mx-auto mt-5 max-w-2xl rounded-lg border-2 border-[#3A3832] bg-[#141413] p-4 text-left space-y-3">
               <label className="flex cursor-pointer items-start gap-3">
                 <input
                   type="checkbox"
                   checked={useHybridVision}
                   onChange={(e) => setUseHybridVision(e.target.checked)}
-                  className="mt-0.5 h-4 w-4 rounded border-slate-600 bg-slate-900 text-indigo-600 focus:ring-indigo-500"
+                  className="mt-0.5 h-4 w-4 rounded border-2 border-[#F5EFE6] bg-[#1D1C19] accent-[#F3C969]"
                 />
                 <div className="text-xs leading-relaxed flex-1">
-                  <div className="flex flex-wrap items-center gap-2 font-bold text-indigo-300">
+                  <div className="flex flex-wrap items-center gap-2 font-extrabold text-[#F5EFE6]">
                     <span>
                       Tự động Đọc Chữ Trong Ảnh (OCR) trước khi Soạn Bài Học
                     </span>
                     {hasCachedPdf ? (
-                      <span className="rounded-full bg-emerald-500/20 px-2 py-0.5 text-[10px] font-semibold text-emerald-300">
+                      <span className="rounded-full border-2 border-[#F5EFE6] bg-[#A7D7A9] px-2.5 py-0.5 text-[10px] font-extrabold text-[#141413]">
                         Đã lưu sẵn file PDF gốc
                       </span>
                     ) : (
-                      <span className="rounded-full bg-amber-500/20 px-2 py-0.5 text-[10px] font-semibold text-amber-300">
+                      <span className="rounded-full border-2 border-[#F5EFE6] bg-[#F3C969] px-2.5 py-0.5 text-[10px] font-extrabold text-[#141413]">
                         Chọn file PDF/Ảnh ở nút bên dưới nếu chưa có
                       </span>
                     )}
                   </div>
-                  <p className="mt-0.5 text-slate-400">
+                  <p className="mt-1 text-[#B8B2A6]">
                     Bóc chữ sạch từ ảnh (trang {currentChapter.startPage || 1}–{currentChapter.endPage || 15}) trước khi soạn bài để tránh lỗi quá tải ảnh.
                   </p>
                 </div>
               </label>
 
               {useHybridVision && (
-                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 pt-2 border-t border-indigo-500/20 text-xs">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2.5 pt-3 border-t-2 border-[#3A3832] text-xs">
                   <button
                     type="button"
                     onClick={() => setOcrEngineMode("local_tesseract")}
-                    className={`rounded-xl border p-2.5 text-left transition ${
+                    className={`rounded-xl border-2 p-3 text-left transition-colors ${
                       ocrEngineMode === "local_tesseract"
-                        ? "border-emerald-500 bg-emerald-950/40 text-emerald-200"
-                        : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700"
+                        ? "border-[#F5EFE6] bg-[#A7D7A9] text-[#141413]"
+                        : "border-[#3A3832] bg-[#1D1C19] text-[#B8B2A6] hover:border-[#F5EFE6]"
                     }`}
                   >
-                    <div className="font-bold flex items-center justify-between">
+                    <div className="font-extrabold flex items-center justify-between">
                       <span>1. OCR Trình Duyệt (Khuyên dùng)</span>
                       {ocrEngineMode === "local_tesseract" && (
-                        <Check className="h-3.5 w-3.5 text-emerald-400" />
+                        <Check className="h-3.5 w-3.5 text-[#141413]" />
                       )}
                     </div>
-                    <p className="mt-0.5 text-[11px] opacity-80">
+                    <p className="mt-0.5 text-[11px] opacity-90">
                       Quét chữ bằng Tesseract.js ngay trên máy, không gọi AI Vision, <strong>không bao giờ bị die</strong>.
                     </p>
                   </button>
@@ -1692,19 +1718,19 @@ export default function ChapterWorkspace({
                   <button
                     type="button"
                     onClick={() => setOcrEngineMode("micro_batch_ai")}
-                    className={`rounded-xl border p-2.5 text-left transition ${
+                    className={`rounded-xl border-2 p-3 text-left transition-colors ${
                       ocrEngineMode === "micro_batch_ai"
-                        ? "border-indigo-500 bg-indigo-950/50 text-indigo-200"
-                        : "border-slate-800 bg-slate-900/60 text-slate-400 hover:border-slate-700"
+                        ? "border-[#F5EFE6] bg-[#C8B6FF] text-[#141413]"
+                        : "border-[#3A3832] bg-[#1D1C19] text-[#B8B2A6] hover:border-[#F5EFE6]"
                     }`}
                   >
-                    <div className="font-bold flex items-center justify-between">
+                    <div className="font-extrabold flex items-center justify-between">
                       <span>2. AI OCR Chia Cụm 2 Trang</span>
                       {ocrEngineMode === "micro_batch_ai" && (
-                        <Check className="h-3.5 w-3.5 text-indigo-400" />
+                        <Check className="h-3.5 w-3.5 text-[#141413]" />
                       )}
                     </div>
-                    <p className="mt-0.5 text-[11px] opacity-80">
+                    <p className="mt-0.5 text-[11px] opacity-90">
                       Chia nhỏ từng 2 trang nhẹ để đọc chữ (tự động chuyển sang OCR Trình duyệt nếu lỗi).
                     </p>
                   </button>
@@ -1717,7 +1743,7 @@ export default function ChapterWorkspace({
                 type="button"
                 disabled={isGeneratingLesson || isRunningStandaloneOcr}
                 onClick={() => handleGenerateChapterLesson(currentChapter)}
-                className="inline-flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-6 py-3 text-sm font-bold text-white shadow-xl shadow-indigo-600/25 transition hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
+                className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-3 text-sm font-extrabold text-[#141413] shadow-[4px_4px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
               >
                 {isGeneratingLesson ? (
                   <>
@@ -1750,12 +1776,12 @@ export default function ChapterWorkspace({
                       setIsRunningStandaloneOcr(false);
                     }
                   }}
-                  className="inline-flex items-center gap-2 rounded-xl border border-emerald-500/40 bg-emerald-950/30 px-4 py-3 text-xs font-semibold text-emerald-200 transition hover:bg-emerald-900/50 disabled:opacity-50"
+                  className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] px-4 py-3 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
                 >
                   {isRunningStandaloneOcr ? (
-                    <Loader2 className="h-4 w-4 animate-spin text-emerald-400" />
+                    <Loader2 className="h-4 w-4 animate-spin text-[#141413]" />
                   ) : (
-                    <FileText className="h-4 w-4 text-emerald-400 shrink-0" />
+                    <FileText className="h-4 w-4 text-[#141413] shrink-0" />
                   )}
                   <span>
                     Chỉ Quét Chữ Từ Ảnh PDF Vào Văn Bản Gốc (Xem trước chữ)
@@ -1763,8 +1789,8 @@ export default function ChapterWorkspace({
                 </button>
               )}
 
-              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-5 py-3 text-xs font-semibold text-indigo-200 transition hover:bg-indigo-900/50">
-                <Camera className="h-4 w-4 text-indigo-400 shrink-0" />
+              <label className="inline-flex cursor-pointer items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#C8B6FF] px-5 py-3 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6]">
+                <Camera className="h-4 w-4 text-[#141413] shrink-0" />
                 <span>
                   Chọn File PDF / Ảnh Từ Máy Để Quét Chữ & Tạo Bài
                 </span>
@@ -1813,14 +1839,14 @@ export default function ChapterWorkspace({
           /* Lesson Exists -> Show 5 Learning Tabs */
           <div className="space-y-6">
             {/* Desktop Navigation Tabs (Hidden on mobile; Mobile uses Fixed Bottom Tab Bar) */}
-            <div className="hidden lg:flex flex-wrap gap-2 rounded-2xl border border-slate-800 bg-slate-900/90 p-1.5">
+            <div className="hidden lg:flex flex-wrap gap-2.5 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-2 shadow-[4px_4px_0_0_#F5EFE6]">
               <button
                 type="button"
                 onClick={() => handleSelectLearningTab("content")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-4 py-2 text-xs font-bold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   activeTab === "content"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
                 }`}
               >
                 <BookOpen className="h-4 w-4 shrink-0" />
@@ -1829,10 +1855,10 @@ export default function ChapterWorkspace({
               <button
                 type="button"
                 onClick={() => handleSelectLearningTab("grammar")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-4 py-2 text-xs font-bold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   activeTab === "grammar"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
                 }`}
               >
                 <GraduationCap className="h-4 w-4 shrink-0" />
@@ -1841,10 +1867,10 @@ export default function ChapterWorkspace({
               <button
                 type="button"
                 onClick={() => handleSelectLearningTab("vocabulary")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-4 py-2 text-xs font-bold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   activeTab === "vocabulary"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
                 }`}
               >
                 <Layers className="h-4 w-4 shrink-0" />
@@ -1853,10 +1879,10 @@ export default function ChapterWorkspace({
               <button
                 type="button"
                 onClick={() => handleSelectLearningTab("practice")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-4 py-2 text-xs font-bold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   activeTab === "practice"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
                 }`}
               >
                 <HelpCircle className="h-4 w-4 shrink-0" />
@@ -1868,10 +1894,10 @@ export default function ChapterWorkspace({
               <button
                 type="button"
                 onClick={() => handleSelectLearningTab("translation")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-semibold transition ${
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-4 py-2 text-xs font-bold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   activeTab === "translation"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:bg-slate-800 hover:text-slate-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
                 }`}
               >
                 <Languages className="h-4 w-4 shrink-0" />
@@ -1883,10 +1909,10 @@ export default function ChapterWorkspace({
               <button
                 type="button"
                 onClick={() => handleSelectLearningTab("exam_arena")}
-                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl px-4 py-2.5 text-xs font-bold transition ${
+                className={`flex items-center gap-2 shrink-0 whitespace-nowrap rounded-xl border-2 px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   activeTab === "exam_arena"
-                    ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow"
-                    : "text-amber-300 hover:bg-slate-800"
+                    ? "border-[#F5EFE6] bg-[#C8B6FF] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#F3C969] bg-[#141413] text-[#F3C969] hover:bg-[#F3C969] hover:text-[#141413]"
                 }`}
               >
                 <Trophy className="h-4 w-4 shrink-0" />
@@ -1896,16 +1922,16 @@ export default function ChapterWorkspace({
 
             {/* Smart Banner when a previously generated chapter has fewer than 35 vocabulary words (only in Content tab so other tabs keep exact Y alignment) */}
             {lesson.vocabulary.length < 35 && activeTab === "content" && (
-              <div className="mb-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-2xl border border-amber-500/35 bg-gradient-to-r from-amber-950/35 via-slate-900 to-indigo-950/35 p-4">
+              <div className="mb-5 flex flex-col lg:flex-row lg:items-center justify-between gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 shadow-[4px_4px_0_0_#F5EFE6]">
                 <div className="space-y-0.5 text-xs">
-                  <div className="font-bold text-amber-300">
+                  <div className="font-extrabold text-[#F3C969]">
                     Chương này hiện mới có {lesson.vocabulary.length} từ vựng (do bản soạn rút gọn 12–16 từ trước đó)
                   </div>
-                  <p className="text-slate-300">
+                  <p className="text-[#B8B2A6]">
                     Bấm nút bên cạnh để AI chia 3 phân đoạn + vét cạn 100% các mục từ vựng trong bài (lấy đủ 35–50+ từ cho chương này hoặc toàn bộ các chương đã soạn)!
                   </p>
                 </div>
-                <div className="flex flex-wrap items-center gap-2 shrink-0">
+                <div className="flex flex-wrap items-center gap-2.5 shrink-0">
                   <button
                     type="button"
                     disabled={isExtractingFullVocab}
@@ -1913,7 +1939,7 @@ export default function ChapterWorkspace({
                       setActiveTab("vocabulary");
                       void handleExtractFullVocab(currentChapter);
                     }}
-                    className="inline-flex items-center justify-center gap-2 rounded-xl bg-gradient-to-r from-amber-500 to-indigo-600 px-3.5 py-2 text-xs font-bold text-white shadow hover:from-amber-400 hover:to-indigo-500 disabled:opacity-50 cursor-pointer"
+                    className="inline-flex items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
                   >
                     {isExtractingFullVocab ? (
                       <>
@@ -1940,9 +1966,9 @@ export default function ChapterWorkspace({
                         setActiveTab("vocabulary");
                         void handleBatchExtractVocabForAllGeneratedChapters();
                       }}
-                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border border-indigo-400/40 bg-indigo-950/60 px-3.5 py-2 text-xs font-bold text-indigo-200 hover:bg-indigo-900/70 disabled:opacity-50 cursor-pointer"
+                      className="inline-flex items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#C8B6FF] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
                     >
-                      <Layers className="h-3.5 w-3.5 text-indigo-300" />
+                      <Layers className="h-3.5 w-3.5 text-[#141413]" />
                       <span>Quét Đủ Cho Tất Cả Chương Đã Soạn</span>
                     </button>
                   )}
@@ -2043,9 +2069,9 @@ export default function ChapterWorkspace({
       {lesson && (
         <nav
           aria-label="Tab bài học"
-          className="fixed bottom-0 inset-x-0 z-40 border-t border-white/[0.08] bg-[#090D16]/95 backdrop-blur-xl pb-safe lg:hidden"
+          className="fixed bottom-0 inset-x-0 z-40 border-t-2 border-[#F5EFE6] bg-[#1D1C19] pb-safe lg:hidden"
         >
-          <div className="mx-auto grid max-w-2xl grid-cols-6 items-center px-1 pt-1 pb-0.5">
+          <div className="mx-auto grid max-w-2xl grid-cols-6 items-center gap-1 px-1.5 pt-1.5 pb-1">
             {(
               [
                 {
@@ -2100,24 +2126,24 @@ export default function ChapterWorkspace({
                   key={tabItem.id}
                   type="button"
                   onClick={() => handleSelectLearningTab(tabItem.id)}
-                  className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl px-0.5 py-1 text-[10px] font-semibold transition ${
+                  className={`flex min-h-[48px] flex-col items-center justify-center gap-0.5 rounded-xl border-2 px-0.5 py-1 text-[10px] font-bold transition-colors ${
                     isActive
                       ? tabItem.isExam
-                        ? "text-amber-400 bg-amber-500/10"
-                        : "text-indigo-400 bg-indigo-500/10"
+                        ? "border-[#F5EFE6] bg-[#C8B6FF] text-[#141413]"
+                        : "border-[#F5EFE6] bg-[#F3C969] text-[#141413]"
                       : tabItem.isExam
-                      ? "text-amber-300/80 hover:text-amber-200"
-                      : "text-slate-400 hover:text-slate-200"
+                      ? "border-transparent text-[#F3C969]"
+                      : "border-transparent text-[#B8B2A6] hover:text-[#F5EFE6]"
                   }`}
                 >
                   <div className="relative flex items-center justify-center">
                     <Icon className="h-4 w-4 shrink-0" />
                     {tabItem.count !== null && tabItem.count > 0 && (
                       <span
-                        className={`ml-0.5 rounded px-1 text-[8px] font-bold leading-tight ${
+                        className={`ml-0.5 rounded px-1 text-[8px] font-extrabold leading-tight ${
                           isActive
-                            ? "bg-indigo-500/30 text-indigo-200"
-                            : "bg-slate-800 text-slate-300"
+                            ? "bg-[#141413] text-[#F3C969]"
+                            : "bg-[#141413] text-[#F5EFE6]"
                         }`}
                       >
                         {tabItem.count}

@@ -149,13 +149,11 @@ export default function VocabularyTab({
       if (autoPlayCancelRef.current) break;
       setAutoPlayVocabId(item.id);
       if (typeof document !== "undefined") {
-        document
-          .getElementById(`vocab-card-${item.id}`)
-          ?.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest",
-            inline: "center",
-          });
+        document.getElementById(`vocab-card-${item.id}`)?.scrollIntoView({
+          behavior: "smooth",
+          block: "nearest",
+          inline: "center",
+        });
       }
       await speakWait(item.word);
       if (autoPlayCancelRef.current) break;
@@ -187,10 +185,10 @@ export default function VocabularyTab({
 
   return (
     <div className="space-y-6 sm:space-y-8">
-      {/* Interactive SRS Flashcard Deck for this chapter (Touch Swipe Left/Right on Mobile) */}
+      {/* Interactive SRS Flashcard Deck */}
       <div>
-        <h3 className="mb-3 flex items-center gap-2 text-sm sm:text-base font-bold text-white">
-          <Sparkles className="h-4 w-4 text-indigo-400 shrink-0" />
+        <h3 className="mb-3 flex items-center gap-2 text-sm sm:text-base font-extrabold text-[#F5EFE6]">
+          <Sparkles className="h-4 w-4 text-[#F3C969] shrink-0" />
           <span>
             Luyện lật thẻ nhớ từ vựng thông minh (Spaced Repetition SRS)
           </span>
@@ -203,13 +201,13 @@ export default function VocabularyTab({
 
       {/* Detailed Vocabulary Table / Cards */}
       <div className="space-y-4">
-        <div className="flex flex-wrap items-center justify-between gap-3 rounded-2xl border border-slate-800 bg-slate-900/90 p-3.5 sm:p-4">
+        <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 shadow-[4px_4px_0_0_#F5EFE6]">
           <div>
-            <h3 className="text-sm sm:text-base font-bold text-white">
+            <h3 className="text-sm sm:text-base font-extrabold text-[#F5EFE6]">
               Bảng phân tích toàn bộ Từ vựng, Danh từ riêng &amp; Cụm từ (
               {lesson.vocabulary.length} từ)
             </h3>
-            <p className="text-xs text-slate-400">
+            <p className="text-xs text-[#B8B2A6] mt-0.5">
               {currentChapter.rawText.length > 16000 &&
               lesson.vocabulary.length < 35
                 ? `Chương dài (${currentChapter.rawText.length.toLocaleString()} ký tự) — bấm "Quét Đủ 100% Từ Vựng" để AI rà soát hết các phần còn lại!`
@@ -218,14 +216,14 @@ export default function VocabularyTab({
           </div>
           <div className="flex flex-wrap items-center gap-2">
             {/* Chuyển chế độ lướt ngang / danh sách trên điện thoại */}
-            <div className="flex md:hidden items-center rounded-xl border border-white/[0.08] bg-slate-950 p-1">
+            <div className="flex md:hidden items-center gap-1">
               <button
                 type="button"
                 onClick={() => setMobileVocabLayout("carousel")}
-                className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition cursor-pointer ${
+                className={`rounded-xl border-2 px-2.5 py-1.5 text-[11px] font-bold cursor-pointer ${
                   mobileVocabLayout === "carousel"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#B8B2A6]"
                 }`}
               >
                 Lướt ngang
@@ -233,10 +231,10 @@ export default function VocabularyTab({
               <button
                 type="button"
                 onClick={() => setMobileVocabLayout("list")}
-                className={`rounded-lg px-2.5 py-1.5 text-[11px] font-semibold transition cursor-pointer ${
+                className={`rounded-xl border-2 px-2.5 py-1.5 text-[11px] font-bold cursor-pointer ${
                   mobileVocabLayout === "list"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:text-slate-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#B8B2A6]"
                 }`}
               >
                 Dạng danh sách
@@ -247,7 +245,7 @@ export default function VocabularyTab({
               type="button"
               disabled={isExtractingFullVocab}
               onClick={() => onExtractFullVocab(currentChapter)}
-              className="flex items-center gap-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 px-3.5 sm:px-4 py-2 text-xs font-bold text-white shadow hover:from-indigo-500 hover:to-purple-500 disabled:opacity-50"
+              className="flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 sm:px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
             >
               {isExtractingFullVocab ? (
                 <>
@@ -262,8 +260,8 @@ export default function VocabularyTab({
               )}
             </button>
 
-            <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-950/30 px-3.5 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-900/50">
-              <Camera className="h-3.5 w-3.5 text-indigo-400 shrink-0" />
+            <label className="flex cursor-pointer items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6]">
+              <Camera className="h-3.5 w-3.5 shrink-0" />
               <span>Quét từ Ảnh / PDF (Tất cả trang)</span>
               <input
                 type="file"
@@ -313,32 +311,32 @@ export default function VocabularyTab({
 
         {/* Mobile Swipe Hint */}
         {mobileVocabLayout === "carousel" && lesson.vocabulary.length > 1 && (
-          <div className="flex md:hidden items-center justify-center gap-1.5 text-[11px] font-medium text-indigo-300/90">
-            <ChevronLeft className="h-3.5 w-3.5 text-indigo-400" />
+          <div className="flex md:hidden items-center justify-center gap-1.5 text-[11px] font-bold text-[#F3C969]">
+            <ChevronLeft className="h-3.5 w-3.5" />
             <span>
               Lướt ngang qua lại để xem {lesson.vocabulary.length} từ vựng
             </span>
-            <ChevronRight className="h-3.5 w-3.5 text-indigo-400" />
+            <ChevronRight className="h-3.5 w-3.5" />
           </div>
         )}
 
         {/* Search + Star Hard-Word Filter + Sequential Audio Auto-Play Bar */}
-        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 rounded-2xl border border-white/[0.08] bg-[#0F1523]/90 p-3">
+        <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-2.5 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-3 shadow-[4px_4px_0_0_#F5EFE6]">
           <div className="relative flex-1 min-w-0">
-            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-slate-400" />
+            <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-[#B8B2A6]" />
             <input
               type="text"
               value={vocabSearchQuery}
               onChange={(e) => setVocabSearchQuery(e.target.value)}
               placeholder="Tìm nhanh từ vựng, IPA hoặc nghĩa tiếng Việt..."
-              className="min-h-[42px] w-full rounded-xl border border-white/[0.08] bg-slate-950/90 pl-9 pr-9 py-2 text-xs sm:text-sm text-white placeholder-slate-500 focus:border-indigo-500 focus:outline-none"
+              className="min-h-[42px] w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] pl-9 pr-9 py-2 text-xs sm:text-sm text-[#F5EFE6] placeholder-[#8F8A7E] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
             />
             {vocabSearchQuery && (
               <button
                 type="button"
                 onClick={() => setVocabSearchQuery("")}
                 aria-label="Xóa tìm kiếm"
-                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-slate-400 hover:bg-slate-800 hover:text-white"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 rounded-lg p-1 text-[#B8B2A6] hover:bg-[#2A2823] hover:text-[#F5EFE6]"
               >
                 <X className="h-3.5 w-3.5" />
               </button>
@@ -346,14 +344,14 @@ export default function VocabularyTab({
           </div>
 
           <div className="flex flex-wrap items-center gap-2 shrink-0">
-            <div className="inline-flex items-center rounded-xl border border-white/[0.08] bg-slate-950/90 p-1">
+            <div className="inline-flex items-center gap-1.5">
               <button
                 type="button"
                 onClick={() => setVocabStarFilter("all")}
-                className={`min-h-[34px] rounded-lg px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                className={`min-h-[38px] rounded-xl border-2 px-3 py-1 text-xs font-bold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   vocabStarFilter === "all"
-                    ? "bg-indigo-600 text-white shadow"
-                    : "text-slate-400 hover:text-white"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6]"
                 }`}
               >
                 Tất cả ({lesson.vocabulary.length})
@@ -361,13 +359,13 @@ export default function VocabularyTab({
               <button
                 type="button"
                 onClick={() => setVocabStarFilter("starred")}
-                className={`inline-flex min-h-[34px] items-center gap-1.5 rounded-lg px-3 py-1 text-xs font-semibold transition cursor-pointer ${
+                className={`inline-flex min-h-[38px] items-center gap-1.5 rounded-xl border-2 px-3 py-1 text-xs font-bold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
                   vocabStarFilter === "starred"
-                    ? "bg-amber-500/20 text-amber-300 border border-amber-500/40"
-                    : "text-slate-400 hover:text-amber-200"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6]"
                 }`}
               >
-                <Star className="h-3.5 w-3.5 fill-amber-400 text-amber-400" />
+                <Star className="h-3.5 w-3.5 fill-current" />
                 <span>Từ khó ({starredInChapterCount})</span>
               </button>
             </div>
@@ -376,20 +374,18 @@ export default function VocabularyTab({
               type="button"
               disabled={filteredVocab.length === 0 && autoPlayVocabId === null}
               onClick={() => handleToggleAutoPlayVocab(filteredVocab)}
-              className={`inline-flex min-h-[42px] items-center justify-center gap-2 rounded-xl border px-3.5 py-2 text-xs font-bold transition active:scale-95 cursor-pointer disabled:opacity-40 ${
-                autoPlayVocabId !== null
-                  ? "border-rose-500/50 bg-rose-600/20 text-rose-200 hover:bg-rose-600/30"
-                  : "border-indigo-500/40 bg-indigo-500/15 text-indigo-200 hover:bg-indigo-500/25"
+              className={`inline-flex min-h-[40px] items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer disabled:opacity-40 ${
+                autoPlayVocabId !== null ? "bg-[#FF8A8A]" : "bg-[#C8B6FF]"
               }`}
             >
               {autoPlayVocabId !== null ? (
                 <>
-                  <Square className="h-3.5 w-3.5 fill-rose-400 text-rose-400" />
+                  <Square className="h-3.5 w-3.5 fill-current" />
                   <span>Dừng nghe tự động</span>
                 </>
               ) : (
                 <>
-                  <Play className="h-3.5 w-3.5 fill-indigo-400 text-indigo-400" />
+                  <Play className="h-3.5 w-3.5 fill-current" />
                   <span>Nghe tự động ({filteredVocab.length} từ)</span>
                 </>
               )}
@@ -398,8 +394,8 @@ export default function VocabularyTab({
         </div>
 
         {filteredVocab.length === 0 ? (
-          <div className="rounded-2xl border border-dashed border-white/[0.1] bg-slate-900/50 p-8 text-center space-y-3">
-            <p className="text-sm font-medium text-slate-300">
+          <div className="rounded-xl border-2 border-dashed border-[#3A3832] bg-[#1D1C19] p-8 text-center space-y-3">
+            <p className="text-sm font-bold text-[#F5EFE6]">
               {vocabStarFilter === "starred" && starredInChapterCount === 0
                 ? "Bạn chưa đánh dấu ⭐ Từ khó nào trong chương này."
                 : "Không tìm thấy từ vựng phù hợp với bộ lọc hiện tại."}
@@ -410,7 +406,7 @@ export default function VocabularyTab({
                 setVocabSearchQuery("");
                 setVocabStarFilter("all");
               }}
-              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border border-indigo-500/40 bg-indigo-500/15 px-4 py-2 text-xs font-semibold text-indigo-200 hover:bg-indigo-500/25"
+              className="inline-flex min-h-[40px] items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#C8B6FF] px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] cursor-pointer"
             >
               Xem lại toàn bộ từ vựng
             </button>
@@ -419,7 +415,7 @@ export default function VocabularyTab({
           <div
             className={
               mobileVocabLayout === "carousel"
-                ? "flex overflow-x-auto snap-x snap-mandatory gap-3.5 pb-3 no-scrollbar md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:pb-0"
+                ? "flex overflow-x-auto snap-x snap-mandatory gap-4 pb-3 no-scrollbar md:grid md:grid-cols-2 md:gap-4 md:overflow-visible md:pb-0"
                 : "grid grid-cols-1 gap-4 md:grid-cols-2"
             }
           >
@@ -433,12 +429,12 @@ export default function VocabularyTab({
                 <div
                   key={voc.id}
                   id={`vocab-card-${voc.id}`}
-                  className={`select-text rounded-2xl border p-4 sm:p-5 space-y-3 transition ${
+                  className={`select-text rounded-xl border-2 p-4 sm:p-5 space-y-3 bg-[#1D1C19] shadow-[4px_4px_0_0_#F5EFE6] ${
                     isAutoPlaying
-                      ? "border-indigo-400 bg-indigo-950/35 ring-2 ring-indigo-500/30 shadow-lg"
+                      ? "border-[#F3C969]"
                       : isStarred
-                      ? "border-amber-500/35 bg-slate-900/90 hover:border-amber-400/50"
-                      : "border-slate-800 bg-slate-900/80 hover:border-slate-700"
+                      ? "border-[#F3C969]"
+                      : "border-[#F5EFE6]"
                   } ${
                     mobileVocabLayout === "carousel"
                       ? "w-[86vw] max-w-[340px] shrink-0 snap-center md:w-auto md:max-w-none"
@@ -448,18 +444,18 @@ export default function VocabularyTab({
                   <div className="flex items-start justify-between gap-2">
                     <div className="min-w-0">
                       <div className="flex flex-wrap items-center gap-2">
-                        <h4 className="text-lg font-bold text-white break-words">
+                        <h4 className="text-lg font-extrabold text-[#F5EFE6] break-words">
                           {voc.word}
                         </h4>
                         {isAutoPlaying && (
-                          <span className="inline-flex items-center gap-1 rounded-full bg-indigo-500/25 px-2 py-0.5 text-[10px] font-bold text-indigo-200 animate-pulse">
+                          <span className="inline-flex items-center gap-1 rounded-full border-2 border-[#F5EFE6] bg-[#F3C969] px-2 py-0.5 text-[10px] font-extrabold text-[#141413] animate-pulse">
                             🔊 Đang đọc
                           </span>
                         )}
                         <AudioSpeakButton
                           text={voc.word}
                           showLabel={false}
-                          className="rounded-lg bg-slate-800 p-1.5 text-indigo-400 hover:bg-indigo-600 hover:text-white"
+                          className="rounded-lg border-2 border-[#F5EFE6] bg-[#B8D8F8] p-1.5 text-[#141413]"
                         />
                         <button
                           type="button"
@@ -469,15 +465,15 @@ export default function VocabularyTab({
                               ? "Bỏ đánh dấu Từ khó"
                               : "Đánh dấu ⭐ Từ khó để ôn tập riêng"
                           }
-                          className={`inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg border transition active:scale-90 cursor-pointer ${
+                          className={`inline-flex min-h-[32px] min-w-[32px] items-center justify-center rounded-lg border-2 transition-transform active:translate-y-[1px] cursor-pointer ${
                             isStarred
-                              ? "border-amber-500/50 bg-amber-500/15 text-amber-400"
-                              : "border-white/[0.08] bg-slate-800/80 text-slate-400 hover:border-amber-500/40 hover:text-amber-300"
+                              ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413]"
+                              : "border-[#3A3832] bg-[#141413] text-[#B8B2A6] hover:border-[#F5EFE6]"
                           }`}
                         >
                           <Star
                             className={`h-3.5 w-3.5 ${
-                              isStarred ? "fill-amber-400 text-amber-400" : ""
+                              isStarred ? "fill-current" : ""
                             }`}
                           />
                         </button>
@@ -491,40 +487,40 @@ export default function VocabularyTab({
                               contextHint: `Ví dụ: ${voc.quoteFromBook}`,
                             })
                           }
-                          className="flex items-center gap-1 text-[11px] font-semibold text-emerald-400 hover:text-emerald-300 hover:bg-emerald-950/40 px-2 py-1 rounded-lg border border-emerald-500/30 transition cursor-pointer"
+                          className="flex items-center gap-1 rounded-lg border-2 border-[#F5EFE6] bg-[#A7D7A9] px-2 py-1 text-[11px] font-extrabold text-[#141413] transition-transform active:translate-y-[1px] cursor-pointer"
                           title="Luyện đọc từ này để AI chấm điểm"
                         >
                           <Mic className="h-3 w-3" />
                           <span>Luyện nói</span>
                         </button>
                       </div>
-                      <span className="font-mono text-xs text-indigo-300">
+                      <span className="font-mono text-xs font-semibold text-[#C8B6FF]">
                         {voc.ipa} • {voc.partOfSpeech}
                       </span>
                     </div>
                     <div className="flex flex-col items-end gap-1 shrink-0">
-                      <span className="rounded-lg bg-slate-800 px-2 py-0.5 text-[10px] font-semibold text-slate-300">
+                      <span className="rounded-full border-2 border-[#3A3832] bg-[#141413] px-2 py-0.5 text-[10px] font-bold text-[#B8B2A6]">
                         Từ {vocIdx + 1}/{filteredVocab.length}
                       </span>
-                      <span className="rounded-lg bg-indigo-500/20 px-2.5 py-0.5 text-xs font-bold text-indigo-300">
+                      <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2.5 py-0.5 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]">
                         {voc.cefrLevel}
                       </span>
                     </div>
                   </div>
 
-                  <div className="text-sm font-bold text-emerald-300">
+                  <div className="text-sm font-extrabold text-[#A7D7A9]">
                     {voc.vietnameseMeaning}
                   </div>
 
-                  <p className="text-xs leading-relaxed text-slate-300">
+                  <p className="text-xs leading-relaxed text-[#F5EFE6]">
                     {voc.explanationInContext}
                   </p>
 
-                  <div className="rounded-xl bg-slate-950 p-3 text-xs">
-                    <p className="italic text-slate-200">
+                  <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-3 text-xs">
+                    <p className="italic text-[#F5EFE6]">
                       &ldquo;{voc.quoteFromBook}&rdquo;
                     </p>
-                    <p className="mt-1 text-slate-400">
+                    <p className="mt-1 text-[#B8B2A6]">
                       → {voc.quoteTranslation}
                     </p>
                   </div>
@@ -533,16 +529,16 @@ export default function VocabularyTab({
                     {voc.collocations.map((c, idx) => (
                       <span
                         key={idx}
-                        className="inline-flex items-center gap-1 rounded bg-slate-800 px-2 py-0.5 text-[11px] text-slate-300"
+                        className="inline-flex items-center gap-1 rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2 py-0.5 text-[11px] font-semibold text-[#F5EFE6]"
                       >
-                        <Link2 className="h-3 w-3 text-slate-400" />
+                        <Link2 className="h-3 w-3 text-[#B8D8F8]" />
                         <span>{c}</span>
                       </span>
                     ))}
                     {voc.synonyms.map((s, idx) => (
                       <span
                         key={idx}
-                        className="rounded bg-indigo-950/60 px-2 py-0.5 text-[11px] text-indigo-300"
+                        className="rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2 py-0.5 text-[11px] font-bold text-[#C8B6FF]"
                       >
                         ≈ {s}
                       </span>

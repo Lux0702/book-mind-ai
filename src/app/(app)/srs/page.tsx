@@ -51,17 +51,17 @@ function SrsPageContent() {
     <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-white">
+          <h1 className="text-2xl font-extrabold text-[#F5EFE6]">
             Trung Tâm Kiểm Tra &amp; Ôn Tập Theo Khóa Học / Chương
           </h1>
-          <p className="mt-1 text-sm text-slate-400">
+          <p className="mt-1 text-sm text-[#B8B2A6]">
             Chọn đúng Khóa học và Chương bạn muốn làm bài thi kiểm tra (có tính giờ từng câu) hoặc ôn Flashcard SRS.
           </p>
         </div>
         <button
           type="button"
           onClick={() => router.push(ROUTES.books)}
-          className="rounded-xl border border-slate-700 px-4 py-2 text-xs font-semibold text-slate-300 hover:bg-slate-800"
+          className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-4 py-2 text-xs font-bold text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
         >
           Quay về Tủ sách
         </button>
@@ -69,11 +69,11 @@ function SrsPageContent() {
 
       {/* Filter by Course -> Chapter */}
       {targetCourse && (
-        <div className="grid grid-cols-1 gap-4 rounded-2xl border border-slate-800 bg-slate-900/90 p-5 md:grid-cols-3">
-          <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-indigo-300">
-              <BookOpen className="h-3.5 w-3.5 text-indigo-400" />
-              <span>1. Chọn Khóa Học (Course)</span>
+        <div className="grid grid-cols-1 gap-4 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-5 shadow-[4px_4px_0_0_#F5EFE6] md:grid-cols-3 md:items-end">
+          <div className="min-w-0">
+            <label className="mb-2 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-[#C8B6FF] whitespace-nowrap truncate">
+              <BookOpen className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">1. Chọn Khóa Học</span>
             </label>
             <CustomSelect
               value={targetCourse.id}
@@ -95,10 +95,10 @@ function SrsPageContent() {
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-emerald-300">
-              <Layers className="h-3.5 w-3.5 text-emerald-400" />
-              <span>2. Chọn Chương Cần Kiểm Tra / Ôn Tập</span>
+          <div className="min-w-0">
+            <label className="mb-2 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-[#A7D7A9] whitespace-nowrap truncate">
+              <Layers className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">2. Chọn Chương Ôn Tập</span>
             </label>
             <CustomSelect
               value={targetChapter?.id || ""}
@@ -117,19 +117,19 @@ function SrsPageContent() {
             />
           </div>
 
-          <div>
-            <label className="mb-1.5 flex items-center gap-1.5 text-xs font-bold uppercase tracking-wider text-amber-300">
-              <Sparkles className="h-3.5 w-3.5 text-amber-400" />
-              <span>3. Chế độ</span>
+          <div className="min-w-0">
+            <label className="mb-2 flex items-center gap-1.5 text-xs font-extrabold uppercase tracking-wider text-[#F3C969] whitespace-nowrap truncate">
+              <Sparkles className="h-3.5 w-3.5 shrink-0" />
+              <span className="truncate">3. Chế Độ</span>
             </label>
-            <div className="grid grid-cols-2 gap-2">
+            <div className="grid grid-cols-2 gap-2.5">
               <button
                 type="button"
                 onClick={() => updateSrsQuery({ mode: "exam" })}
-                className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${
+                className={`flex h-[54px] items-center justify-center gap-1.5 rounded-lg border-2 px-3 text-xs font-extrabold transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                   reviewSubTab === "exam"
-                    ? "bg-gradient-to-r from-amber-500 to-orange-600 text-white shadow-lg shadow-amber-600/20"
-                    : "border border-slate-800 bg-slate-950 text-slate-400 hover:bg-slate-900 hover:text-white"
+                    ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6]"
                 }`}
               >
                 <Timer className="h-3.5 w-3.5 shrink-0" />
@@ -138,10 +138,10 @@ function SrsPageContent() {
               <button
                 type="button"
                 onClick={() => updateSrsQuery({ mode: "flashcards" })}
-                className={`flex items-center justify-center gap-1.5 rounded-xl py-2.5 px-3 text-xs font-bold transition cursor-pointer ${
+                className={`flex h-[54px] items-center justify-center gap-1.5 rounded-lg border-2 px-3 text-xs font-extrabold transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                   reviewSubTab === "flashcards"
-                    ? "bg-indigo-600 text-white shadow-lg shadow-indigo-600/20"
-                    : "border border-slate-800 bg-slate-950 text-slate-400 hover:bg-slate-900 hover:text-white"
+                    ? "border-[#F5EFE6] bg-[#C8B6FF] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
+                    : "border-[#3A3832] bg-[#141413] text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6]"
                 }`}
               >
                 <GraduationCap className="h-3.5 w-3.5 shrink-0" />
