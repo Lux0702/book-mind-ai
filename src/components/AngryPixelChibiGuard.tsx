@@ -5,6 +5,7 @@ import { Flame, CheckCircle2, Sparkles, PartyPopper, Music } from "lucide-react"
 import { recordLearningActivity } from "@/lib/storage";
 import { ChibiCelebrateDetail } from "@/lib/chibiEvents";
 import { useAppData } from "@/components/app/AppDataProvider";
+import PixelChibiArt from "@/components/PixelChibiArt";
 
 const ANGRY_LINES = [
   "Hôm qua trốn học đi đâu hả?!",
@@ -120,148 +121,17 @@ function PixelChibiSprite({ mood }: { mood: ChibiMood }) {
         </>
       )}
 
-      {/* Main 16x16 Pixel Chibi Character */}
-      <svg
-        viewBox="0 0 16 16"
-        shapeRendering="crispEdges"
-        className={`h-36 w-36 sm:h-40 sm:w-40 drop-shadow-[0_10px_20px_rgba(0,0,0,0.6)] ${
+      {/* Main 32x32 High-Detail Pixel Chibi Character */}
+      <PixelChibiArt
+        mood={mood}
+        className={`h-40 w-40 sm:h-44 sm:w-44 ${
           mood === "angry"
             ? "bm-chibi-jump"
             : mood === "party"
             ? "bm-chibi-party-jump"
             : "bm-chibi-happy"
         }`}
-        role="img"
-        aria-label={
-          mood === "angry"
-            ? "Pixel Chibi đang giận dữ"
-            : mood === "party"
-            ? "Pixel Chibi đang nhảy múa ca hát chúc mừng"
-            : "Pixel Chibi vui vẻ"
-        }
-      >
-        {/* Pixel anger vein mark */}
-        {mood === "angry" && (
-          <g className="bm-anger-vein">
-            <rect x="1" y="1" width="1" height="2" fill="#ef4444" />
-            <rect x="2" y="2" width="1" height="1" fill="#ef4444" />
-            <rect x="3" y="1" width="1" height="2" fill="#ef4444" />
-            <rect x="1" y="4" width="1" height="1" fill="#ef4444" />
-            <rect x="3" y="4" width="1" height="1" fill="#ef4444" />
-          </g>
-        )}
-
-        {/* Party Crown / Cone Hat */}
-        {mood === "party" && (
-          <g>
-            <rect x="7" y="0" width="2" height="1" fill="#fbbf24" />
-            <rect x="6" y="1" width="4" height="1" fill="#f59e0b" />
-            <rect x="5" y="2" width="6" height="1" fill="#f43f5e" />
-            <rect x="7" y="1" width="2" height="1" fill="#fef08a" />
-          </g>
-        )}
-
-        {/* Cat-hoodie chibi ears */}
-        <rect x="3" y="1" width="2" height="2" fill="#312e81" />
-        <rect x="4" y="2" width="1" height="1" fill="#f472b6" />
-        <rect x="11" y="1" width="2" height="2" fill="#312e81" />
-        <rect x="11" y="2" width="1" height="1" fill="#f472b6" />
-
-        {/* Hair / Hoodie Outline */}
-        <rect x="3" y="3" width="10" height="7" fill="#312e81" />
-        <rect x="2" y="4" width="12" height="5" fill="#4338ca" />
-        <rect x="4" y="3" width="8" height="1" fill="#6366f1" />
-
-        {/* Face Skin */}
-        <rect x="4" y="5" width="8" height="5" fill="#fde6d0" />
-        <rect x="3" y="6" width="10" height="3" fill="#fde6d0" />
-        {/* Bangs */}
-        <rect x="4" y="4" width="2" height="1" fill="#312e81" />
-        <rect x="7" y="4" width="3" height="2" fill="#312e81" />
-        <rect x="11" y="4" width="1" height="1" fill="#312e81" />
-
-        {/* Expression */}
-        {mood === "angry" ? (
-          <>
-            <rect x="4" y="5" width="2" height="1" fill="#1e1b4b" />
-            <rect x="6" y="6" width="1" height="1" fill="#1e1b4b" />
-            <rect x="10" y="5" width="2" height="1" fill="#1e1b4b" />
-            <rect x="9" y="6" width="1" height="1" fill="#1e1b4b" />
-            <rect x="5" y="7" width="1" height="1" fill="#dc2626" />
-            <rect x="10" y="7" width="1" height="1" fill="#dc2626" />
-            <rect x="3" y="8" width="2" height="1" fill="#fb7185" />
-            <rect x="11" y="8" width="2" height="1" fill="#fb7185" />
-            <rect x="7" y="8" width="2" height="2" fill="#991b1b" />
-            <rect x="7" y="8" width="2" height="1" fill="#ffffff" />
-          </>
-        ) : mood === "party" ? (
-          <>
-            {/* Sparkling excited ^ ^ eyes */}
-            <rect x="5" y="6" width="1" height="1" fill="#1e1b4b" />
-            <rect x="4" y="7" width="1" height="1" fill="#1e1b4b" />
-            <rect x="6" y="7" width="1" height="1" fill="#1e1b4b" />
-            <rect x="10" y="6" width="1" height="1" fill="#1e1b4b" />
-            <rect x="9" y="7" width="1" height="1" fill="#1e1b4b" />
-            <rect x="11" y="7" width="1" height="1" fill="#1e1b4b" />
-            {/* Bright rosy cheeks */}
-            <rect x="3" y="8" width="2" height="1" fill="#fb7185" />
-            <rect x="11" y="8" width="2" height="1" fill="#fb7185" />
-            {/* Wide singing happy :D mouth */}
-            <rect x="6" y="8" width="4" height="2" fill="#e11d48" />
-            <rect x="7" y="8" width="2" height="1" fill="#ffffff" />
-          </>
-        ) : (
-          <>
-            <rect x="5" y="6" width="1" height="1" fill="#1e1b4b" />
-            <rect x="4" y="7" width="1" height="1" fill="#1e1b4b" />
-            <rect x="6" y="7" width="1" height="1" fill="#1e1b4b" />
-            <rect x="10" y="6" width="1" height="1" fill="#1e1b4b" />
-            <rect x="9" y="7" width="1" height="1" fill="#1e1b4b" />
-            <rect x="11" y="7" width="1" height="1" fill="#1e1b4b" />
-            <rect x="4" y="8" width="1" height="1" fill="#fb7185" />
-            <rect x="11" y="8" width="1" height="1" fill="#fb7185" />
-            <rect x="7" y="8" width="2" height="1" fill="#be123c" />
-          </>
-        )}
-
-        {/* Chibi Body / Hoodie */}
-        <rect x="5" y="10" width="6" height="4" fill="#4f46e5" />
-        <rect x="6" y="10" width="4" height="3" fill="#6366f1" />
-        <rect x="5" y="10" width="6" height="1" fill="#f59e0b" />
-
-        {/* Arms: raised & cheering in party mode, clawing in angry mode */}
-        {mood === "party" ? (
-          <>
-            <g className="bm-chibi-party-arm-l">
-              <rect x="2" y="8" width="3" height="2" fill="#fde6d0" />
-              <rect x="1" y="7" width="2" height="2" fill="#fbbf24" />
-            </g>
-            <g className="bm-chibi-party-arm-r">
-              <rect x="11" y="8" width="3" height="2" fill="#fde6d0" />
-              <rect x="13" y="7" width="2" height="2" fill="#fbbf24" />
-            </g>
-          </>
-        ) : (
-          <>
-            <g className={mood === "angry" ? "bm-chibi-arm-l" : ""}>
-              <rect x="2" y="10" width="3" height="2" fill="#fde6d0" />
-              {mood === "angry" && (
-                <rect x="1" y="10" width="1" height="2" fill="#ffffff" />
-              )}
-            </g>
-            <g className={mood === "angry" ? "bm-chibi-arm-r" : ""}>
-              <rect x="11" y="10" width="3" height="2" fill="#fde6d0" />
-              {mood === "angry" && (
-                <rect x="14" y="10" width="1" height="2" fill="#ffffff" />
-              )}
-            </g>
-          </>
-        )}
-
-        {/* Feet */}
-        <rect x="5" y="14" width="2" height="1" fill="#1e1b4b" />
-        <rect x="9" y="14" width="2" height="1" fill="#1e1b4b" />
-      </svg>
+      />
     </div>
   );
 }

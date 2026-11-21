@@ -121,9 +121,9 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="text-sm sm:text-base font-extrabold tracking-tight text-[#F5EFE6]">
                   BookMind
                 </span>
-                <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold tracking-wider text-[#141413]">
+                {/* <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold tracking-wider text-[#141413]">
                   STUDIO
-                </span>
+                </span> */}
               </div>
             </button>
 

@@ -33,6 +33,7 @@ import {
 } from "@/lib/storage";
 import { runWithFeedback } from "@/lib/feedback";
 import { triggerChibiCelebrate } from "@/lib/chibiEvents";
+import ChibiDailyQuestCard from "@/components/ChibiDailyQuestCard";
 
 interface AttendanceDashboardProps {
   courses: Course[];
@@ -350,6 +351,23 @@ export default function AttendanceDashboard({
           </div>
         </div>
       </div>
+
+      {/* 1.5 DAILY QUEST & PIXEL CHIBI EVOLUTION */}
+      <ChibiDailyQuestCard
+        streak={streak}
+        activities={activities}
+        courses={courses}
+        flashcards={flashcards}
+        onCheckIn={handleManualCheckIn}
+        onOpenSrs={onOpenSrs}
+        onOpenFirstCourse={() => {
+          if (courses[0]) {
+            onOpenCourse(courses[0].id);
+          } else {
+            onOpenSrs();
+          }
+        }}
+      />
 
       {/* 2. STATS SUMMARY GRID */}
       <div className="space-y-4">
