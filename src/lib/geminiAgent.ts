@@ -5,6 +5,11 @@ import {
   PronunciationEvaluation,
 } from "@/types/course";
 import { verifyVirtualApiKey } from "@/lib/quotaManager";
+import {
+  getDailyLiveFreeModels,
+  isModelNotFoundError,
+  markModelDeadToday,
+} from "@/lib/freeModelDiscovery";
 
 const DEFAULT_GROQ_KEY =
   process.env.GROQ_API_KEY ||
@@ -268,6 +273,7 @@ async function callOpenAiCompatibleEndpoint(params: {
   imagesBase64: string[];
   responseSchema?: Schema;
   temperature?: number;
+  forceVisionSupport?: boolean;
 }): Promise<string> {
   const expectJson = Boolean(params.responseSchema);
   const isGroq = params.endpointUrl.includes("groq.com");
@@ -291,6 +297,7 @@ ${blueprint}`;
 
   const lowerModel = params.model.toLowerCase();
   const supportsVision =
+    params.forceVisionSupport === true ||
     lowerModel.includes("vl") ||
     lowerModel.includes("vision") ||
     lowerModel.includes("omni") ||
@@ -451,35 +458,34 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
     const responseSchema = params.config?.responseSchema as Schema | undefined;
     const temperature = params.config?.temperature;
 
-    type ProviderAttempt = () => Promise<string>;
+    // Lấy danh sách các model miễn phí còn hoạt động hôm nay (tự động kiểm tra mỗi ngày 1 lần & loại bỏ model 404)
+    const liveFreeModels = await getDailyLiveFreeModels({
+      groqApiKey: pool.groqKeys[0],
+    });
+
+    type ProviderAttempt = { modelId: string; run: () => Promise<string> };
     const attempts: ProviderAttempt[] = [];
 
     const addGroqAttempts = () => {
       for (const gKey of pool.groqKeys) {
         const groqModels = hasImages
-          ? [
-              "meta-llama/llama-4-scout-17b-16e-instruct",
-              "meta-llama/llama-4-maverick-17b-128e-instruct",
-            ]
-          : [
-              "openai/gpt-oss-120b",
-              "openai/gpt-oss-20b",
-              "llama-3.3-70b-versatile",
-              "qwen/qwen3-32b",
-              "qwen/qwen3.8-27b",
-            ];
+          ? liveFreeModels.groqVisionModels
+          : liveFreeModels.groqTextModels;
         for (const m of groqModels) {
-          attempts.push(() =>
-            callOpenAiCompatibleEndpoint({
-              endpointUrl: "https://api.groq.com/openai/v1/chat/completions",
-              apiKey: gKey,
-              model: m,
-              promptText,
-              imagesBase64,
-              responseSchema,
-              temperature,
-            })
-          );
+          attempts.push({
+            modelId: m,
+            run: () =>
+              callOpenAiCompatibleEndpoint({
+                endpointUrl: "https://api.groq.com/openai/v1/chat/completions",
+                apiKey: gKey,
+                model: m,
+                promptText,
+                imagesBase64,
+                responseSchema,
+                temperature,
+                forceVisionSupport: hasImages,
+              }),
+          });
         }
       }
     };
@@ -487,25 +493,23 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
     const addOpenRouterAttempts = () => {
       for (const orKey of pool.openRouterKeys) {
         const orModels = hasImages
-          ? [
-              "qwen/qwen2.5-vl-72b-instruct:free",
-              "qwen/qwen2.5-vl-32b-instruct:free",
-              "google/gemma-3-27b-it:free",
-              "openrouter/free",
-            ]
-          : ["openrouter/free", "google/gemma-3-27b-it:free"];
+          ? liveFreeModels.openRouterVisionFree
+          : liveFreeModels.openRouterTextFree;
         for (const m of orModels) {
-          attempts.push(() =>
-            callOpenAiCompatibleEndpoint({
-              endpointUrl: "https://openrouter.ai/api/v1/chat/completions",
-              apiKey: orKey,
-              model: m,
-              promptText,
-              imagesBase64,
-              responseSchema,
-              temperature,
-            })
-          );
+          attempts.push({
+            modelId: m,
+            run: () =>
+              callOpenAiCompatibleEndpoint({
+                endpointUrl: "https://openrouter.ai/api/v1/chat/completions",
+                apiKey: orKey,
+                model: m,
+                promptText,
+                imagesBase64,
+                responseSchema,
+                temperature,
+                forceVisionSupport: hasImages,
+              }),
+          });
         }
       }
     };
@@ -516,17 +520,19 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
           ? ["Qwen/Qwen3-VL-8B-Instruct", "Qwen/Qwen3.8-27B"]
           : ["Qwen/Qwen3.8-27B", "Qwen/Qwen2.5-7B-Instruct"];
         for (const m of sfModels) {
-          attempts.push(() =>
-            callOpenAiCompatibleEndpoint({
-              endpointUrl: "https://api.siliconflow.com/v1/chat/completions",
-              apiKey: sfKey,
-              model: m,
-              promptText,
-              imagesBase64,
-              responseSchema,
-              temperature,
-            })
-          );
+          attempts.push({
+            modelId: m,
+            run: () =>
+              callOpenAiCompatibleEndpoint({
+                endpointUrl: "https://api.siliconflow.com/v1/chat/completions",
+                apiKey: sfKey,
+                model: m,
+                promptText,
+                imagesBase64,
+                responseSchema,
+                temperature,
+              }),
+          });
         }
       }
     };
@@ -553,31 +559,34 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
             : clientForKey.models.generateContent.bind(clientForKey.models);
 
         for (const candidateModel of modelChain) {
-          attempts.push(async () => {
-            const clonedConfig = params.config
-              ? { ...params.config }
-              : undefined;
-            if (
-              clonedConfig &&
-              "thinkingConfig" in clonedConfig &&
-              !candidateModel.startsWith("gemini-2.5")
-            ) {
-              delete (clonedConfig as Record<string, unknown>).thinkingConfig;
-            }
-            const geminiTimeoutMs = hasImages ? 35_000 : 22_000;
-            const res = await withRaceTimeout(
-              genFn({
-                ...params,
-                model: candidateModel,
-                config: clonedConfig,
-              }),
-              geminiTimeoutMs,
-              `Gemini ${candidateModel}`
-            );
-            if (!res.text) {
-              throw new Error("Empty response from Gemini");
-            }
-            return res.text;
+          attempts.push({
+            modelId: candidateModel,
+            run: async () => {
+              const clonedConfig = params.config
+                ? { ...params.config }
+                : undefined;
+              if (
+                clonedConfig &&
+                "thinkingConfig" in clonedConfig &&
+                !candidateModel.startsWith("gemini-2.5")
+              ) {
+                delete (clonedConfig as Record<string, unknown>).thinkingConfig;
+              }
+              const geminiTimeoutMs = hasImages ? 35_000 : 22_000;
+              const res = await withRaceTimeout(
+                genFn({
+                  ...params,
+                  model: candidateModel,
+                  config: clonedConfig,
+                }),
+                geminiTimeoutMs,
+                `Gemini ${candidateModel}`
+              );
+              if (!res.text) {
+                throw new Error("Empty response from Gemini");
+              }
+              return res.text;
+            },
           });
         }
       }
@@ -636,13 +645,19 @@ function getClient(customApiKey?: string, masterApiKey?: string): GoogleGenAI {
       if (attemptIdx >= 2 && Date.now() - routerStartTime > 50_000) {
         break;
       }
+      const currentAttempt = attempts[attemptIdx];
       try {
-        const resultText = await attempts[attemptIdx]();
+        const resultText = await currentAttempt.run();
         return {
           text: resultText,
         } as Awaited<ReturnType<typeof originalGenerateContent>>;
       } catch (err: unknown) {
         lastError = err;
+        const msg = err instanceof Error ? err.message : String(err);
+        if (isModelNotFoundError(msg)) {
+          // Tự động đưa model 404 / ngừng phục vụ vào danh sách đen trong ngày để các lần sau không gọi lại nữa
+          markModelDeadToday(currentAttempt.modelId);
+        }
         // Continue to next provider/model in the failover chain!
       }
     }

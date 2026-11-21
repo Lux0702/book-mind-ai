@@ -253,6 +253,32 @@ export default function AppDataProvider({
     window.addEventListener("bookmind:quota-updated", handleQuotaUpdated);
     window.addEventListener("bookmind:email-updated", handleEmailUpdated);
     window.addEventListener("bookmind:new-email", handleNewEmail);
+
+    // Tự động kiểm tra các model AI miễn phí (OpenRouter :free & Groq) còn hoạt động mỗi ngày 1 lần khi truy cập trang
+    try {
+      const now = new Date();
+      const todayKey = `${now.getFullYear()}-${String(
+        now.getMonth() + 1
+      ).padStart(2, "0")}-${String(now.getDate()).padStart(2, "0")}`;
+      const lastChecked = localStorage.getItem(
+        "bookmind_free_models_checked_date"
+      );
+      if (lastChecked !== todayKey) {
+        void fetch("/api/agent/free-models")
+          .then((r) => (r.ok ? r.json() : null))
+          .then((data) => {
+            if (data?.ok) {
+              localStorage.setItem(
+                "bookmind_free_models_checked_date",
+                todayKey
+              );
+            }
+          })
+          .catch(() => {});
+      }
+    } catch {
+      // Ignore storage errors
+    }
     window.addEventListener(
       "bookmind:require-key-activation",
       handleRequireKeyActivation
