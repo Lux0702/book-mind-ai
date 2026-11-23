@@ -17,7 +17,6 @@ import { ChapterLesson } from "@/types/course";
 import { getAppSettings } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 import AudioSpeakButton from "@/components/AudioSpeakButton";
-import TutorThinkingLoader from "@/components/loadings/TutorThinkingLoader";
 
 interface ContentTabProps {
   courseTitle: string;
@@ -239,46 +238,6 @@ export default function ContentTab({
             )}
           </div>
         ))}
-      </div>
-
-      {/* Interactive Ask-the-Book AI Tutor */}
-      <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-5 sm:p-6 shadow-[4px_4px_0_0_#F5EFE6]">
-        <div className="flex items-center gap-2 text-sm font-extrabold text-[#F5EFE6]">
-          <MessageSquare className="h-4 w-4 text-[#C8B6FF]" />
-          <span>
-            Hỏi Gia sư AI thêm về bất kỳ câu văn hay ý nghĩa nào trong Chương này
-          </span>
-        </div>
-        <form
-          onSubmit={handleAskTutor}
-          className="mt-3 flex flex-col sm:flex-row gap-2.5"
-        >
-          <input
-            type="text"
-            value={tutorQuestion}
-            onChange={(e) => setTutorQuestion(e.target.value)}
-            placeholder="VD: Giải thích kỹ hơn câu thứ 2 ở đoạn 1, hoặc tại sao tác giả lại dùng hình ảnh ẩn dụ đó?..."
-            className="flex-1 rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] placeholder-[#8F8A7E] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
-          />
-          <button
-            type="submit"
-            disabled={isAskingTutor}
-            className="flex min-h-[44px] items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 shrink-0 cursor-pointer"
-          >
-            {isAskingTutor ? (
-              <Loader2 className="h-4 w-4 animate-spin" />
-            ) : (
-              <Send className="h-4 w-4" />
-            )}
-            Hỏi AI
-          </button>
-        </form>
-        {isAskingTutor && <TutorThinkingLoader />}
-        {tutorAnswer && !isAskingTutor && (
-          <div className="mt-4 whitespace-pre-wrap rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4 text-sm leading-relaxed text-[#F5EFE6]">
-            {tutorAnswer}
-          </div>
-        )}
       </div>
     </div>
   );

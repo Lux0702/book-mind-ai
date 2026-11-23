@@ -79,6 +79,7 @@ import VocabularyTab from "./workspace/VocabularyTab";
 import PracticeTab from "./workspace/PracticeTab";
 import TranslationTab from "./workspace/TranslationTab";
 import { useAppData } from "./app/AppDataProvider";
+import AiLessonChatWidget from "./AiLessonChatWidget";
 
 interface ChapterWorkspaceProps {
   course: Course;
@@ -2227,6 +2228,16 @@ export default function ChapterWorkspace({
         courseTitle={course.title}
         chapterTitle={currentChapter.title}
         chapterText={currentChapter.rawText}
+        selectedAiModel={selectedAiModel}
+      />
+
+      {/* Floating AI Lesson Tutor Chat Widget (Hỏi đáp từ vựng, ngữ pháp & nội dung bài học) */}
+      <AiLessonChatWidget
+        mode="floating"
+        courseTitle={course.title}
+        chapterTitle={currentChapter.title}
+        chapterRawText={currentChapter.rawText}
+        lesson={lesson}
         selectedAiModel={selectedAiModel}
       />
 

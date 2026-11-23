@@ -581,14 +581,14 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         {children}
       </div>
 
-      {/* Floating Scroll-to-Top Button when scrolling deep down */}
+      {/* Floating Scroll-to-Top Button when scrolling deep down (Stacked cleanly ABOVE the right-side AI Chat float button) */}
       {showScrollTopBtn && (
         <button
           type="button"
           onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
           aria-label="Lên đầu trang"
           title="Cuộn nhanh về đầu trang"
-          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-40 inline-flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3.5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-all hover:bg-[#f7d47e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] animate-in fade-in slide-in-from-bottom-3 duration-150 cursor-pointer"
+          className="fixed bottom-36 right-4 lg:bottom-20 lg:right-6 z-40 inline-flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-all hover:bg-[#f7d47e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] animate-in fade-in slide-in-from-bottom-3 duration-150 cursor-pointer"
         >
           <ArrowUp className="h-4 w-4 shrink-0 stroke-[2.5]" />
           <span className="hidden sm:inline">Đầu trang</span>

@@ -14,6 +14,7 @@ import {
   Play,
   Mic,
   Link2,
+  MessageSquare,
 } from "lucide-react";
 import {
   Course,
@@ -492,6 +493,25 @@ export default function VocabularyTab({
                         >
                           <Mic className="h-3 w-3" />
                           <span>Luyện nói</span>
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent("bookmind:ask-ai-tutor", {
+                                detail: {
+                                  question: `Phân tích sâu từ vựng "${voc.word}" (${voc.ipa} - ${voc.vietnameseMeaning}) trong bài học này: cách dùng, cụm từ đi kèm (collocations), từ đồng/trái nghĩa, các từ dễ nhầm lẫn và ví dụ thực tế.`,
+                                  excerpt: `${voc.word} (${voc.ipa}): ${voc.vietnameseMeaning}`,
+                                  autoSend: true,
+                                },
+                              })
+                            );
+                          }}
+                          className="flex items-center gap-1 rounded-lg border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2 py-1 text-[11px] font-extrabold text-[#141413] transition-transform active:translate-y-[1px] cursor-pointer"
+                          title="Hỏi Gia sư AI phân tích sâu từ vựng này"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          <span>Hỏi AI</span>
                         </button>
                       </div>
                       <span className="font-mono text-xs font-semibold text-[#C8B6FF]">

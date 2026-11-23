@@ -1628,12 +1628,20 @@ YÊU CẦU CHẤM ĐIỂM CÔNG TÂM VÀ CHI TIẾT:
   };
 }
 
+export interface TutorChatMessage {
+  role: "user" | "assistant";
+  content: string;
+}
+
 export async function askBookTutorWithAI(params: {
   courseTitle: string;
   chapterTitle: string;
   chapterText: string;
   question: string;
   selectedExcerpt?: string;
+  lessonDataSummary?: string;
+  learnerMemorySummary?: string;
+  chatHistory?: TutorChatMessage[];
   apiKey?: string;
   masterApiKey?: string;
   model?: string;
@@ -1641,19 +1649,60 @@ export async function askBookTutorWithAI(params: {
   const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
-  const prompt = `Bạn là Gia sư AI chuyên giải đáp sách "${params.courseTitle}" (${params.chapterTitle}).
-Ngữ cảnh chương sách (trích lược):
-"""
-${params.chapterText.slice(0, 15000)}
-"""
+  const historyText =
+    Array.isArray(params.chatHistory) && params.chatHistory.length > 0
+      ? `\nLỊCH SỬ HỘI THOẠI GẦN ĐÂY TRONG BÀI NÀY:\n${params.chatHistory
+          .slice(-6)
+          .map(
+            (m) =>
+              `- ${m.role === "user" ? "Học viên" : "Gia sư AI"}: ${String(
+                m.content || ""
+              ).slice(0, 450)}`
+          )
+          .join("\n")}\n`
+      : "";
+
+  const memoryBlock = params.learnerMemorySummary
+    ? `\n🧠 HỒ SƠ GHI NHỚ HỌC TẬP CỦA HỌC VIÊN (Các từ vựng, chủ đề & câu hỏi học viên từng thắc mắc trước đây — hãy dựa vào đây để hiểu trình độ, thói quen của học viên và liên hệ/so sánh với các từ đã hỏi khi phù hợp để giúp học viên nhớ sâu hơn):\n${params.learnerMemorySummary.slice(
+        0,
+        1400
+      )}\n`
+    : "";
+
+  // Giữ tổng độ dài prompt luôn < 9,800 ký tự để trên Groq (limit 11,200 ký tự) KHÔNG BAO GIỜ bị cắt mất câu hỏi ở cuối!
+  const structuredLessonBlock = params.lessonDataSummary
+    ? `\nDỮ LIỆU ĐÃ PHÂN TÍCH CỦA BÀI HỌC (Từ vựng, Ngữ pháp, Câu bài tập, Đoạn trích):\n"""\n${params.lessonDataSummary.slice(
+        0,
+        5200
+      )}\n"""\n`
+    : "";
+
+  const rawChapterBlock = params.chapterText
+    ? `\nVĂN BẢN GỐC CỦA BÀI HỌC:\n"""\n${params.chapterText.slice(
+        0,
+        3000
+      )}\n"""\n`
+    : "";
+
+  const prompt = `Bạn là Gia sư AI Chuyên sâu của BookMind, đang hướng dẫn bài học "${params.chapterTitle}" thuộc "${params.courseTitle}".
+
+🎯 CÂU HỎI / YÊU CẦU HIỆN TẠI CỦA HỌC VIÊN (BẮT BUỘC TRẢ LỜI TRỰC TIẾP YÊU CẦU NÀY):
+>>> "${params.question}" <<<
 ${
   params.selectedExcerpt
-    ? `\nĐoạn văn người học đang bôi đen / thắc mắc:\n"${params.selectedExcerpt}"\n`
+    ? `Đoạn văn / Từ vựng đính kèm: "${params.selectedExcerpt}"\n`
     : ""
-}
-Câu hỏi của người học: "${params.question}"
-
-Hãy trả lời thật rõ ràng, sâu sắc, dễ hiểu bằng tiếng Việt (phân tích cả ý nghĩa nội dung lẫn từ vựng/ngữ pháp nếu liên quan).`;
+}${historyText}${memoryBlock}
+🚫 QUY TẮC BẮT BUỘC (TUYỆT ĐỐI TUÂN THỦ):
+1. KHÔNG BAO GIỜ trả lời kiểu câu chào hỏi chung chung hay hỏi ngược lại ("Chào bạn! Mình sẵn sàng hỗ trợ... Bạn muốn tìm hiểu từ nào?"). Hãy ĐI THẲNG VÀO GIẢI ĐÁP ngay cho yêu cầu: "${params.question}".
+2. Nếu học viên chỉ gõ 1 từ vựng hoặc 1 cụm ngắn (ví dụ: "identify", "từ identify trong câu bài tập", "compound", v.v.), bạn PHẢI hiểu ngay là học viên đang cần PHÂN TÍCH & GIẢI THÍCH CHI TIẾT từ/cụm từ đó:
+   - Phiên âm chuẩn (IPA / Pinyin) + Từ loại + Nghĩa tiếng Việt đầy đủ.
+   - Phân tích từ đó trong ngữ cảnh bài học hoặc trong câu bài tập của bài (nếu có xuất hiện trong bài học/bài tập bên dưới, hãy trích dẫn câu đó ra, dịch nghĩa cả câu và giải thích tại sao dùng từ đó).
+   - Tổng hợp kiến thức mở rộng: Gia đình từ (Word family: động từ/danh từ/tính từ), Cụm từ đi kèm (Collocations / giới từ đi kèm như "identify with", "identify as"), Từ đồng nghĩa / trái nghĩa, và 1–2 câu ví dụ song ngữ dễ nhớ.
+3. Nếu học viên hỏi về một câu bài tập, ngữ pháp hoặc đoạn văn trong bài: hãy đối chiếu dữ liệu bài học bên dưới kết hợp kiến thức của bạn để giải thích thật rõ ràng, dễ hiểu.
+4. Nếu học viên trò chuyện xã giao ngoài lề (ví dụ: "xin chào", "cảm ơn"): đáp lại thân thiện 1 câu ngắn rồi gợi ý ngay 1–2 từ vựng thú vị trong bài "${params.chapterTitle}".
+${structuredLessonBlock}${rawChapterBlock}
+👉 Hãy trả lời trực tiếp, chi tiết và rõ ràng bằng tiếng Việt cho câu hỏi/từ khóa của học viên: "${params.question}"`;
 
   const response = await ai.models.generateContent({
     model: modelName,

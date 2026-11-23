@@ -1045,13 +1045,18 @@ export async function fetchAiAgent(
   }
 
   // 6. Thực thi gọi AI kèm Timeout (120s) + Retry Exponential Backoff (tối đa 1 lần cho lỗi mạng) + Auto-Refund nếu lỗi
+  const isSilentUi =
+    Boolean(payload?.silentUi) || endpoint.includes("ask-tutor");
+
   const executeWithRetry = async (): Promise<Response> => {
     activeConcurrencyCount++;
-    const loadingHudId = startActionLoading({
-      variant: "api",
-      title: taskInfo.taskLabel,
-      subtitle: taskInfo.description,
-    });
+    const loadingHudId = isSilentUi
+      ? ""
+      : startActionLoading({
+          variant: "api",
+          title: taskInfo.taskLabel,
+          subtitle: taskInfo.description,
+        });
     const startTime = Date.now();
     let attempt = 0;
     const maxRetries = 1;
@@ -1153,15 +1158,17 @@ export async function fetchAiAgent(
               window.dispatchEvent(new CustomEvent("bookmind:quota-updated"));
             }
 
-            showToast({
-              type: "success",
-              title: `Hoàn tất: ${taskInfo.taskLabel}`,
-              message:
-                requiredCredits > 0
-                  ? `Xử lý thành công trong ${((Date.now() - startTime) / 1000).toFixed(1)}s (-${requiredCredits} AI Credit)`
-                  : `Xử lý thành công trong ${((Date.now() - startTime) / 1000).toFixed(1)}s`,
-              durationMs: 1800,
-            });
+            if (!isSilentUi) {
+              showToast({
+                type: "success",
+                title: `Hoàn tất: ${taskInfo.taskLabel}`,
+                message:
+                  requiredCredits > 0
+                    ? `Xử lý thành công trong ${((Date.now() - startTime) / 1000).toFixed(1)}s (-${requiredCredits} AI Credit)`
+                    : `Xử lý thành công trong ${((Date.now() - startTime) / 1000).toFixed(1)}s`,
+                durationMs: 1800,
+              });
+            }
 
             return new Response(rawText, {
               status: 200,
@@ -1216,12 +1223,14 @@ export async function fetchAiAgent(
         createdAt: new Date().toISOString(),
       });
 
-      showToast({
-        type: "error",
-        title: `Chưa hoàn tất: ${taskInfo.taskLabel}`,
-        message: lastErrorText,
-        durationMs: 2200,
-      });
+      if (!isSilentUi) {
+        showToast({
+          type: "error",
+          title: `Chưa hoàn tất: ${taskInfo.taskLabel}`,
+          message: lastErrorText,
+          durationMs: 2200,
+        });
+      }
 
       return new Response(
         JSON.stringify({

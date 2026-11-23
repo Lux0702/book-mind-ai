@@ -30,6 +30,7 @@ import {
   Trophy,
   Play,
   Globe,
+  MessageSquare,
 } from "lucide-react";
 import {
   VocabularyItem,
@@ -58,6 +59,7 @@ import { useAppData } from "@/components/app/AppDataProvider";
 import AudioSpeakButton from "@/components/AudioSpeakButton";
 import FlashcardArena from "@/components/FlashcardArena";
 import PronunciationModal from "@/components/PronunciationModal";
+import AiLessonChatWidget from "@/components/AiLessonChatWidget";
 import SelectionAiPopover from "@/components/SelectionAiPopover";
 import CustomSelect from "@/components/ui/CustomSelect";
 
@@ -2315,6 +2317,25 @@ export default function TopicVocabStudioPage() {
                           <Mic className="h-3 w-3" />
                           <span>Luyện phát âm</span>
                         </button>
+                        <button
+                          type="button"
+                          onClick={() => {
+                            window.dispatchEvent(
+                              new CustomEvent("bookmind:ask-ai-tutor", {
+                                detail: {
+                                  question: `Phân tích sâu từ vựng "${voc.word}" (${voc.ipa} - ${voc.vietnameseMeaning}) trong chủ đề ${activeDeck?.title || "Từ vựng"}: cách dùng, collocations, từ đồng/trái nghĩa, từ dễ nhầm lẫn và ví dụ thực tế.`,
+                                  excerpt: `${voc.word} (${voc.ipa}): ${voc.vietnameseMeaning}`,
+                                  autoSend: true,
+                                },
+                              })
+                            );
+                          }}
+                          className="inline-flex items-center gap-1 rounded-lg border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2.5 py-1 text-[11px] font-extrabold text-[#141413] cursor-pointer"
+                          title="Hỏi Gia sư AI phân tích sâu từ vựng này"
+                        >
+                          <MessageSquare className="h-3 w-3" />
+                          <span>Hỏi AI</span>
+                        </button>
                       </div>
                       <p className="mt-1 font-mono text-xs sm:text-sm font-bold text-[#F3C969]">
                         {voc.ipa} •{" "}
@@ -3242,17 +3263,27 @@ export default function TopicVocabStudioPage() {
 
       {/* Bôi đen tra từ & AI Giải thích khi đã nộp bài hoặc đang xem bảng từ vựng */}
       {(!isTestRunning || isTestSubmitted) && (
-        <SelectionAiPopover
-          courseTitle={`Từ vựng Chủ đề (${selectedLanguage})`}
-          chapterTitle={activeDeck?.title || "Chủ đề Từ vựng"}
-          chapterText={scopedItems
-            .map(
-              (v) =>
-                `${v.word} (${v.ipa}) [${v.partOfSpeech}]: ${v.vietnameseMeaning}. Ví dụ: ${v.quoteFromBook}`
-            )
-            .join("\n")}
-          selectedAiModel=""
-        />
+        <>
+          <SelectionAiPopover
+            courseTitle={`Từ vựng Chủ đề (${selectedLanguage})`}
+            chapterTitle={activeDeck?.title || "Chủ đề Từ vựng"}
+            chapterText={scopedItems
+              .map(
+                (v) =>
+                  `${v.word} (${v.ipa}) [${v.partOfSpeech}]: ${v.vietnameseMeaning}. Ví dụ: ${v.quoteFromBook}`
+              )
+              .join("\n")}
+            selectedAiModel=""
+          />
+          <AiLessonChatWidget
+            mode="floating"
+            courseTitle={`Từ vựng Chủ đề (${selectedLanguage})`}
+            chapterTitle={`${activeDeck?.title || "Chủ đề"} — Bài ${String(
+              selectedLessonBatch + 1
+            ).padStart(2, "0")}`}
+            vocabularyList={scopedItems}
+          />
+        </>
       )}
     </div>
   );
