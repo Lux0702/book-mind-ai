@@ -62,6 +62,10 @@ import {
 } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 import {
+  toBaseVocabWord,
+  normalizeDedupeVocabKey,
+} from "@/lib/geminiAgent";
+import {
   renderPdfPagesToImagesBase64,
   convertUploadedFilesToImagesBase64,
   runLocalBrowserOcrOnImages,
@@ -665,24 +669,17 @@ export default function ChapterWorkspace({
       }
 
       setOcrStatusMsg(
-        "AI đang phân tích nội dung chương & trích xuất toàn bộ từ vựng (chống trùng lặp)..."
+        "AI đang phân tích nội dung chương & trích xuất từ vựng trọng tâm (chuẩn hóa từ gốc & chống trùng lặp)..."
       );
-
-      const normalizeWordKey = (rawWord: unknown) =>
-        String(rawWord || "")
-          .trim()
-          .toLowerCase()
-          .replace(/\s*\([^)]*\)\s*/g, " ")
-          .replace(/[.,!?;:'"“”‘’`~@#$%^&*_+=<>[\]{}|\\/]+/g, " ")
-          .replace(/\s+/g, " ")
-          .trim();
 
       const existingCourseWords = Array.from(
         new Set(
           course.chapters
             .filter((ch) => ch.id !== chapter.id && ch.lesson?.vocabulary)
             .flatMap((ch) =>
-              (ch.lesson?.vocabulary || []).map((v) => String(v.word || "").trim())
+              (ch.lesson?.vocabulary || []).map((v) =>
+                toBaseVocabWord(String(v.word || ""))
+              )
             )
             .filter(Boolean)
         )
@@ -704,13 +701,24 @@ export default function ChapterWorkspace({
       }
 
       if (data.lesson && Array.isArray(data.lesson.vocabulary)) {
-        const seenLessonKeys = new Set<string>();
-        data.lesson.vocabulary = data.lesson.vocabulary.filter((item: any) => {
-          const k = normalizeWordKey(item?.word);
-          if (!k || seenLessonKeys.has(k)) return false;
+        const seenLessonKeys = new Set<string>(
+          existingCourseWords
+            .map((w) => normalizeDedupeVocabKey(w))
+            .filter(Boolean)
+        );
+        const cleanedList: any[] = [];
+        for (const item of data.lesson.vocabulary) {
+          const baseWord = toBaseVocabWord(String(item?.word || ""));
+          const k = normalizeDedupeVocabKey(baseWord);
+          if (!k || seenLessonKeys.has(k)) continue;
           seenLessonKeys.add(k);
-          return true;
-        });
+          cleanedList.push({
+            ...item,
+            word: baseWord,
+            id: `voc-${cleanedList.length + 1}`,
+          });
+        }
+        data.lesson.vocabulary = cleanedList;
       }
 
       const updatedChapters = course.chapters.map((ch) =>
@@ -786,8 +794,20 @@ export default function ChapterWorkspace({
         ? chapter.lesson.vocabulary
         : [];
       const existingWords = existingVocab
-        .map((v) => String(v?.word || "").trim())
+        .map((v) => toBaseVocabWord(String(v?.word || "")))
         .filter(Boolean);
+      const existingCourseWords = Array.from(
+        new Set(
+          course.chapters
+            .filter((ch) => ch.id !== chapter.id && ch.lesson?.vocabulary)
+            .flatMap((ch) =>
+              (ch.lesson?.vocabulary || []).map((v) =>
+                toBaseVocabWord(String(v?.word || ""))
+              )
+            )
+            .filter(Boolean)
+        )
+      );
 
       const res = await fetchAiAgent("/api/agent/extract-vocab", {
         courseTitle: course.title,
@@ -795,6 +815,7 @@ export default function ChapterWorkspace({
         chapterText: textToUse,
         pageImagesBase64,
         existingWords,
+        existingCourseWords,
         apiKey: settings.geminiApiKey,
         model: selectedAiModel || settings.geminiModel,
       });
@@ -804,21 +825,21 @@ export default function ChapterWorkspace({
       }
 
       if (Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
-        const seenWords = new Set<string>();
+        const seenWords = new Set<string>(
+          existingCourseWords
+            .map((w) => normalizeDedupeVocabKey(w))
+            .filter(Boolean)
+        );
         const mergedVocab: typeof existingVocab = [];
 
         for (const item of [...existingVocab, ...data.vocabulary]) {
-          const wKey = String(item?.word || "")
-            .trim()
-            .toLowerCase()
-            .replace(/\s*\([^)]*\)\s*/g, " ")
-            .replace(/[.,!?;:'"“”‘’`~@#$%^&*_+=<>[\]{}|\\/]+/g, " ")
-            .replace(/\s+/g, " ")
-            .trim();
+          const baseWord = toBaseVocabWord(String(item?.word || ""));
+          const wKey = normalizeDedupeVocabKey(baseWord);
           if (!wKey || seenWords.has(wKey)) continue;
           seenWords.add(wKey);
           mergedVocab.push({
             ...item,
+            word: baseWord,
             id: `voc-${mergedVocab.length + 1}`,
           });
         }
@@ -888,32 +909,45 @@ export default function ChapterWorkspace({
         );
         const existingVocab = ch.lesson?.vocabulary || [];
         const existingWords = existingVocab
-          .map((v) => String(v?.word || "").trim())
+          .map((v) => toBaseVocabWord(String(v?.word || "")))
           .filter(Boolean);
+        const existingCourseWords = Array.from(
+          new Set(
+            workingChapters
+              .filter((other) => other.id !== ch.id && other.lesson?.vocabulary)
+              .flatMap((other) =>
+                (other.lesson?.vocabulary || []).map((v) =>
+                  toBaseVocabWord(String(v?.word || ""))
+                )
+              )
+              .filter(Boolean)
+          )
+        );
         const res = await fetchAiAgent("/api/agent/extract-vocab", {
           courseTitle: course.title,
           chapterTitle: ch.title,
           chapterText: ch.rawText,
           existingWords,
+          existingCourseWords,
           apiKey: settings.geminiApiKey,
           model: selectedAiModel || settings.geminiModel,
         });
         const data = await res.json();
         if (res.ok && Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
-          const seenWords = new Set<string>();
+          const seenWords = new Set<string>(
+            existingCourseWords
+              .map((w) => normalizeDedupeVocabKey(w))
+              .filter(Boolean)
+          );
           const mergedVocab: typeof existingVocab = [];
           for (const item of [...existingVocab, ...data.vocabulary]) {
-            const wKey = String(item?.word || "")
-              .trim()
-              .toLowerCase()
-              .replace(/\s*\([^)]*\)\s*/g, " ")
-              .replace(/[.,!?;:'"“”‘’`~@#$%^&*_+=<>[\]{}|\\/]+/g, " ")
-              .replace(/\s+/g, " ")
-              .trim();
+            const baseWord = toBaseVocabWord(String(item?.word || ""));
+            const wKey = normalizeDedupeVocabKey(baseWord);
             if (!wKey || seenWords.has(wKey)) continue;
             seenWords.add(wKey);
             mergedVocab.push({
               ...item,
+              word: baseWord,
               id: `voc-${mergedVocab.length + 1}`,
             });
           }

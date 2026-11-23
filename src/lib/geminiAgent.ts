@@ -1059,14 +1059,285 @@ const PRONUNCIATION_EVAL_SCHEMA: Schema = {
   ],
 };
 
-export function normalizeDedupeVocabKey(word: string): string {
-  return String(word || "")
+const INVARIANT_S_WORDS = new Set([
+  "always",
+  "perhaps",
+  "besides",
+  "towards",
+  "afterwards",
+  "backwards",
+  "forwards",
+  "upwards",
+  "downwards",
+  "nowadays",
+  "sometimes",
+  "unawares",
+  "indoors",
+  "outdoors",
+  "upstairs",
+  "downstairs",
+  "clothes",
+  "goods",
+  "news",
+  "means",
+  "series",
+  "species",
+  "scissors",
+  "glasses",
+  "spectacles",
+  "trousers",
+  "pants",
+  "jeans",
+  "shorts",
+  "stairs",
+  "outskirts",
+  "premises",
+  "headquarters",
+  "surroundings",
+  "belongings",
+  "savings",
+  "earnings",
+  "proceedings",
+  "findings",
+  "remains",
+  "odds",
+  "customs",
+  "manners",
+  "morals",
+  "terms",
+  "grounds",
+  "funds",
+  "resources",
+  "authorities",
+  "thanks",
+  "ethics",
+  "economics",
+  "politics",
+  "physics",
+  "mathematics",
+  "maths",
+  "linguistics",
+  "statistics",
+  "genetics",
+  "athletics",
+  "acoustics",
+  "gymnastics",
+  "tactics",
+  "logistics",
+  "diabetes",
+  "rabies",
+  "measles",
+  "mumps",
+  "lens",
+  "chaos",
+  "bias",
+  "alias",
+  "canvas",
+  "compass",
+  "atlas",
+  "chorus",
+  "virus",
+  "focus",
+  "bonus",
+  "campus",
+  "census",
+  "consensus",
+  "status",
+  "apparatus",
+  "stimulus",
+  "syllabus",
+  "genius",
+  "radius",
+  "surplus",
+  "corps",
+  "debris",
+  "chassis",
+  "rendezvous",
+  "ourselves",
+  "themselves",
+  "yourselves",
+]);
+
+const IRREGULAR_PLURAL_TO_BASE: Record<string, string> = {
+  children: "child",
+  men: "man",
+  women: "woman",
+  people: "person",
+  teeth: "tooth",
+  feet: "foot",
+  mice: "mouse",
+  geese: "goose",
+  phenomena: "phenomenon",
+  criteria: "criterion",
+  analyses: "analysis",
+  crises: "crisis",
+  theses: "thesis",
+  hypotheses: "hypothesis",
+  diagnoses: "diagnosis",
+  bases: "basis",
+  oases: "oasis",
+  syntheses: "synthesis",
+  emphases: "emphasis",
+  curricula: "curriculum",
+  stimuli: "stimulus",
+  syllabi: "syllabus",
+  fungi: "fungus",
+  alumni: "alumnus",
+  cacti: "cactus",
+  nuclei: "nucleus",
+  lives: "life",
+  wives: "wife",
+  knives: "knife",
+  leaves: "leaf",
+  wolves: "wolf",
+  halves: "half",
+  shelves: "shelf",
+  calves: "calf",
+  loaves: "loaf",
+  thieves: "thief",
+  scarves: "scarf",
+  heroes: "hero",
+  potatoes: "potato",
+  tomatoes: "tomato",
+  echoes: "echo",
+  vetoes: "veto",
+  torpedoes: "torpedo",
+  embargoes: "embargo",
+  goes: "go",
+  does: "do",
+};
+
+function lemmatizeSingleEnglishToken(token: string): string {
+  const clean = token.trim();
+  if (!/^[a-zA-Z]{3,}$/.test(clean)) return clean;
+  const lower = clean.toLowerCase();
+
+  if (INVARIANT_S_WORDS.has(lower)) return clean;
+  if (IRREGULAR_PLURAL_TO_BASE[lower]) {
+    const base = IRREGULAR_PLURAL_TO_BASE[lower];
+    return clean[0] === clean[0].toUpperCase() && clean[1] === clean[1].toLowerCase()
+      ? base.charAt(0).toUpperCase() + base.slice(1)
+      : base;
+  }
+
+  // Không cắt hậu tố gốc của từ đơn: -ss, -us, -is, -os, -as, -ics, -ous, -ness, -less
+  if (/(ss|us|is|os|as|ics|ous|ness|less)$/i.test(lower)) {
+    return clean;
+  }
+
+  let base = lower;
+
+  // 1. Consonant + ies -> y (families -> family, identifies -> identify, communities -> community)
+  if (lower.length >= 5 && /[bcdfghjklmnpqrstvwxz]ies$/.test(lower)) {
+    base = lower.slice(0, -3) + "y";
+  }
+  // 2. -ches, -shes, -xes, -zes, -sses -> bỏ es (approaches -> approach, establishes -> establish, processes -> process, boxes -> box)
+  else if (lower.length >= 5 && /(ch|sh|x|z|ss)es$/.test(lower)) {
+    base = lower.slice(0, -2);
+  }
+  // 3. Regular -s (parents -> parent, relationships -> relationship, interacts -> interact, resembles -> resemble)
+  else if (lower.length >= 4 && lower.endsWith("s") && !lower.endsWith("ss")) {
+    base = lower.slice(0, -1);
+  }
+
+  if (base === lower) return clean;
+  return clean[0] === clean[0].toUpperCase() && clean[1] === clean[1].toLowerCase()
+    ? base.charAt(0).toUpperCase() + base.slice(1)
+    : base;
+}
+
+/**
+ * Chuẩn hóa từ vựng hoặc cụm từ tiếng Anh về dạng nguyên mẫu (Base form / Lemma):
+ * - Bỏ số thứ tự đầu dòng, chú thích từ loại trong ngoặc: "1. parents (n)" -> "parent"
+ * - Chuyển danh từ số nhiều / động từ chia -s/-es/-ies về từ gốc nguyên mẫu:
+ *   "parents" -> "parent", "families" -> "family", "identifies" -> "identify", "nuclear families" -> "nuclear family"
+ */
+export function toBaseVocabWord(rawWord: string): string {
+  const cleaned = String(rawWord || "")
     .trim()
-    .toLowerCase()
-    .replace(/\([^)]*\)/g, " ")
+    .replace(/\s*\((?:n|v|adj|adv|prep|conj|pron|noun|verb|adjective|adverb|plural|pl|sing)[^)]*\)\s*/gi, " ")
     .replace(/^[\d.\-#*•]+\s*/, "")
     .replace(/\s+/g, " ")
     .trim();
+
+  if (!cleaned) return "";
+
+  // Nếu là từ đơn hoặc cụm từ tiếng Anh (ví dụ: "parents" hoặc "nuclear families" hoặc "close relationships")
+  const parts = cleaned.split(" ");
+  if (parts.length === 1) {
+    return lemmatizeSingleEnglishToken(parts[0]);
+  }
+  // Với cụm danh từ / collocation (2-4 từ), đưa từ cuối (hoặc từ đầu nếu không phải phrasal verb có giới từ) về nguyên mẫu
+  if (parts.length >= 2 && parts.length <= 4) {
+    const prepositions = new Set([
+      "in",
+      "on",
+      "at",
+      "to",
+      "for",
+      "with",
+      "from",
+      "of",
+      "by",
+      "about",
+      "as",
+      "into",
+      "up",
+      "down",
+      "out",
+      "off",
+      "over",
+      "after",
+      "through",
+      "between",
+      "among",
+    ]);
+    const lastIdx = parts.length - 1;
+    if (prepositions.has(parts[lastIdx].toLowerCase())) {
+      // Phrasal verb như "grows up", "brings up", "looks after" -> đưa động từ đầu về nguyên mẫu
+      parts[0] = lemmatizeSingleEnglishToken(parts[0]);
+    } else {
+      // Cụm danh từ như "nuclear families", "genetic factors" -> đưa danh từ chính ở cuối về nguyên mẫu
+      parts[lastIdx] = lemmatizeSingleEnglishToken(parts[lastIdx]);
+    }
+    return parts.join(" ");
+  }
+
+  return cleaned;
+}
+
+export function normalizeDedupeVocabKey(word: string): string {
+  const baseWord = toBaseVocabWord(word);
+  return baseWord
+    .trim()
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/[.,!?;:'"“”‘’`~@#$%^&*_+=<>[\]{}|\\/]+/g, " ")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
+/**
+ * Bộ lọc hậu kiểm: phát hiện và loại bỏ mọi câu hỏi phụ thuộc vào đoạn văn/bài đọc/bài nghe/hình ảnh
+ * không có mặt trên giao diện làm bài tập (đảm bảo 100% câu hỏi là tự thân độc lập - self-contained).
+ */
+export function isPassageDependentQuestion(text: string): boolean {
+  const s = String(text || "").trim().toLowerCase();
+  if (!s) return true;
+  const forbiddenPatterns: RegExp[] = [
+    /\baccording to the (?:passage|text|article|reading|dialogue|conversation|recording|audio|author|speaker|extract)\b/i,
+    /\bin the (?:passage|reading text|article|dialogue|conversation|recording|audio|extract|table above|chart above|diagram|picture|box above)\b/i,
+    /\b(?:paragraph|section)\s+\d+\b/i,
+    /\bwhich (?:paragraph|speaker|person|section)\b/i,
+    /\blisten to (?:the )?(?:recording|audio|track|speaker|conversation)\b/i,
+    /\blook at the (?:picture|photo|diagram|chart|table|graph|box|map)\b/i,
+    /\btrue\s*\/\s*false\s*\/\s*not given\b/i,
+    /\btheo (?:đoạn văn|bài đọc|bài khóa|đoạn trích|đoạn hội thoại|bài nghe|băng ghi âm|tác giả trong bài)\b/i,
+    /\btrong (?:đoạn văn|bài đọc|đoạn trích|bài khóa|đoạn hội thoại|bài nghe|bảng trên|biểu đồ trên|hình trên|khung từ trên)\b/i,
+    /\bnhìn vào (?:hình|ảnh|bảng|biểu đồ|sơ đồ)\b/i,
+    /\bnghe (?:đoạn băng|bài nghe|audio|track)\b/i,
+  ];
+  return forbiddenPatterns.some((rx) => rx.test(s));
 }
 
 export async function generateChapterLessonWithAI(params: {
@@ -1093,13 +1364,17 @@ export async function generateChapterLessonWithAI(params: {
   const existingWordsNotice =
     Array.isArray(params.existingCourseWords) &&
     params.existingCourseWords.length > 0
-      ? `\n🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
-- Dưới đây là các từ vựng đã được tạo ở các bài trước hoặc đã có sẵn: [${params.existingCourseWords
-          .slice(0, 180)
+      ? `\n🚫 CẢNH BÁO CHỐNG TRÙNG LẶP & CHUẨN HÓA TỪ GỐC (ANTI-DUPLICATION & BASE FORM RULE):
+- DANH SÁCH TỪ VỰNG ĐÃ HỌC Ở CÁC BÀI TRƯỚC (TUYỆT ĐỐI KHÔNG TRÍCH XUẤT LẠI CÁC TỪ NÀY HOẶC BIẾN THỂ CỦA CHÚNG): [${params.existingCourseWords
+          .slice(0, 200)
           .join(", ")}].
-- TUYỆT ĐỐI KHÔNG tạo lặp lại một từ vựng 2 lần trong cùng bài học này, và ưu tiên trích xuất các từ vựng mới của chương hiện tại (không lặp lại từ cũ của các chương trước trừ khi mang nghĩa hoàn toàn mới)!\n`
-      : `\n🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
-- TUYỆT ĐỐI KHÔNG tạo từ vựng bị trùng lặp (mỗi mục từ word trong danh sách vocabulary phải là DUY NHẤT 100%, không lặp lại từ đã xuất hiện ở mục trước dưới bất kỳ hình thức nào)!\n`;
+- TUYỆT ĐỐI KHÔNG tạo lặp lại bất kỳ từ vựng nào 2 lần trong cùng bài học này và KHÔNG trùng với các từ đã học ở các bài trước!
+- ĐƯA VỀ TỪ GỐC NGUYÊN MẪU (BASE FORM / LEMMA): Nếu từ trong văn bản đang ở dạng danh từ số nhiều thêm "-s / -es / -ies" (ví dụ: parents, families, relationships) hoặc động từ chia "-s / -es / -ies / -ed / -ing" (ví dụ: identifies, resembles, interacts, developed), BẮT BUỘC phải trả trường "word" về dạng TỪ GỐC NGUYÊN MẪU (parent, family, relationship, identify, resemble, interact, develop).
+- CHỈ LẤY TỪ VỰNG TRỌNG TÂM: Chỉ trích xuất các từ vựng trọng tâm, học thuật, từ khóa chủ đề và cụm từ cố định (collocations/phrasal verbs) đắt giá của bài học; không lấy đại từ, giới từ đơn hay các từ A1 quá sơ cấp!\n`
+      : `\n🚫 CẢNH BÁO CHỐNG TRÙNG LẶP & CHUẨN HÓA TỪ GỐC (ANTI-DUPLICATION & BASE FORM RULE):
+- TUYỆT ĐỐI KHÔNG tạo từ vựng bị trùng lặp (mỗi mục từ word trong danh sách vocabulary phải là DUY NHẤT 100%, không lặp lại từ đã xuất hiện ở mục trước dưới bất kỳ hình thức nào)!
+- ĐƯA VỀ TỪ GỐC NGUYÊN MẪU (BASE FORM / LEMMA): Nếu từ trong văn bản đang ở dạng danh từ số nhiều thêm "-s / -es / -ies" (ví dụ: parents, families, relationships) hoặc động từ chia "-s / -es / -ies / -ed / -ing" (ví dụ: identifies, resembles, interacts, developed), BẮT BUỘC phải trả trường "word" về dạng TỪ GỐC NGUYÊN MẪU (parent, family, relationship, identify, resemble, interact, develop).
+- CHỈ LẤY TỪ VỰNG TRỌNG TÂM: Chỉ trích xuất các từ vựng trọng tâm, học thuật, từ khóa chủ đề và cụm từ cố định đắt giá của bài học!\n`;
 
   const prompt = `Bạn là một Giáo sư Ngôn ngữ học & Gia sư Đọc hiểu Sách chuyên sâu (Multilingual Book Tutor Agent - hỗ trợ sách Tiếng Anh, Tiếng Trung 繁體/簡體 Pinyin, Tiếng Nhật, Tiếng Hàn...).
 Hãy phân tích toàn diện chương sách dưới đây thuộc cuốn sách "${params.courseTitle}" và tạo ra bài học cực kỳ chi tiết bằng tiếng Việt để người học vừa nắm trọn vẹn nội dung cuốn sách, vừa giỏi từ vựng, ngữ pháp và kỹ năng dịch thuật.
@@ -1118,9 +1393,12 @@ YÊU CẦU BẮT BUỘC (Viết súc tích, rõ ràng để đảm bảo xuất 
 2. contentAnalysis: Chia nội dung chương thành 2-3 phần trọng tâm theo mạch sách (ví dụ Dialogue I, Dialogue II, Bài đọc...). Mỗi phần trích dẫn đoạn văn gốc (originalExcerpt), dịch sang tiếng Việt chuẩn xác (vietnameseTranslation), và giải thích sâu ý nghĩa nội dung, bối cảnh (deepExplanation & stylisticOrContextNotes).
 3. grammarPoints: Trích xuất 3-5 cấu trúc ngữ pháp trọng tâm xuất hiện trong chương. Giải thích công thức, cách dùng và cho 1-2 ví dụ.
 4. vocabulary: BẮT BUỘC trích xuất ĐẦY ĐỦ TẤT CẢ các mục từ vựng xuất hiện trong chương (tối thiểu 20 đến 35+ từ, bao gồm toàn bộ bảng Vocabulary I, Vocabulary II, People, Names, và Phrases — TUYỆT ĐỐI KHÔNG ĐƯỢC RÚT GỌN CHỈ CÒN 5 TỪ VÀ TUYỆT ĐỐI KHÔNG LẶP LẠI TỪ VỰNG TRÙNG NHAU!). Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ ngắn gọn, 1-2 collocations.
-5. clozeExercises: Tạo 5 câu bài tập điền từ/ngữ pháp vào chỗ trống (dùng đúng ký hiệu "_____" tại vị trí từ bị khuyết).
-6. quizExercises: Tạo 6 câu hỏi trắc nghiệm (4 lựa chọn) CHỈ KIỂM TRA TỪ VỰNG (nghĩa từ, cách dùng từ, phiên âm) VÀ NGỮ PHÁP (trật tự từ, chọn cấu trúc đúng, điền trợ từ).
-7. translationExercises: Chọn 4 câu tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.
+5. clozeExercises: Tạo 6 câu bài tập điền từ / collocation / ngữ pháp vào chỗ trống (dùng đúng ký hiệu "_____" tại vị trí từ bị khuyết).
+   - ƯU TIÊN KHAI THÁC & HỌC HỎI TỪ BÀI TẬP THẬT TRONG SÁCH: Nếu chương sách có sẵn các câu bài tập điền từ/hoàn thành câu độc lập (như Complete the sentences, Fill in the blanks, Word formation), hãy trích xuất & chuẩn hóa chúng trước, rồi học đúng phong cách/trình độ của sách để bổ sung thêm cho đủ 6 câu!
+   - CẤM CÂU PHỤ THUỘC ĐOẠN TRÍCH: Mỗi câu điền từ PHẢI ĐỘC LẬP 100% (đọc riêng câu đó là làm được ngay), tuyệt đối KHÔNG lấy câu điền khuyết thuộc đoạn văn đọc hiểu dài, bài nghe (listening) hay bảng biểu không hiển thị!
+6. quizExercises: Tạo 6 câu hỏi trắc nghiệm (4 lựa chọn) CHỈ KIỂM TRA TỪ VỰNG (nghĩa từ, collocation, từ loại, đồng/trái nghĩa, phiên âm) VÀ NGỮ PHÁP (cấu trúc câu, chia động từ, giới từ) — ưu tiên trích xuất & học hỏi từ các bài tập trắc nghiệm/chọn từ độc lập trong sách.
+   - TUYỆT ĐỐI KHÔNG tạo câu hỏi đọc hiểu phụ thuộc đoạn trích/bài đọc/hội thoại/bài nghe/hình ảnh (KHÔNG hỏi "Theo đoạn văn...", "According to the passage...", "Trong đoạn hội thoại nhân vật A...", "Look at the picture/table...", "True/False/Not Given"...) vì giao diện bài tập không hiển thị đoạn văn gốc!
+7. translationExercises: Chọn 4 câu tiêu biểu sử dụng từ vựng và ngữ pháp trọng tâm của chương để người học luyện dịch sang tiếng Việt.
 
 NỘI DUNG VĂN BẢN CHƯƠNG SÁCH (LỚP TEXT & OCR TRÍCH XUẤT TỰ ĐỘNG):
 """
@@ -1208,10 +1486,14 @@ ${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính k�
       : [],
     vocabulary: (() => {
       const rawVocab = Array.isArray(root?.vocabulary) ? root.vocabulary : [];
-      const seenKeys = new Set<string>();
+      const seenKeys = new Set<string>(
+        (params.existingCourseWords || [])
+          .map((w) => normalizeDedupeVocabKey(w))
+          .filter(Boolean)
+      );
       const deduped: VocabularyItem[] = [];
       for (const v of rawVocab) {
-        const word = String(v?.word || "").trim();
+        const word = toBaseVocabWord(String(v?.word || ""));
         const key = normalizeDedupeVocabKey(word);
         if (!key || seenKeys.has(key)) continue;
         seenKeys.add(key);
@@ -1238,31 +1520,38 @@ ${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính k�
       return deduped;
     })(),
     clozeExercises: Array.isArray(root?.clozeExercises)
-      ? root.clozeExercises.map((cl: any, idx: number) => ({
-          id: String(cl?.id || `cloze-${idx + 1}`),
-          sentenceWithBlank: String(cl?.sentenceWithBlank || ""),
-          answer: String(cl?.answer || ""),
-          hint: String(cl?.hint || ""),
-          fullSentenceTranslation: String(cl?.fullSentenceTranslation || ""),
-          explanation: String(cl?.explanation || ""),
-        }))
+      ? root.clozeExercises
+          .filter(
+            (cl: any) =>
+              !isPassageDependentQuestion(String(cl?.sentenceWithBlank || ""))
+          )
+          .map((cl: any, idx: number) => ({
+            id: String(cl?.id || `cloze-${idx + 1}`),
+            sentenceWithBlank: String(cl?.sentenceWithBlank || ""),
+            answer: String(cl?.answer || ""),
+            hint: String(cl?.hint || ""),
+            fullSentenceTranslation: String(cl?.fullSentenceTranslation || ""),
+            explanation: String(cl?.explanation || ""),
+          }))
       : [],
     quizExercises: Array.isArray(root?.quizExercises)
-      ? root.quizExercises.map((qz: any, idx: number) => ({
-          id: String(qz?.id || `quiz-${idx + 1}`),
-          question: String(qz?.question || ""),
-          category: (["comprehension", "vocabulary", "grammar", "inference"].includes(
-            String(qz?.category)
+      ? root.quizExercises
+          .filter(
+            (qz: any) => !isPassageDependentQuestion(String(qz?.question || ""))
           )
-            ? qz.category
-            : "vocabulary") as any,
-          options: Array.isArray(qz?.options)
-            ? qz.options.map(String)
-            : ["A", "B", "C", "D"],
-          correctIndex:
-            typeof qz?.correctIndex === "number" ? qz.correctIndex : 0,
-          explanation: String(qz?.explanation || ""),
-        }))
+          .map((qz: any, idx: number) => ({
+            id: String(qz?.id || `quiz-${idx + 1}`),
+            question: String(qz?.question || ""),
+            category: (["vocabulary", "grammar"].includes(String(qz?.category))
+              ? qz.category
+              : "vocabulary") as any,
+            options: Array.isArray(qz?.options)
+              ? qz.options.map(String)
+              : ["A", "B", "C", "D"],
+            correctIndex:
+              typeof qz?.correctIndex === "number" ? qz.correctIndex : 0,
+            explanation: String(qz?.explanation || ""),
+          }))
       : [],
     translationExercises: Array.isArray(root?.translationExercises)
       ? root.translationExercises.map((tr: any, idx: number) => ({
@@ -1494,8 +1783,12 @@ ${trimmedText || "(Sử dụng dữ liệu bài học phía trên)"}
 """
 
 YÊU CẦU BẮT BUỘC (Trả về đúng định dạng JSON):
-1. clozeExercises: Tạo 6 câu bài tập điền từ hoặc cấu trúc ngữ pháp vào chỗ trống (dùng ký hiệu "_____" tại vị trí từ cần điền). Có gợi ý (hint), bản dịch câu đầy đủ (fullSentenceTranslation) và giải thích chi tiết (explanation).
-2. quizExercises: Tạo 8 câu hỏi trắc nghiệm (4 lựa chọn A, B, C, D) kiểm tra sâu Từ vựng (vocabulary) và Ngữ pháp (grammar) xuất hiện trong chương. Giải thích rõ vì sao đáp án đúng.
+📌 NGUYÊN TẮC KHAI THÁC BÀI TẬP SÁCH & TỰ THÂN ĐỘC LẬP (SELF-CONTAINED RULE):
+- Hãy quét kỹ phần VĂN BẢN GỐC CỦA CHƯƠNG: nếu trong sách có sẵn các câu bài tập Từ vựng / Collocation / Word Formation / Ngữ pháp dạng câu đơn độc lập (như Complete the sentences, Choose the right word...), hãy ưu tiên TRÍCH XUẤT & CHUẨN HÓA các câu hay nhất (không trùng với câu đã có), đồng thời học phong cách ra đề của sách để sáng tạo thêm các câu mới cùng trình độ!
+- 🚫 TUYỆT ĐỐI LOẠI BỎ CÂU PHỤ THUỘC ĐOẠN TRÍCH / BÀI ĐỌC / BÀI NGHE / HÌNH ẢNH: Vì người học làm bài tập trực tiếp KHÔNG nhìn thấy đoạn văn đọc hiểu hay file nghe, mọi câu hỏi BẮT BUỘC PHẢI ĐỘC LẬP 100%. KHÔNG tạo câu kiểu "According to the passage...", "Theo đoạn văn...", "In paragraph 2...", "Trong đoạn hội thoại nhân vật A...", "Look at the table/diagram/picture...", "Listen to the recording...", "True/False/Not Given".
+
+1. clozeExercises: Tạo 6 câu bài tập điền từ hoặc cấu trúc ngữ pháp vào chỗ trống (dùng ký hiệu "_____" tại vị trí từ cần điền), mỗi câu có đủ ngữ cảnh tự thân để làm độc lập. Có gợi ý (hint), bản dịch câu đầy đủ (fullSentenceTranslation) và giải thích chi tiết (explanation).
+2. quizExercises: Tạo 8 câu hỏi trắc nghiệm (4 lựa chọn A, B, C, D) CHỈ kiểm tra sâu Từ vựng (vocabulary) và Ngữ pháp (grammar) xuất hiện trong chương (tự thân độc lập 100%, không phụ thuộc đoạn đọc). Giải thích rõ vì sao đáp án đúng.
 3. translationExercises: Tạo 5 câu luyện dịch tiêu biểu sát với ngữ pháp và từ vựng của chương để người học dịch sang tiếng Việt và được AI chấm điểm (direction: "EN_TO_VI", có contextHint, targetGrammarOrVocab và referenceTranslation chuẩn xác).`;
 
   const response = await ai.models.generateContent({
@@ -1520,35 +1813,42 @@ YÊU CẦU BẮT BUỘC (Trả về đúng định dạng JSON):
   const clozeExercises: ChapterLesson["clozeExercises"] = Array.isArray(
     rawParsed?.clozeExercises
   )
-    ? rawParsed.clozeExercises.map((cl: any, idx: number) => ({
-        id: `cloze-${stamp}-${idx + 1}`,
-        sentenceWithBlank: String(cl?.sentenceWithBlank || ""),
-        answer: String(cl?.answer || ""),
-        hint: String(cl?.hint || ""),
-        fullSentenceTranslation: String(cl?.fullSentenceTranslation || ""),
-        explanation: String(cl?.explanation || ""),
-      }))
+    ? rawParsed.clozeExercises
+        .filter(
+          (cl: any) =>
+            !isPassageDependentQuestion(String(cl?.sentenceWithBlank || ""))
+        )
+        .map((cl: any, idx: number) => ({
+          id: `cloze-${stamp}-${idx + 1}`,
+          sentenceWithBlank: String(cl?.sentenceWithBlank || ""),
+          answer: String(cl?.answer || ""),
+          hint: String(cl?.hint || ""),
+          fullSentenceTranslation: String(cl?.fullSentenceTranslation || ""),
+          explanation: String(cl?.explanation || ""),
+        }))
     : [];
 
   const quizExercises: ChapterLesson["quizExercises"] = Array.isArray(
     rawParsed?.quizExercises
   )
-    ? rawParsed.quizExercises.map((qz: any, idx: number) => ({
-        id: `quiz-${stamp}-${idx + 1}`,
-        question: String(qz?.question || ""),
-        category: (["comprehension", "vocabulary", "grammar"].includes(
-          String(qz?.category)
+    ? rawParsed.quizExercises
+        .filter(
+          (qz: any) => !isPassageDependentQuestion(String(qz?.question || ""))
         )
-          ? qz.category
-          : "vocabulary") as "vocabulary" | "grammar" | "comprehension",
-        options:
-          Array.isArray(qz?.options) && qz.options.length >= 2
-            ? qz.options.map(String)
-            : ["A", "B", "C", "D"],
-        correctIndex:
-          typeof qz?.correctIndex === "number" ? qz.correctIndex : 0,
-        explanation: String(qz?.explanation || ""),
-      }))
+        .map((qz: any, idx: number) => ({
+          id: `quiz-${stamp}-${idx + 1}`,
+          question: String(qz?.question || ""),
+          category: (["vocabulary", "grammar"].includes(String(qz?.category))
+            ? qz.category
+            : "vocabulary") as "vocabulary" | "grammar" | "comprehension",
+          options:
+            Array.isArray(qz?.options) && qz.options.length >= 2
+              ? qz.options.map(String)
+              : ["A", "B", "C", "D"],
+          correctIndex:
+            typeof qz?.correctIndex === "number" ? qz.correctIndex : 0,
+          explanation: String(qz?.explanation || ""),
+        }))
     : [];
 
   const translationExercises: ChapterLesson["translationExercises"] =
@@ -1923,8 +2223,10 @@ export async function generateCustomExamWithAI(params: {
 Dựa trên dữ liệu văn bản đã quét (scanned data), từ vựng và ngữ pháp của "${params.scopeTitle}" trong khóa học "${params.courseTitle}", hãy sinh ra một ĐỀ THI KIỂM TRA CHƯƠNG MỚI TINH để người học làm bài kiểm tra.
 
 QUY TẮC BẮT BUỘC:
-1. quizQuestions (10 câu trắc nghiệm): CHỈ KIỂM TRA TỪ VỰNG (nghĩa, phiên âm, cách dùng từ, từ loại) VÀ NGỮ PHÁP (cấu trúc câu, sắp xếp từ, điền từ đúng ngữ pháp). TUYỆT ĐỐI KHÔNG hỏi tình tiết cốt truyện hay hội thoại (như nhân vật là ai, làm gì trong bài khóa).
-2. clozeQuestions (6 câu điền từ): Tạo các câu ứng dụng mới (dùng _____ cho chỗ trống) yêu cầu điền đúng từ vựng hoặc điểm ngữ pháp của chương.
+- KHAI THÁC & HỌC HỎI TỪ BÀI TẬP THẬT TRONG SÁCH: Ưu tiên trích xuất và biến tấu từ các bài tập Từ vựng / Collocation / Ngữ pháp độc lập có sẵn trong văn bản sách để giữ đúng văn phong và trình độ giáo trình.
+- 🚫 CẤM TUYỆT ĐỐI CÂU HỎI PHỤ THUỘC ĐOẠN TRÍCH / BÀI ĐỌC / BÀI NGHE / HÌNH ẢNH: Mọi câu hỏi PHẢI ĐỘC LẬP 100% (self-contained), tuyệt đối KHÔNG hỏi "Theo đoạn văn...", "According to the passage...", "Trong đoạn hội thoại...", "Look at the diagram/picture/table...", "Listen to the audio..." vì người thi không có đoạn văn gốc trên màn hình!
+1. quizQuestions (10 câu trắc nghiệm): CHỈ KIỂM TRA TỪ VỰNG (nghĩa, phiên âm, collocation, cách dùng từ, từ loại) VÀ NGỮ PHÁP (cấu trúc câu, sắp xếp từ, điền từ đúng ngữ pháp).
+2. clozeQuestions (6 câu điền từ): Tạo các câu ứng dụng độc lập (dùng _____ cho chỗ trống) yêu cầu điền đúng từ vựng hoặc điểm ngữ pháp của chương.
 3. translationChallenges (4 câu dịch thuật): Các câu hoàn chỉnh vận dụng từ vựng và ngữ pháp của chương để người học dịch và được AI chấm điểm độ gần đúng.
 
 DỮ LIỆU ĐÃ QUÉT & TỪ VỰNG:
@@ -1947,7 +2249,18 @@ ${params.scannedContentAndVocab.slice(0, 30000)}
     throw new Error("Không thể tạo đề thi mới.");
   }
 
-  return JSON.parse(response.text);
+  const parsedExam = JSON.parse(response.text);
+  if (Array.isArray(parsedExam?.quizQuestions)) {
+    parsedExam.quizQuestions = parsedExam.quizQuestions.filter(
+      (q: any) => !isPassageDependentQuestion(String(q?.question || ""))
+    );
+  }
+  if (Array.isArray(parsedExam?.clozeQuestions)) {
+    parsedExam.clozeQuestions = parsedExam.clozeQuestions.filter(
+      (c: any) => !isPassageDependentQuestion(String(c?.sentenceWithBlank || ""))
+    );
+  }
+  return parsedExam;
 }
 
 const FULL_VOCAB_SCHEMA: Schema = {
@@ -1964,6 +2277,7 @@ export async function extractAllChapterVocabWithAI(params: {
   chapterText: string;
   pageImagesBase64?: string[];
   existingWords?: string[];
+  existingCourseWords?: string[];
   apiKey?: string;
   masterApiKey?: string;
   model?: string;
@@ -1971,8 +2285,15 @@ export async function extractAllChapterVocabWithAI(params: {
   const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
+  // Các từ đã học ở các chương trước: tuyệt đối loại trừ khỏi kết quả quét của chương này
+  const excludedCourseKeys = new Set<string>(
+    (params.existingCourseWords || [])
+      .map((w) => normalizeDedupeVocabKey(w))
+      .filter(Boolean)
+  );
+
   const normalizeVocabItems = (rawItems: unknown[]) => {
-    const seen = new Set<string>();
+    const seen = new Set<string>(excludedCourseKeys);
     const result: Array<{
       id: string;
       word: string;
@@ -1989,7 +2310,7 @@ export async function extractAllChapterVocabWithAI(params: {
 
     for (const v of rawItems) {
       const item = (v || {}) as Record<string, any>;
-      const word = String(item.word || "").trim();
+      const word = toBaseVocabWord(String(item.word || ""));
       const dedupeKey = normalizeDedupeVocabKey(word);
       if (!dedupeKey || seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
@@ -2032,9 +2353,11 @@ export async function extractAllChapterVocabWithAI(params: {
 
     const prompt = `Bạn là Chuyên gia Từ điển & Ngôn ngữ học kiêm Giảng viên cao cấp.
 Nhiệm vụ của bạn là quét toàn bộ văn bản và HÌNH ẢNH TRANG SÁCH (${partLabel}) của bài học "${params.chapterTitle}" thuộc sách "${params.courseTitle}".
-BẮT BUỘC TRÍCH XUẤT ĐẦY ĐỦ 100% TẤT CẢ CÁC MỤC TỪ VỰNG XUẤT HIỆN TRONG PHẦN NÀY (MỖI CHƯƠNG THƯỜNG CÓ TỪ 35 ĐẾN 50+ MỤC TỪ).
-🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
-- TUYỆT ĐỐI KHÔNG tạo từ vựng bị lặp lại trong danh sách trả về (không lặp lại cùng 1 từ, không lặp lại biến thể số ít/số nhiều hoặc kèm phiên âm trong ngoặc của cùng 1 từ). Mỗi mục từ (word) phải là DUY NHẤT 100%!
+BẮT BUỘC TRÍCH XUẤT ĐẦY ĐỦ CÁC MỤC TỪ VỰNG TRỌNG TÂM XUẤT HIỆN TRONG PHẦN NÀY.
+🚫 CẢNH BÁO CHỐNG TRÙNG LẶP & CHUẨN HÓA TỪ GỐC (ANTI-DUPLICATION & BASE FORM RULE):
+1. TUYỆT ĐỐI KHÔNG tạo từ vựng bị lặp lại trong danh sách trả về và KHÔNG trùng với các từ đã học ở bài trước! Mỗi mục từ (word) phải là DUY NHẤT 100%!
+2. ĐƯA VỀ TỪ GỐC NGUYÊN MẪU (BASE FORM / LEMMA): Nếu từ trong sách đang ở dạng số nhiều thêm "-s / -es / -ies" (ví dụ: parents, families, relationships, communities) hoặc động từ chia "-s / -es / -ies / -ed / -ing" (ví dụ: identifies, resembles, interacts, developed), BẮT BUỘC phải chuyển trường "word" về dạng TỪ GỐC NGUYÊN MẪU (parent, family, relationship, community, identify, resemble, interact, develop).
+3. CHỈ LẤY TỪ VỰNG TRỌNG TÂM: Ưu tiên từ vựng trọng tâm, học thuật, từ khóa theo chủ đề bài học và cụm từ cố định (collocations/phrasal verbs); không lấy đại từ, giới từ đơn hay các từ A1 quá sơ cấp.
 ${excludeClause}
 ĐẶC BIỆT LƯU Ý VỀ CẤU TRÚC GIÁO TRÌNH TIẾNG NGOẠI NGỮ (TIẾNG TRUNG ĐƯƠNG ĐẠI / HSK / TIẾNG ANH / NHẬT / HÀN):
 Mỗi bài học thường có nhiều phần đối thoại (Dialogue I, Dialogue II, Bài đọc...) và mỗi phần đều có các bảng từ vựng độc lập được đánh số thứ tự (1, 2, 3...):
@@ -2139,9 +2462,18 @@ ${textSlice}
     }
   }
 
-  const initialSeedWords = Array.isArray(params.existingWords)
-    ? params.existingWords.map((w) => String(w || "").trim()).filter(Boolean)
-    : [];
+  const initialSeedWords = Array.from(
+    new Set(
+      [
+        ...(Array.isArray(params.existingWords) ? params.existingWords : []),
+        ...(Array.isArray(params.existingCourseWords)
+          ? params.existingCourseWords
+          : []),
+      ]
+        .map((w) => toBaseVocabWord(String(w || "")))
+        .filter(Boolean)
+    )
+  );
 
   const chunkPromises = textChunks.map((chunkStr, idx) => {
     const imgPerChunk = Math.ceil(images.length / textChunks.length);
@@ -2516,8 +2848,10 @@ YÊU CẦU BẮT BUỘC CHO MỖI TỪ VỰNG:
 10. synonyms: 2-4 từ đồng nghĩa sát nghĩa nhất trong ngôn ngữ ${lang}.
 11. antonyms: 1-3 từ trái nghĩa rõ ràng nhất trong ngôn ngữ ${lang}.
 
-🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
+🚫 CẢNH BÁO CHỐNG TRÙNG LẶP & CHUẨN HÓA TỪ GỐC (ANTI-DUPLICATION & BASE FORM RULE):
 - Mỗi mục từ (word) trong danh sách trả về phải là DUY NHẤT 100%, TUYỆT ĐỐI KHÔNG tạo bất kỳ từ vựng nào bị lặp lại 2 lần hoặc trùng biến thể!
+- ĐƯA VỀ TỪ GỐC NGUYÊN MẪU (BASE FORM / LEMMA): Nếu từ trong dữ liệu nguồn đang ở dạng số nhiều thêm "-s / -es / -ies" (ví dụ: parents, families, relationships) hoặc động từ chia "-s / -es / -ies / -ed / -ing" (ví dụ: identifies, resembles, interacts), BẮT BUỘC phải chuyển trường "word" về dạng TỪ GỐC NGUYÊN MẪU (parent, family, relationship, identify, resemble, interact).
+- CHỈ LẤY TỪ VỰNG TRỌNG TÂM: Chỉ biên soạn các từ vựng trọng tâm, học thuật và đắt giá nhất của chủ đề!
 ${existingSummary}
 DỮ LIỆU NGUỒN / NỘI DUNG FILE CHỦ ĐỀ:
 """
@@ -2544,7 +2878,7 @@ ${(params.rawInputText || params.topicTitle).slice(0, 22000)}
   const seenTopicWords = new Set<string>();
   const normalized: VocabularyItem[] = [];
   for (const item of rawList) {
-    const word = String(item?.word || "").trim();
+    const word = toBaseVocabWord(String(item?.word || ""));
     const dedupeKey = normalizeDedupeVocabKey(word);
     if (!dedupeKey || seenTopicWords.has(dedupeKey)) continue;
     seenTopicWords.add(dedupeKey);
