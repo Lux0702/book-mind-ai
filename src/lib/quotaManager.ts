@@ -126,6 +126,13 @@ export const AI_TASK_CREDITS: Record<string, AiTaskCreditConfig> = {
     costTier: "Cao",
     description: "Phân tích sóng âm giọng nói thực tế (Multimodal Audio) + STT",
   },
+  "/api/agent/topic-vocab": {
+    endpoint: "/api/agent/topic-vocab",
+    taskLabel: "AI Phân tích & Tạo Bộ Từ Vựng Chủ Đề + Câu Hỏi Ôn Tập",
+    credits: 3,
+    costTier: "Trung bình",
+    description: "Đọc file chủ đề, biên soạn từ vựng, IPA, đồng nghĩa, trái nghĩa và bộ bài tập ôn luyện đa kỹ năng",
+  },
 };
 
 export function getEndpointCreditInfo(endpoint: string): AiTaskCreditConfig {

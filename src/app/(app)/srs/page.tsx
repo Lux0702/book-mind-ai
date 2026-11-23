@@ -48,23 +48,30 @@ function SrsPageContent() {
   );
 
   return (
-    <div className="mx-auto w-full max-w-5xl flex-1 px-4 py-8 sm:px-6 space-y-6">
-      <div className="flex flex-wrap items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-extrabold text-[#F5EFE6]">
-            Trung Tâm Kiểm Tra &amp; Ôn Tập Theo Khóa Học / Chương
-          </h1>
-          <p className="mt-1 text-sm text-[#B8B2A6]">
-            Chọn đúng Khóa học và Chương bạn muốn làm bài thi kiểm tra (có tính giờ từng câu) hoặc ôn Flashcard SRS.
-          </p>
+    <div className="mx-auto w-full max-w-6xl flex-1 px-4 py-6 sm:px-6 space-y-5">
+      {/* Unified 2-Mode Switcher at the very top: 1. Theo Sách/Chương vs 2. Theo Chủ đề Từ vựng */}
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-3.5 shadow-[4px_4px_0_0_#F5EFE6]">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1">
+          <button
+            type="button"
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-4 py-2.5 text-xs sm:text-sm font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] cursor-pointer"
+          >
+            <BookOpen className="h-4 w-4 shrink-0" />
+            <span>1. Ôn &amp; Thi Theo Sách / Giáo Trình</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("bookmind:route-start"));
+              router.push(ROUTES.topicVocab);
+            }}
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-4 py-2.5 text-xs sm:text-sm font-extrabold text-[#F5EFE6] hover:border-[#F5EFE6] transition-colors cursor-pointer"
+          >
+            <Sparkles className="h-4 w-4 text-[#F3C969] shrink-0" />
+            <span>2. Học &amp; Thi Từ Vựng Chủ Đề (Đa Ngôn Ngữ • 5.000+ Từ)</span>
+          </button>
         </div>
-        <button
-          type="button"
-          onClick={() => router.push(ROUTES.books)}
-          className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] px-4 py-2 text-xs font-bold text-[#F5EFE6] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#262520] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
-        >
-          Quay về Tủ sách
-        </button>
       </div>
 
       {/* Filter by Course -> Chapter */}

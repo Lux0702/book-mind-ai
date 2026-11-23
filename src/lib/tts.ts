@@ -98,6 +98,29 @@ export function extractCleanSpeechTranscript(results: any): string {
 let activeAudioElement: HTMLAudioElement | null = null;
 let currentPlayingText: string = "";
 let currentPlaySessionId = 0;
+let preferredEnglishVoiceAccent: "en-US" | "en-GB" = "en-US";
+let preferredChineseVoiceAccent: "zh-CN" | "zh-TW" = "zh-CN";
+let preferredPlaybackRate: number = 1.0;
+
+export function setTtsVoiceConfig(config: {
+  accent?: "en-US" | "en-GB";
+  chineseAccent?: "zh-CN" | "zh-TW";
+  rate?: number;
+}) {
+  if (config.accent) preferredEnglishVoiceAccent = config.accent;
+  if (config.chineseAccent) preferredChineseVoiceAccent = config.chineseAccent;
+  if (typeof config.rate === "number" && config.rate >= 0.6 && config.rate <= 1.5) {
+    preferredPlaybackRate = config.rate;
+  }
+}
+
+export function getTtsVoiceConfig() {
+  return {
+    accent: preferredEnglishVoiceAccent,
+    chineseAccent: preferredChineseVoiceAccent,
+    rate: preferredPlaybackRate,
+  };
+}
 
 function emitTtsStatus(isPlaying: boolean, text: string = "") {
   currentPlayingText = isPlaying ? text : "";
@@ -251,7 +274,14 @@ export function speakSmart(
   stopAllSpeech();
 
   const sessionId = currentPlaySessionId;
-  const langCode = preferredLang || detectTextLang(cleaned);
+  const detectedLang = detectTextLang(cleaned);
+  const langCode =
+    preferredLang ||
+    (detectedLang === "en-US"
+      ? preferredEnglishVoiceAccent
+      : detectedLang === "zh-CN"
+      ? preferredChineseVoiceAccent
+      : detectedLang);
 
   try {
     const audioUrl = `/api/tts?text=${encodeURIComponent(
@@ -261,6 +291,7 @@ export function speakSmart(
     const audio = new Audio(audioUrl);
     (audio as any).playsInline = true;
     audio.preload = "auto";
+    audio.playbackRate = preferredPlaybackRate;
     activeAudioElement = audio;
 
     emitTtsStatus(true, cleaned);

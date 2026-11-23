@@ -161,10 +161,24 @@ export default function BooksPage() {
             </strong>
           </p>
         </div>
-        <div className="flex items-center gap-2.5">
+        <div className="flex flex-wrap items-center gap-2.5">
           <button
             type="button"
-            onClick={() => router.push(ROUTES.library)}
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("bookmind:route-start"));
+              router.push(ROUTES.topicVocab);
+            }}
+            className="flex min-h-[40px] items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
+          >
+            <Sparkles className="h-3.5 w-3.5 shrink-0" />
+            <span>Từ vựng Chủ đề (5.000+ từ &amp; AI)</span>
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("bookmind:route-start"));
+              router.push(ROUTES.library);
+            }}
             className="flex min-h-[40px] items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
           >
             <Library className="h-3.5 w-3.5 shrink-0" />
@@ -214,7 +228,10 @@ export default function BooksPage() {
             return (
               <div
                 key={course.id}
-                onClick={() => router.push(ROUTES.book(course.id))}
+                onClick={() => {
+                  window.dispatchEvent(new CustomEvent("bookmind:route-start"));
+                  router.push(ROUTES.book(course.id));
+                }}
                 className="group flex cursor-pointer flex-col overflow-hidden rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] shadow-[4px_4px_0_0_#F5EFE6] transition-transform hover:-translate-y-0.5 active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6]"
               >
                 {/* Flat Book Spine Accent + Header */}

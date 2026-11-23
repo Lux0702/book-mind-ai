@@ -455,6 +455,32 @@ export default function FlashcardArena({
                   ))}
                 </div>
               )}
+
+              {((currentCard.synonyms && currentCard.synonyms.length > 0) ||
+                (currentCard.antonyms && currentCard.antonyms.length > 0)) && (
+                <div className="flex flex-wrap gap-2 pt-1">
+                  {currentCard.synonyms &&
+                    currentCard.synonyms.map((syn, idx) => (
+                      <span
+                        key={`syn-${idx}`}
+                        className="rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2.5 py-1 text-[11px] font-bold text-[#A7D7A9]"
+                        title="Từ đồng nghĩa (Synonym)"
+                      >
+                        ≈ Đồng nghĩa: {syn}
+                      </span>
+                    ))}
+                  {currentCard.antonyms &&
+                    currentCard.antonyms.map((ant, idx) => (
+                      <span
+                        key={`ant-${idx}`}
+                        className="rounded-lg border-2 border-[#3A3832] bg-[#141413] px-2.5 py-1 text-[11px] font-bold text-[#FF8A8A]"
+                        title="Từ trái nghĩa (Antonym)"
+                      >
+                        ≠ Trái nghĩa: {ant}
+                      </span>
+                    ))}
+                </div>
+              )}
             </div>
           </div>
         )}

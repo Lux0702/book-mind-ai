@@ -78,6 +78,7 @@ import GrammarTab from "./workspace/GrammarTab";
 import VocabularyTab from "./workspace/VocabularyTab";
 import PracticeTab from "./workspace/PracticeTab";
 import TranslationTab from "./workspace/TranslationTab";
+import { useAppData } from "./app/AppDataProvider";
 
 interface ChapterWorkspaceProps {
   course: Course;
@@ -117,6 +118,8 @@ export default function ChapterWorkspace({
   onCourseUpdated,
   onOpenSettings,
 }: ChapterWorkspaceProps) {
+  const { quotaAccount } = useAppData();
+  const isAdminUser = quotaAccount?.role === "admin";
   const [selectedChapterId, setSelectedChapterId] = useState<string>(() => {
     if (
       initialChapterId &&
@@ -661,7 +664,27 @@ export default function ChapterWorkspace({
       }
 
       setOcrStatusMsg(
-        "AI đang phân tích nội dung chương & trích xuất toàn bộ từ vựng..."
+        "AI đang phân tích nội dung chương & trích xuất toàn bộ từ vựng (chống trùng lặp)..."
+      );
+
+      const normalizeWordKey = (rawWord: unknown) =>
+        String(rawWord || "")
+          .trim()
+          .toLowerCase()
+          .replace(/\s*\([^)]*\)\s*/g, " ")
+          .replace(/[.,!?;:'"“”‘’`~@#$%^&*_+=<>[\]{}|\\/]+/g, " ")
+          .replace(/\s+/g, " ")
+          .trim();
+
+      const existingCourseWords = Array.from(
+        new Set(
+          course.chapters
+            .filter((ch) => ch.id !== chapter.id && ch.lesson?.vocabulary)
+            .flatMap((ch) =>
+              (ch.lesson?.vocabulary || []).map((v) => String(v.word || "").trim())
+            )
+            .filter(Boolean)
+        )
       );
 
       // Step 2: Send pure enriched text (no heavy 20-image payload!) so Gemini/Qwen never dies or times out
@@ -669,6 +692,7 @@ export default function ChapterWorkspace({
         courseTitle: course.title,
         chapterTitle: chapter.title,
         chapterText: textToUse,
+        existingCourseWords,
         apiKey: settings.geminiApiKey,
         model: selectedAiModel || settings.geminiModel,
       });
@@ -676,6 +700,16 @@ export default function ChapterWorkspace({
       const data = await res.json();
       if (!res.ok || data.error) {
         throw new Error(data.error || "Không thể tạo bài học với AI.");
+      }
+
+      if (data.lesson && Array.isArray(data.lesson.vocabulary)) {
+        const seenLessonKeys = new Set<string>();
+        data.lesson.vocabulary = data.lesson.vocabulary.filter((item: any) => {
+          const k = normalizeWordKey(item?.word);
+          if (!k || seenLessonKeys.has(k)) return false;
+          seenLessonKeys.add(k);
+          return true;
+        });
       }
 
       const updatedChapters = course.chapters.map((ch) =>
@@ -747,11 +781,19 @@ export default function ChapterWorkspace({
         );
       }
 
+      const existingVocab = Array.isArray(chapter.lesson.vocabulary)
+        ? chapter.lesson.vocabulary
+        : [];
+      const existingWords = existingVocab
+        .map((v) => String(v?.word || "").trim())
+        .filter(Boolean);
+
       const res = await fetchAiAgent("/api/agent/extract-vocab", {
         courseTitle: course.title,
         chapterTitle: chapter.title,
         chapterText: textToUse,
         pageImagesBase64,
+        existingWords,
         apiKey: settings.geminiApiKey,
         model: selectedAiModel || settings.geminiModel,
       });
@@ -761,16 +803,17 @@ export default function ChapterWorkspace({
       }
 
       if (Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
-        const existingVocab = Array.isArray(chapter.lesson.vocabulary)
-          ? chapter.lesson.vocabulary
-          : [];
         const seenWords = new Set<string>();
         const mergedVocab: typeof existingVocab = [];
 
-        for (const item of [...data.vocabulary, ...existingVocab]) {
+        for (const item of [...existingVocab, ...data.vocabulary]) {
           const wKey = String(item?.word || "")
             .trim()
-            .toLowerCase();
+            .toLowerCase()
+            .replace(/\s*\([^)]*\)\s*/g, " ")
+            .replace(/[.,!?;:'"“”‘’`~@#$%^&*_+=<>[\]{}|\\/]+/g, " ")
+            .replace(/\s+/g, " ")
+            .trim();
           if (!wKey || seenWords.has(wKey)) continue;
           seenWords.add(wKey);
           mergedVocab.push({
@@ -842,22 +885,30 @@ export default function ChapterWorkspace({
         setOcrStatusMsg(
           `Đang quét đủ 100% từ vựng cho chương ${i + 1}/${targetChapters.length}: "${ch.title}"...`
         );
+        const existingVocab = ch.lesson?.vocabulary || [];
+        const existingWords = existingVocab
+          .map((v) => String(v?.word || "").trim())
+          .filter(Boolean);
         const res = await fetchAiAgent("/api/agent/extract-vocab", {
           courseTitle: course.title,
           chapterTitle: ch.title,
           chapterText: ch.rawText,
+          existingWords,
           apiKey: settings.geminiApiKey,
           model: selectedAiModel || settings.geminiModel,
         });
         const data = await res.json();
         if (res.ok && Array.isArray(data.vocabulary) && data.vocabulary.length > 0) {
-          const existingVocab = ch.lesson?.vocabulary || [];
           const seenWords = new Set<string>();
           const mergedVocab: typeof existingVocab = [];
-          for (const item of [...data.vocabulary, ...existingVocab]) {
+          for (const item of [...existingVocab, ...data.vocabulary]) {
             const wKey = String(item?.word || "")
               .trim()
-              .toLowerCase();
+              .toLowerCase()
+              .replace(/\s*\([^)]*\)\s*/g, " ")
+              .replace(/[.,!?;:'"“”‘’`~@#$%^&*_+=<>[\]{}|\\/]+/g, " ")
+              .replace(/\s+/g, " ")
+              .trim();
             if (!wKey || seenWords.has(wKey)) continue;
             seenWords.add(wKey);
             mergedVocab.push({
@@ -1064,10 +1115,16 @@ export default function ChapterWorkspace({
     }
   };
 
-  const handleSubmitQuiz = async (quizId: string, correctIndex: number) => {
-    setQuizSubmitted({ ...quizSubmitted, [quizId]: true });
+  const handleSubmitQuiz = async (
+    quizId: string,
+    correctIndex: number,
+    chosenIndex?: number
+  ) => {
+    setQuizSubmitted((prev) => ({ ...prev, [quizId]: true }));
+    const actualSelected =
+      chosenIndex !== undefined ? chosenIndex : quizSelected[quizId];
     if (
-      quizSelected[quizId] === correctIndex &&
+      actualSelected === correctIndex &&
       currentChapter &&
       !currentChapter.completedQuizIds.includes(quizId)
     ) {
@@ -1317,21 +1374,23 @@ export default function ChapterWorkspace({
           <ChevronDown className="h-4 w-4 shrink-0 text-[#141413]" />
         </button>
 
-        <button
-          type="button"
-          onClick={() => {
-            setShowRawText(!showRawText);
-            setEditableRawText(currentChapter.rawText);
-          }}
-          className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] ${
-            showRawText
-              ? "bg-[#B8D8F8] text-[#141413]"
-              : "bg-[#141413] text-[#F5EFE6]"
-          }`}
-          title={showRawText ? "Ẩn văn bản gốc" : "Xem văn bản gốc"}
-        >
-          <FileText className="h-4 w-4" />
-        </button>
+        {isAdminUser && (
+          <button
+            type="button"
+            onClick={() => {
+              setShowRawText(!showRawText);
+              setEditableRawText(currentChapter.rawText);
+            }}
+            className={`flex h-10 w-10 shrink-0 items-center justify-center rounded-xl border-2 border-[#F5EFE6] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] ${
+              showRawText
+                ? "bg-[#B8D8F8] text-[#141413]"
+                : "bg-[#141413] text-[#F5EFE6]"
+            }`}
+            title={showRawText ? "Ẩn văn bản gốc" : "Xem văn bản gốc"}
+          >
+            <FileText className="h-4 w-4" />
+          </button>
+        )}
       </div>
 
       {/* MOBILE BOTTOM SHEET MODAL: Chọn Chương */}
@@ -1496,74 +1555,76 @@ export default function ChapterWorkspace({
                 </div>
               </div>
 
-          <div className="flex flex-row flex-wrap sm:flex-nowrap items-center gap-2.5 w-full lg:w-auto">
-            <select
-              value={selectedAiModel}
-              onChange={(e) => {
-                const val = e.target.value;
-                setSelectedAiModel(val);
-                const cur = getAppSettings();
-                saveAppSettings({ ...cur, geminiModel: val });
-              }}
-              title="Chọn nguồn AI tạo bài học (Tự động xoay vòng dự phòng nếu hết hạn mức)"
-              className="min-h-[40px] flex-1 sm:flex-initial min-w-0 rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-2.5 sm:px-3 py-2 text-xs font-bold text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
-            >
-              <option value="qwen-groq">
-                Qwen 3 / Llama 3.3 (Groq Siêu Tốc)
-              </option>
-              <option value="qwen-openrouter">
-                Qwen 2.5 / Nemotron VL (OpenRouter)
-              </option>
-              <option value="qwen-siliconflow">
-                Qwen 2.5 (SiliconFlow Cloud)
-              </option>
-              <option value="gemini-2.5-flash">
-                Google Gemini 2.5 Flash (+ Auto Failover)
-              </option>
-              <option value="gemini-2.0-flash">
-                Google Gemini 2.0 Flash
-              </option>
-            </select>
-            <button
-              type="button"
-              onClick={() => {
-                setShowRawText(!showRawText);
-                setEditableRawText(currentChapter.rawText);
-              }}
-              className={`hidden lg:inline-flex min-h-[40px] items-center justify-center rounded-xl border-2 border-[#F5EFE6] px-3.5 py-2 text-xs font-bold shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] text-center shrink-0 cursor-pointer ${
-                showRawText
-                  ? "bg-[#B8D8F8] text-[#141413]"
-                  : "bg-[#141413] text-[#F5EFE6] hover:bg-[#2A2823]"
-              }`}
-            >
-              {showRawText ? "Ẩn văn bản gốc" : "Văn bản gốc"}
-            </button>
-            {!lesson ? (
-              <button
-                type="button"
-                disabled={isGeneratingLesson}
-                onClick={() => handleGenerateChapterLesson(currentChapter)}
-                className="flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 sm:px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
-              >
-                {isGeneratingLesson ? (
-                  <>
-                    <Loader2 className="h-4 w-4 animate-spin shrink-0" />
-                    <span>AI đang phân tích...</span>
-                  </>
-                ) : (
-                  <>
-                    <Sparkles className="h-4 w-4 shrink-0" />
-                    <span>AI Soạn Bài</span>
-                  </>
-                )}
-              </button>
-            ) : (
-              <div className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3 py-2 text-xs font-extrabold text-[#141413]">
-                <CheckCircle2 className="h-4 w-4 shrink-0 text-[#141413]" />
-                <span>Đã soạn</span>
-              </div>
-            )}
-          </div>
+              {isAdminUser && (
+                <div className="flex flex-row flex-wrap sm:flex-nowrap items-center gap-2.5 w-full lg:w-auto">
+                  <select
+                    value={selectedAiModel}
+                    onChange={(e) => {
+                      const val = e.target.value;
+                      setSelectedAiModel(val);
+                      const cur = getAppSettings();
+                      saveAppSettings({ ...cur, geminiModel: val });
+                    }}
+                    title="Chọn nguồn AI tạo bài học (Tự động xoay vòng dự phòng nếu hết hạn mức)"
+                    className="min-h-[40px] flex-1 sm:flex-initial min-w-0 rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-2.5 sm:px-3 py-2 text-xs font-bold text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
+                  >
+                    <option value="qwen-groq">
+                      Qwen 3 / Llama 3.3 (Groq Siêu Tốc)
+                    </option>
+                    <option value="qwen-openrouter">
+                      Qwen 2.5 / Nemotron VL (OpenRouter)
+                    </option>
+                    <option value="qwen-siliconflow">
+                      Qwen 2.5 (SiliconFlow Cloud)
+                    </option>
+                    <option value="gemini-2.5-flash">
+                      Google Gemini 2.5 Flash (+ Auto Failover)
+                    </option>
+                    <option value="gemini-2.0-flash">
+                      Google Gemini 2.0 Flash
+                    </option>
+                  </select>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setShowRawText(!showRawText);
+                      setEditableRawText(currentChapter.rawText);
+                    }}
+                    className={`hidden lg:inline-flex min-h-[40px] items-center justify-center rounded-xl border-2 border-[#F5EFE6] px-3.5 py-2 text-xs font-bold shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] text-center shrink-0 cursor-pointer ${
+                      showRawText
+                        ? "bg-[#B8D8F8] text-[#141413]"
+                        : "bg-[#141413] text-[#F5EFE6] hover:bg-[#2A2823]"
+                    }`}
+                  >
+                    {showRawText ? "Ẩn văn bản gốc" : "Văn bản gốc"}
+                  </button>
+                  {!lesson ? (
+                    <button
+                      type="button"
+                      disabled={isGeneratingLesson}
+                      onClick={() => handleGenerateChapterLesson(currentChapter)}
+                      className="flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 sm:px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
+                    >
+                      {isGeneratingLesson ? (
+                        <>
+                          <Loader2 className="h-4 w-4 animate-spin shrink-0" />
+                          <span>AI đang phân tích...</span>
+                        </>
+                      ) : (
+                        <>
+                          <Sparkles className="h-4 w-4 shrink-0" />
+                          <span>AI Soạn Bài</span>
+                        </>
+                      )}
+                    </button>
+                  ) : (
+                    <div className="inline-flex min-h-[40px] shrink-0 items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3 py-2 text-xs font-extrabold text-[#141413]">
+                      <CheckCircle2 className="h-4 w-4 shrink-0 text-[#141413]" />
+                      <span>Đã soạn</span>
+                    </div>
+                  )}
+                </div>
+              )}
         </div>
           );
         })()}

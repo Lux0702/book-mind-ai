@@ -22,6 +22,7 @@ export const ROUTES = {
   books: "/books",
   library: "/library",
   srs: "/srs",
+  topicVocab: "/topic-vocab",
   book: (courseId: string) => `/books/${encodeURIComponent(courseId)}`,
   chapter: (courseId: string, chapterId: string, tab?: string | null) =>
     `/books/${encodeURIComponent(courseId)}/${encodeURIComponent(chapterId)}/${

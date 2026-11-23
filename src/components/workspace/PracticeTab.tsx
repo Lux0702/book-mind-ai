@@ -25,7 +25,11 @@ interface PracticeTabProps {
   quizSelected: Record<string, number>;
   quizSubmitted: Record<string, boolean>;
   onSelectQuizOption: (quizId: string, optIdx: number) => void;
-  onSubmitQuiz: (quizId: string, correctIndex: number) => void;
+  onSubmitQuiz: (
+    quizId: string,
+    correctIndex: number,
+    chosenIndex?: number
+  ) => void;
 }
 
 export default function PracticeTab({
@@ -278,12 +282,14 @@ export default function PracticeTab({
                     <button
                       key={optIdx}
                       type="button"
+                      disabled={submitted}
                       onClick={() => {
                         if (!submitted) {
                           onSelectQuizOption(qz.id, optIdx);
+                          onSubmitQuiz(qz.id, qz.correctIndex, optIdx);
                         }
                       }}
-                      className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left text-xs transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${btnStyle}`}
+                      className={`flex w-full items-center gap-3 rounded-xl border-2 p-3 text-left text-xs transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer disabled:cursor-default ${btnStyle}`}
                     >
                       <span className="flex h-6 w-6 shrink-0 items-center justify-center rounded-lg border-2 border-current font-black">
                         {String.fromCharCode(65 + optIdx)}
@@ -294,16 +300,7 @@ export default function PracticeTab({
                 })}
               </div>
 
-              {!submitted ? (
-                <button
-                  type="button"
-                  disabled={selected === undefined}
-                  onClick={() => onSubmitQuiz(qz.id, qz.correctIndex)}
-                  className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-40 cursor-pointer"
-                >
-                  Chốt đáp án
-                </button>
-              ) : (
+              {submitted && (
                 <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-3.5 text-xs leading-relaxed text-[#F5EFE6]">
                   <strong className="text-[#C8B6FF]">
                     Giải thích đáp án:{" "}

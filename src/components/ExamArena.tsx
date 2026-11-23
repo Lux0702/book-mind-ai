@@ -867,111 +867,6 @@ export default function ExamArena({
 
   return (
     <div className="space-y-6">
-      {/* Top Filter: Select Specific Chapter in this Course & Mode */}
-      <div className="flex flex-col gap-4 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 shadow-[4px_4px_0_0_#F5EFE6]">
-        <div className="flex flex-wrap items-center justify-between gap-3 border-b-2 border-[#3A3832] pb-3">
-          <div className="flex items-center gap-2 text-xs font-extrabold text-[#F3C969]">
-            <BookOpen className="h-4 w-4 text-[#F3C969]" />
-            <span>Đang ôn tập & kiểm tra theo Chương:</span>
-          </div>
-          <div className="w-full sm:w-96">
-            <CustomSelect
-              value={selectedChapterId}
-              onChange={(newVal) => {
-                setSelectedChapterId(newVal);
-                setExamStarted(false);
-                setExamFinished(false);
-                setAiGeneratedExam(null);
-                setQuizIdx(0);
-                setMatchedIds([]);
-              }}
-              size="sm"
-              accentColor="indigo"
-              icon={<Layers className="h-3.5 w-3.5" />}
-              options={course.chapters.map((ch) => ({
-                value: ch.id,
-                label: `Chương ${ch.index}: ${ch.title}`,
-                badge: ch.isGenerated ? "Đã soạn" : "Chưa soạn",
-              }))}
-            />
-          </div>
-        </div>
-
-        {/* 5 Practice & Exam Sub-Tabs */}
-        <div className="flex overflow-x-auto no-scrollbar gap-2 pb-1 sm:flex-wrap sm:pb-0">
-          <button
-            type="button"
-            onClick={() => setMode("timed_chapter_exam")}
-            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
-              mode === "timed_chapter_exam"
-                ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
-                : "border-[#3A3832] bg-[#141413] text-[#F3C969] hover:border-[#F5EFE6]"
-            }`}
-          >
-            <Timer className="h-4 w-4 shrink-0" />
-            1. Đề Thi Kiểm Tra Chương (Tính giờ)
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("vocab_quiz")}
-            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
-              mode === "vocab_quiz"
-                ? "border-[#F5EFE6] bg-[#C8B6FF] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
-                : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
-            }`}
-          >
-            <Trophy className="h-4 w-4 shrink-0" />
-            2. Phản Xạ Trắc Nghiệm Từ Vựng ({activeCards.length} từ)
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("matching");
-              setMatchedIds([]);
-              setSelectedLeft(null);
-            }}
-            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
-              mode === "matching"
-                ? "border-[#F5EFE6] bg-[#B8D8F8] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
-                : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
-            }`}
-          >
-            <Gamepad2 className="h-4 w-4 shrink-0" />
-            3. Ghép Thẻ Từ – Nghĩa
-          </button>
-          <button
-            type="button"
-            onClick={() => setMode("typing")}
-            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
-              mode === "typing"
-                ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
-                : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
-            }`}
-          >
-            <Keyboard className="h-4 w-4 shrink-0" />
-            4. Nghe / Nhìn Nghĩa Gõ Từ
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              setMode("pronunciation_arena");
-              stopAllSpeech();
-              setSpeakingIdx(0);
-              setSpeechEvaluation(null);
-              setSpeakingTranscript("");
-            }}
-            className={`flex shrink-0 whitespace-nowrap items-center gap-2 rounded-xl border-2 px-3.5 sm:px-4 py-2 text-xs font-extrabold transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
-              mode === "pronunciation_arena"
-                ? "border-[#F5EFE6] bg-[#A7D7A9] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]"
-                : "border-[#3A3832] bg-[#141413] text-[#A7D7A9] hover:border-[#F5EFE6]"
-            }`}
-          >
-            <Mic className="h-4 w-4 shrink-0" />
-            5. Luyện Đọc &amp; Chấm Âm AI ({speakingItems.length})
-          </button>
-        </div>
-      </div>
-
       {/* ===================================================================== */}
       {/* MODE 1: TIMED CHAPTER EXAM (Tự động tạo bài thi kiểm tra chương)      */}
       {/* ===================================================================== */}
@@ -1273,7 +1168,22 @@ export default function ExamArena({
                         key={oIdx}
                         type="button"
                         disabled={isQuestionLocked}
-                        onClick={() => setUserQuizChoice(oIdx)}
+                        onClick={() => {
+                          if (isQuestionLocked) return;
+                          setUserQuizChoice(oIdx);
+                          const isCorrect = oIdx === currentExamQ.correctIndex;
+                          setIsQuestionLocked(true);
+                          setExamResults((prev) => [
+                            ...prev,
+                            {
+                              question: currentExamQ,
+                              isCorrect,
+                              timedOut: false,
+                              userAnswerText:
+                                currentExamQ.options?.[oIdx] || "Đã chọn đáp án",
+                            },
+                          ]);
+                        }}
                         className={`rounded-xl border-2 p-4 text-left text-sm transition-colors cursor-pointer ${cls}`}
                       >
                         <span className="mr-2 font-black">
@@ -1293,7 +1203,13 @@ export default function ExamArena({
                     disabled={isQuestionLocked}
                     value={userClozeInput}
                     onChange={(e) => setUserClozeInput(e.target.value)}
-                    placeholder="Nhập từ vựng / cấu trúc ngữ pháp còn thiếu vào đây..."
+                    onKeyDown={(e) => {
+                      if (e.key === "Enter" && userClozeInput.trim() && !isQuestionLocked) {
+                        e.preventDefault();
+                        handleConfirmTimedAnswer();
+                      }
+                    }}
+                    placeholder="Nhập từ vựng / cấu trúc ngữ pháp còn thiếu vào đây (Nhấn Enter để chốt)..."
                     className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-3 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
@@ -1314,43 +1230,41 @@ export default function ExamArena({
 
               {/* Action Buttons & Instant Feedback */}
               {!isQuestionLocked ? (
-                <div className="flex justify-end">
-                  {currentExamQ.type === "translation" ? (
-                    <button
-                      type="button"
-                      disabled={
-                        isEvaluatingTranslation || !userTranslationInput.trim()
-                      }
-                      onClick={handleEvaluateUntimedTranslation}
-                      className="flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
-                    >
-                      {isEvaluatingTranslation ? (
-                        <>
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          AI đang chấm điểm câu dịch...
-                        </>
-                      ) : (
-                        <>
-                          <Sparkles className="h-4 w-4" />
-                          Nộp Câu Dịch & Chấm Điểm AI
-                        </>
-                      )}
-                    </button>
-                  ) : (
-                    <button
-                      type="button"
-                      disabled={
-                        currentExamQ.type === "quiz"
-                          ? userQuizChoice === null
-                          : !userClozeInput.trim()
-                      }
-                      onClick={handleConfirmTimedAnswer}
-                      className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
-                    >
-                      Chốt Đáp Án
-                    </button>
-                  )}
-                </div>
+                currentExamQ.type !== "quiz" && (
+                  <div className="flex justify-end">
+                    {currentExamQ.type === "translation" ? (
+                      <button
+                        type="button"
+                        disabled={
+                          isEvaluatingTranslation || !userTranslationInput.trim()
+                        }
+                        onClick={handleEvaluateUntimedTranslation}
+                        className="flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
+                      >
+                        {isEvaluatingTranslation ? (
+                          <>
+                            <Loader2 className="h-4 w-4 animate-spin" />
+                            AI đang chấm điểm câu dịch...
+                          </>
+                        ) : (
+                          <>
+                            <Sparkles className="h-4 w-4" />
+                            Nộp Câu Dịch & Chấm Điểm AI
+                          </>
+                        )}
+                      </button>
+                    ) : (
+                      <button
+                        type="button"
+                        disabled={!userClozeInput.trim()}
+                        onClick={handleConfirmTimedAnswer}
+                        className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
+                      >
+                        Chốt Đáp Án (Enter)
+                      </button>
+                    )}
+                  </div>
+                )
               ) : (
                 <div className="space-y-4 rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4">
                   {timeLeft <= 0 && !isCurrentQuestionUntimed && (

@@ -3,6 +3,8 @@ import {
   ChapterLesson,
   TranslationEvaluation,
   PronunciationEvaluation,
+  VocabularyItem,
+  TopicVocabGeneratedPractice,
 } from "@/types/course";
 import { verifyVirtualApiKey } from "@/lib/quotaManager";
 import {
@@ -1057,11 +1059,22 @@ const PRONUNCIATION_EVAL_SCHEMA: Schema = {
   ],
 };
 
+export function normalizeDedupeVocabKey(word: string): string {
+  return String(word || "")
+    .trim()
+    .toLowerCase()
+    .replace(/\([^)]*\)/g, " ")
+    .replace(/^[\d.\-#*•]+\s*/, "")
+    .replace(/\s+/g, " ")
+    .trim();
+}
+
 export async function generateChapterLessonWithAI(params: {
   courseTitle: string;
   chapterTitle: string;
   chapterText: string;
   pageImagesBase64?: string[];
+  existingCourseWords?: string[];
   apiKey?: string;
   masterApiKey?: string;
   model?: string;
@@ -1077,6 +1090,17 @@ export async function generateChapterLessonWithAI(params: {
     Array.isArray(params.pageImagesBase64) &&
     params.pageImagesBase64.length > 0;
 
+  const existingWordsNotice =
+    Array.isArray(params.existingCourseWords) &&
+    params.existingCourseWords.length > 0
+      ? `\n🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
+- Dưới đây là các từ vựng đã được tạo ở các bài trước hoặc đã có sẵn: [${params.existingCourseWords
+          .slice(0, 180)
+          .join(", ")}].
+- TUYỆT ĐỐI KHÔNG tạo lặp lại một từ vựng 2 lần trong cùng bài học này, và ưu tiên trích xuất các từ vựng mới của chương hiện tại (không lặp lại từ cũ của các chương trước trừ khi mang nghĩa hoàn toàn mới)!\n`
+      : `\n🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
+- TUYỆT ĐỐI KHÔNG tạo từ vựng bị trùng lặp (mỗi mục từ word trong danh sách vocabulary phải là DUY NHẤT 100%, không lặp lại từ đã xuất hiện ở mục trước dưới bất kỳ hình thức nào)!\n`;
+
   const prompt = `Bạn là một Giáo sư Ngôn ngữ học & Gia sư Đọc hiểu Sách chuyên sâu (Multilingual Book Tutor Agent - hỗ trợ sách Tiếng Anh, Tiếng Trung 繁體/簡體 Pinyin, Tiếng Nhật, Tiếng Hàn...).
 Hãy phân tích toàn diện chương sách dưới đây thuộc cuốn sách "${params.courseTitle}" và tạo ra bài học cực kỳ chi tiết bằng tiếng Việt để người học vừa nắm trọn vẹn nội dung cuốn sách, vừa giỏi từ vựng, ngữ pháp và kỹ năng dịch thuật.
 ${
@@ -1086,14 +1110,14 @@ File PDF này có phần NỘI DUNG CHÍNH nằm trong ${params.pageImagesBase64
 Bạn BẮT BUỘC phải nhìn và đọc kỹ TOÀN BỘ chữ, hội thoại, bảng từ vựng, chú thích ngữ pháp và bài đọc nằm bên trong các HÌNH ẢNH TRANG SÁCH đính kèm kết hợp với văn bản để trích xuất đầy đủ 100% nội dung bài học!\n`
     : "(Nếu có hình ảnh trang sách đính kèm do PDF dạng scan, hãy đọc kỹ toàn bộ chữ trên các trang ảnh đó để soạn bài)."
 }
-
+${existingWordsNotice}
 TÊN CHƯƠNG: ${params.chapterTitle}
 
 YÊU CẦU BẮT BUỘC (Viết súc tích, rõ ràng để đảm bảo xuất đủ 100% cả 7 phần dưới đây):
 1. overview: Tóm tắt nội dung/luận điểm của chương sách, nêu 3 chủ đề chính và 3 mục tiêu học tập.
 2. contentAnalysis: Chia nội dung chương thành 2-3 phần trọng tâm theo mạch sách (ví dụ Dialogue I, Dialogue II, Bài đọc...). Mỗi phần trích dẫn đoạn văn gốc (originalExcerpt), dịch sang tiếng Việt chuẩn xác (vietnameseTranslation), và giải thích sâu ý nghĩa nội dung, bối cảnh (deepExplanation & stylisticOrContextNotes).
 3. grammarPoints: Trích xuất 3-5 cấu trúc ngữ pháp trọng tâm xuất hiện trong chương. Giải thích công thức, cách dùng và cho 1-2 ví dụ.
-4. vocabulary: BẮT BUỘC trích xuất ĐẦY ĐỦ TẤT CẢ các mục từ vựng xuất hiện trong chương (tối thiểu 20 đến 35+ từ, bao gồm toàn bộ bảng Vocabulary I, Vocabulary II, People, Names, và Phrases — TUYỆT ĐỐI KHÔNG ĐƯỢC RÚT GỌN CHỈ CÒN 5 TỪ!). Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ ngắn gọn, 1-2 collocations.
+4. vocabulary: BẮT BUỘC trích xuất ĐẦY ĐỦ TẤT CẢ các mục từ vựng xuất hiện trong chương (tối thiểu 20 đến 35+ từ, bao gồm toàn bộ bảng Vocabulary I, Vocabulary II, People, Names, và Phrases — TUYỆT ĐỐI KHÔNG ĐƯỢC RÚT GỌN CHỈ CÒN 5 TỪ VÀ TUYỆT ĐỐI KHÔNG LẶP LẠI TỪ VỰNG TRÙNG NHAU!). Ở trường ipa: ghi phiên âm Pinyin có dấu (nếu tiếng Trung) hoặc IPA (nếu tiếng Anh). Cung cấp từ loại chuẩn, nghĩa tiếng Việt, câu ví dụ ngắn gọn, 1-2 collocations.
 5. clozeExercises: Tạo 5 câu bài tập điền từ/ngữ pháp vào chỗ trống (dùng đúng ký hiệu "_____" tại vị trí từ bị khuyết).
 6. quizExercises: Tạo 6 câu hỏi trắc nghiệm (4 lựa chọn) CHỈ KIỂM TRA TỪ VỰNG (nghĩa từ, cách dùng từ, phiên âm) VÀ NGỮ PHÁP (trật tự từ, chọn cấu trúc đúng, điền trợ từ).
 7. translationExercises: Chọn 4 câu tiêu biểu sử dụng từ vựng và ngữ pháp của chương để người học luyện dịch sang tiếng Việt.
@@ -1182,10 +1206,18 @@ ${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính k�
             : [],
         }))
       : [],
-    vocabulary: Array.isArray(root?.vocabulary)
-      ? root.vocabulary.map((v: any, idx: number) => ({
-          id: String(v?.id || `voc-${idx + 1}`),
-          word: String(v?.word || ""),
+    vocabulary: (() => {
+      const rawVocab = Array.isArray(root?.vocabulary) ? root.vocabulary : [];
+      const seenKeys = new Set<string>();
+      const deduped: VocabularyItem[] = [];
+      for (const v of rawVocab) {
+        const word = String(v?.word || "").trim();
+        const key = normalizeDedupeVocabKey(word);
+        if (!key || seenKeys.has(key)) continue;
+        seenKeys.add(key);
+        deduped.push({
+          id: String(v?.id || `voc-${deduped.length + 1}`),
+          word,
           ipa: String(v?.ipa || ""),
           partOfSpeech: String(v?.partOfSpeech || "word"),
           cefrLevel: (["A1", "A2", "B1", "B2", "C1", "C2"].includes(
@@ -1201,8 +1233,10 @@ ${trimmedText || "(Nội dung nằm trong các hình ảnh trang sách đính k�
             ? v.collocations.map(String)
             : [],
           synonyms: Array.isArray(v?.synonyms) ? v.synonyms.map(String) : [],
-        }))
-      : [],
+        });
+      }
+      return deduped;
+    })(),
     clozeExercises: Array.isArray(root?.clozeExercises)
       ? root.clozeExercises.map((cl: any, idx: number) => ({
           id: String(cl?.id || `cloze-${idx + 1}`),
@@ -1880,6 +1914,7 @@ export async function extractAllChapterVocabWithAI(params: {
   chapterTitle: string;
   chapterText: string;
   pageImagesBase64?: string[];
+  existingWords?: string[];
   apiKey?: string;
   masterApiKey?: string;
   model?: string;
@@ -1906,9 +1941,8 @@ export async function extractAllChapterVocabWithAI(params: {
     for (const v of rawItems) {
       const item = (v || {}) as Record<string, any>;
       const word = String(item.word || "").trim();
-      if (!word) continue;
-      const dedupeKey = word.toLowerCase();
-      if (seen.has(dedupeKey)) continue;
+      const dedupeKey = normalizeDedupeVocabKey(word);
+      if (!dedupeKey || seen.has(dedupeKey)) continue;
       seen.add(dedupeKey);
 
       result.push({
@@ -1944,12 +1978,14 @@ export async function extractAllChapterVocabWithAI(params: {
   ) => {
     const excludeClause =
       excludeWords.length > 0
-        ? `\n⚠️ DANH SÁCH ${excludeWords.length} TỪ ĐÃ LẤY Ở LƯỢT TRƯỚC (TUYỆT ĐỐI KHÔNG LẶP LẠI CÁC TỪ NÀY):\n[${excludeWords.join(", ")}]\n👉 Nhiệm vụ của bạn ở lượt này là RÀ SOÁT KỸ toàn bộ văn bản/trang sách bên dưới để LẤY HẾT 100% CÁC MỤC TỪ VỰNG CÒN SÓT LẠI (chưa nằm trong danh sách trên)!\n`
+        ? `\n🚫 DANH SÁCH ${excludeWords.length} TỪ ĐÃ LẤY Ở LƯỢT TRƯỚC / ĐÃ CÓ TRONG BÀI (TUYỆT ĐỐI KHÔNG TẠO LẶP LẠI BẤT KỲ TỪ NÀO TRONG DANH SÁCH NÀY):\n[${excludeWords.join(", ")}]\n👉 Nhiệm vụ của bạn ở lượt này là RÀ SOÁT KỸ toàn bộ văn bản/trang sách bên dưới để LẤY HẾT 100% CÁC MỤC TỪ VỰNG MỚI CÒN SÓT LẠI (chưa nằm trong danh sách trên)!\n`
         : "";
 
     const prompt = `Bạn là Chuyên gia Từ điển & Ngôn ngữ học kiêm Giảng viên cao cấp.
 Nhiệm vụ của bạn là quét toàn bộ văn bản và HÌNH ẢNH TRANG SÁCH (${partLabel}) của bài học "${params.chapterTitle}" thuộc sách "${params.courseTitle}".
 BẮT BUỘC TRÍCH XUẤT ĐẦY ĐỦ 100% TẤT CẢ CÁC MỤC TỪ VỰNG XUẤT HIỆN TRONG PHẦN NÀY (MỖI CHƯƠNG THƯỜNG CÓ TỪ 35 ĐẾN 50+ MỤC TỪ).
+🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
+- TUYỆT ĐỐI KHÔNG tạo từ vựng bị lặp lại trong danh sách trả về (không lặp lại cùng 1 từ, không lặp lại biến thể số ít/số nhiều hoặc kèm phiên âm trong ngoặc của cùng 1 từ). Mỗi mục từ (word) phải là DUY NHẤT 100%!
 ${excludeClause}
 ĐẶC BIỆT LƯU Ý VỀ CẤU TRÚC GIÁO TRÌNH TIẾNG NGOẠI NGỮ (TIẾNG TRUNG ĐƯƠNG ĐẠI / HSK / TIẾNG ANH / NHẬT / HÀN):
 Mỗi bài học thường có nhiều phần đối thoại (Dialogue I, Dialogue II, Bài đọc...) và mỗi phần đều có các bảng từ vựng độc lập được đánh số thứ tự (1, 2, 3...):
@@ -2054,6 +2090,10 @@ ${textSlice}
     }
   }
 
+  const initialSeedWords = Array.isArray(params.existingWords)
+    ? params.existingWords.map((w) => String(w || "").trim()).filter(Boolean)
+    : [];
+
   const chunkPromises = textChunks.map((chunkStr, idx) => {
     const imgPerChunk = Math.ceil(images.length / textChunks.length);
     const chunkImgs = images.slice(
@@ -2063,7 +2103,8 @@ ${textSlice}
     return runVocabExtractionSlice(
       chunkStr,
       chunkImgs,
-      `Phân đoạn ${idx + 1}/${textChunks.length} của chương`
+      `Phân đoạn ${idx + 1}/${textChunks.length} của chương`,
+      initialSeedWords.slice(0, 120)
     ).catch(() => []);
   });
 
@@ -2074,7 +2115,9 @@ ${textSlice}
   // gửi danh sách từ đã lấy (excludeWords) để AI rà soát và nhặt nốt TẤT CẢ các từ còn sót trong chương!
   if (accumulated.length < 42 && cleanText.length > 400) {
     try {
-      const alreadyWords = accumulated.map((v) => v.word);
+      const alreadyWords = Array.from(
+        new Set([...initialSeedWords, ...accumulated.map((v) => v.word)])
+      );
       const sweepText =
         cleanText.length <= 7500
           ? cleanText
@@ -2221,5 +2264,363 @@ YÊU CẦU:
   });
 
   return (response.text || "").trim();
+}
+
+const TOPIC_VOCAB_ANALYZE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    topicTitle: {
+      type: Type.STRING,
+      description: "Tên chủ đề từ vựng bằng Tiếng Anh kèm Tiếng Việt",
+    },
+    topicSummary: {
+      type: Type.STRING,
+      description: "Mô tả ngắn gọn về bộ từ vựng chủ đề này",
+    },
+    vocabulary: {
+      type: Type.ARRAY,
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          word: { type: Type.STRING, description: "Từ vựng hoặc cụm từ" },
+          ipa: { type: Type.STRING, description: "Phiên âm quốc tế IPA chuẩn (/.../)" },
+          partOfSpeech: { type: Type.STRING, description: "Từ loại (Danh từ, Động từ, Tính từ, Cụm danh từ...)" },
+          cefrLevel: { type: Type.STRING, description: "A1, A2, B1, B2, C1 hoặc C2" },
+          vietnameseMeaning: { type: Type.STRING, description: "Nghĩa tiếng Việt chính xác, rõ ràng" },
+          explanationInContext: { type: Type.STRING, description: "Giải thích sâu sắc thái nghĩa và ngữ cảnh sử dụng" },
+          quoteFromBook: { type: Type.STRING, description: "Câu ví dụ mẫu tự nhiên bằng tiếng Anh có chứa từ vựng" },
+          quoteTranslation: { type: Type.STRING, description: "Dịch nghĩa tiếng Việt của câu ví dụ" },
+          collocations: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "2-3 cụm từ đi kèm (collocations / usage patterns)",
+          },
+          synonyms: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "2-4 từ đồng nghĩa (Synonyms)",
+          },
+          antonyms: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "1-3 từ trái nghĩa (Antonyms)",
+          },
+        },
+        required: [
+          "id",
+          "word",
+          "ipa",
+          "partOfSpeech",
+          "cefrLevel",
+          "vietnameseMeaning",
+          "explanationInContext",
+          "quoteFromBook",
+          "quoteTranslation",
+          "collocations",
+          "synonyms",
+          "antonyms",
+        ],
+      },
+    },
+  },
+  required: ["topicTitle", "topicSummary", "vocabulary"],
+};
+
+const TOPIC_VOCAB_PRACTICE_SCHEMA: Schema = {
+  type: Type.OBJECT,
+  properties: {
+    sentenceFillExercises: {
+      type: Type.ARRAY,
+      description: "8-12 câu bài tập điền từ vào câu đúng ngữ cảnh (dùng _____ cho chỗ trống)",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          sentenceWithBlank: { type: Type.STRING, description: "Câu tiếng Anh có _____ ở vị trí từ cần điền" },
+          answer: { type: Type.STRING, description: "Từ/cụm từ đáp án chính xác" },
+          options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "4 phương án lựa chọn (bao gồm đáp án đúng và 3 từ nhiễu cùng chủ đề)",
+          },
+          fullSentenceWithAnswer: { type: Type.STRING, description: "Câu tiếng Anh hoàn chỉnh đã điền đáp án để đọc phát âm TTS" },
+          vietnameseTranslation: { type: Type.STRING, description: "Dịch nghĩa tiếng Việt của câu hoàn chỉnh" },
+          explanation: { type: Type.STRING, description: "Giải thích vì sao chọn từ này theo ngữ cảnh & ngữ pháp" },
+        },
+        required: [
+          "id",
+          "sentenceWithBlank",
+          "answer",
+          "options",
+          "fullSentenceWithAnswer",
+          "vietnameseTranslation",
+          "explanation",
+        ],
+      },
+    },
+    listeningExercises: {
+      type: Type.ARRAY,
+      description: "6-8 câu bài tập nghe phát âm chuẩn và nhận diện/điền từ",
+      items: {
+        type: Type.OBJECT,
+        properties: {
+          id: { type: Type.STRING },
+          word: { type: Type.STRING },
+          ipa: { type: Type.STRING },
+          spokenSentence: { type: Type.STRING, description: "Câu hoàn chỉnh để hệ thống đọc bằng giọng chuẩn bản xứ" },
+          sentenceWithBlank: { type: Type.STRING, description: "Câu có chứa _____ ở vị trí từ vựng cần nghe" },
+          vietnameseTranslation: { type: Type.STRING },
+          options: {
+            type: Type.ARRAY,
+            items: { type: Type.STRING },
+            description: "4 từ vựng lựa chọn",
+          },
+        },
+        required: [
+          "id",
+          "word",
+          "ipa",
+          "spokenSentence",
+          "sentenceWithBlank",
+          "vietnameseTranslation",
+          "options",
+        ],
+      },
+    },
+  },
+  required: ["sentenceFillExercises", "listeningExercises"],
+};
+
+export async function analyzeTopicVocabWithAI(params: {
+  topicTitle: string;
+  targetLanguage?: string;
+  rawInputText: string;
+  existingItems?: Partial<VocabularyItem>[];
+  targetCount?: number;
+  apiKey?: string;
+  masterApiKey?: string;
+  model?: string;
+}): Promise<{
+  topicTitle: string;
+  topicSummary: string;
+  vocabulary: VocabularyItem[];
+}> {
+  const ai = getClient(params.apiKey, params.masterApiKey);
+  const modelName = params.model || "gemini-2.5-flash";
+  const count = Math.min(Math.max(params.targetCount || 20, 5), 40);
+  const lang = params.targetLanguage || "English";
+
+  const langSpec =
+    lang === "Chinese"
+      ? `NGÔN NGỮ MỤC TIÊU: TIẾNG TRUNG (Chinese - 汉字).
+- word: Từ vựng chữ Hán (ví dụ: 人工智能 hoặc 发展).
+- ipa: Phiên âm Pinyin chuẩn có dấu thanh điệu (ví dụ: /rén gōng zhì néng/).
+- synonyms / antonyms: Các từ đồng nghĩa (近义词) và trái nghĩa (反义词) bằng chữ Hán kèm Pinyin ngắn gọn.
+- quoteFromBook: Câu ví dụ bằng chữ Hán tự nhiên.`
+      : lang === "Japanese"
+      ? `NGÔN NGỮ MỤC TIÊU: TIẾNG NHẬT (Japanese - 日本語).
+- word: Từ vựng tiếng Nhật (Kanji/Kana).
+- ipa: Cách đọc Furigana (Hiragana) kèm Romaji.
+- synonyms / antonyms: Từ đồng nghĩa (類義語) và trái nghĩa (対義語) bằng tiếng Nhật.
+- quoteFromBook: Câu ví dụ tiếng Nhật tự nhiên.`
+      : lang === "Korean"
+      ? `NGÔN NGỮ MỤC TIÊU: TIẾNG HÀN (Korean - 한국어).
+- word: Từ vựng Hangul.
+- ipa: Phiên âm cách đọc chuẩn.
+- synonyms / antonyms: Từ đồng nghĩa (유의어) và trái nghĩa (반의어) bằng tiếng Hàn.
+- quoteFromBook: Câu ví dụ tiếng Hàn tự nhiên.`
+      : `NGÔN NGỮ MỤC TIÊU: TIẾNG ANH (English).
+- word: Từ vựng hoặc cụm từ tiếng Anh.
+- ipa: Phiên âm quốc tế IPA chuẩn (/.../).
+- synonyms / antonyms: Từ đồng nghĩa (Synonyms) và trái nghĩa (Antonyms) tiếng Anh.
+- quoteFromBook: Câu ví dụ tiếng Anh tự nhiên.`;
+
+  const existingSummary =
+    params.existingItems && params.existingItems.length > 0
+      ? `\nDANH SÁCH TỪ VỰNG TRÍCH TỪ FILE (Hãy bổ sung đầy đủ Phiên âm IPA/Pinyin, Từ loại, Nghĩa tiếng Việt, Giải thích ngữ cảnh, Câu ví dụ song ngữ, Collocations, Từ đồng nghĩa và Từ trái nghĩa cho các từ này theo đúng ngôn ngữ ${lang}):\n${params.existingItems
+          .slice(0, count)
+          .map(
+            (it, i) =>
+              `${i + 1}. ${it.word} ${it.ipa ? `(${it.ipa})` : ""} ${
+                it.partOfSpeech ? `[${it.partOfSpeech}]` : ""
+              } - ${it.vietnameseMeaning || ""} | Ví dụ: ${it.quoteFromBook || ""}`
+          )
+          .join("\n")}\n`
+      : "";
+
+  const prompt = `Bạn là Chuyên gia Từ vựng học Đa Ngôn Ngữ & Biên soạn Giáo trình Quốc tế (CEFR / IELTS / HSK / TOCFL / JLPT / TOPIK).
+Nhiệm vụ của bạn là đọc dữ liệu từ file / chủ đề "${params.topicTitle}" và biên soạn bộ từ vựng chuyên sâu theo chủ đề bằng ngôn ngữ mục tiêu (${lang}) gồm khoảng ${count} mục từ quan trọng nhất.
+
+${langSpec}
+
+YÊU CẦU BẮT BUỘC CHO MỖI TỪ VỰNG:
+1. word: Từ vựng hoặc cụm từ chuẩn xác theo chủ đề bằng ngôn ngữ ${lang}.
+2. ipa: Phiên âm chuẩn quốc tế (IPA cho tiếng Anh, Pinyin cho tiếng Trung, Furigana/Romaji cho tiếng Nhật/Hàn).
+3. partOfSpeech: Từ loại rõ ràng bằng tiếng Việt (Danh từ, Động từ, Tính từ, Trạng từ, Cụm danh từ, Cụm động từ...).
+4. cefrLevel: Phân loại bậc tương đương CEFR chính xác ("A1", "A2", "B1", "B2", "C1", hoặc "C2").
+5. vietnameseMeaning: Nghĩa tiếng Việt chuẩn xác, tự nhiên.
+6. explanationInContext: Giải thích sắc thái nghĩa, cách dùng trong câu và ngữ cảnh áp dụng.
+7. quoteFromBook: 1 câu ví dụ tự nhiên bằng ngôn ngữ ${lang}.
+8. quoteTranslation: Bản dịch tiếng Việt mượt mà cho câu ví dụ trên.
+9. collocations: 2-3 cụm từ kết hợp (collocations) hoặc cấu trúc ngữ pháp đi kèm bằng ngôn ngữ ${lang}.
+10. synonyms: 2-4 từ đồng nghĩa sát nghĩa nhất trong ngôn ngữ ${lang}.
+11. antonyms: 1-3 từ trái nghĩa rõ ràng nhất trong ngôn ngữ ${lang}.
+
+🚫 CẢNH BÁO CHỐNG TRÙNG LẶP TỪ VỰNG (ANTI-DUPLICATION RULE):
+- Mỗi mục từ (word) trong danh sách trả về phải là DUY NHẤT 100%, TUYỆT ĐỐI KHÔNG tạo bất kỳ từ vựng nào bị lặp lại 2 lần hoặc trùng biến thể!
+${existingSummary}
+DỮ LIỆU NGUỒN / NỘI DUNG FILE CHỦ ĐỀ:
+"""
+${(params.rawInputText || params.topicTitle).slice(0, 22000)}
+"""`;
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: TOPIC_VOCAB_ANALYZE_SCHEMA,
+      temperature: 0.3,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Không nhận được dữ liệu từ vựng chủ đề từ AI.");
+  }
+
+  const parsed = JSON.parse(response.text);
+  const rawList: any[] = Array.isArray(parsed.vocabulary) ? parsed.vocabulary : [];
+  const seenTopicWords = new Set<string>();
+  const normalized: VocabularyItem[] = [];
+  for (const item of rawList) {
+    const word = String(item?.word || "").trim();
+    const dedupeKey = normalizeDedupeVocabKey(word);
+    if (!dedupeKey || seenTopicWords.has(dedupeKey)) continue;
+    seenTopicWords.add(dedupeKey);
+    normalized.push({
+      id: `tvoc-${Date.now()}-${normalized.length + 1}`,
+      word,
+      ipa: String(item.ipa || "").trim(),
+      partOfSpeech: String(item.partOfSpeech || "Từ vựng").trim(),
+      cefrLevel: (["A1", "A2", "B1", "B2", "C1", "C2"].includes(
+        String(item.cefrLevel)
+      )
+        ? item.cefrLevel
+        : "B2") as "A1" | "A2" | "B1" | "B2" | "C1" | "C2",
+      vietnameseMeaning: String(item.vietnameseMeaning || "").trim(),
+      explanationInContext: String(item.explanationInContext || "").trim(),
+      quoteFromBook: String(item.quoteFromBook || "").trim(),
+      quoteTranslation: String(item.quoteTranslation || "").trim(),
+      collocations: Array.isArray(item.collocations)
+        ? item.collocations.map(String).filter(Boolean)
+        : [],
+      synonyms: Array.isArray(item.synonyms)
+        ? item.synonyms.map(String).filter(Boolean)
+        : [],
+      antonyms: Array.isArray(item.antonyms)
+        ? item.antonyms.map(String).filter(Boolean)
+        : [],
+      topicTag: params.topicTitle,
+    });
+  }
+
+  return {
+    topicTitle: String(parsed.topicTitle || params.topicTitle).trim(),
+    topicSummary: String(
+      parsed.topicSummary || `Bộ từ vựng chuyên sâu chủ đề ${params.topicTitle}`
+    ).trim(),
+    vocabulary: normalized,
+  };
+}
+
+export async function generateTopicVocabPracticeWithAI(params: {
+  topicTitle: string;
+  targetLanguage?: string;
+  vocabulary: VocabularyItem[];
+  apiKey?: string;
+  masterApiKey?: string;
+  model?: string;
+}): Promise<TopicVocabGeneratedPractice> {
+  const ai = getClient(params.apiKey, params.masterApiKey);
+  const modelName = params.model || "gemini-2.5-flash";
+  const lang = params.targetLanguage || "English";
+
+  const sampleVocab = params.vocabulary.slice(0, 30);
+  const vocabSummary = sampleVocab
+    .map(
+      (v, i) =>
+        `${i + 1}. ${v.word} (${v.ipa}) [${v.partOfSpeech}]: ${v.vietnameseMeaning} | Đồng nghĩa: ${(v.synonyms || []).join(", ")} | Trái nghĩa: ${(v.antonyms || []).join(", ")} | Ví dụ: ${v.quoteFromBook}`
+    )
+    .join("\n");
+
+  const prompt = `Bạn là Chuyên gia Khảo thí Đa Ngôn ngữ AI (Ngôn ngữ mục tiêu: ${lang}).
+Dựa trên danh sách từ vựng thuộc chủ đề "${params.topicTitle}" dưới đây, hãy biên soạn bộ câu hỏi ôn tập tương tác đa kỹ năng bằng ngôn ngữ ${lang}:
+1. sentenceFillExercises (10 câu): Bài tập Điền từ vào câu đúng nghĩa & đúng ngữ cảnh.
+   - Mỗi câu là một câu bằng ngôn ngữ ${lang} tự nhiên, học thuật, dùng "_____" ở đúng vị trí từ vựng cần điền.
+   - Cung cấp 4 phương án (options) cùng chủ đề bằng ngôn ngữ ${lang} để người học chọn hoặc tự gõ từ.
+   - fullSentenceWithAnswer là câu bằng ngôn ngữ ${lang} hoàn chỉnh sau khi điền đáp án để đọc phát âm giọng bản xứ.
+   - vietnameseTranslation: Dịch nghĩa câu hoàn chỉnh sang tiếng Việt.
+   - explanation: Giải thích ngắn gọn vì sao từ đó phù hợp ngữ cảnh và cấu trúc.
+2. listeningExercises (8 câu): Bài tập Nghe giọng chuẩn và chọn/điền đúng từ vựng trong câu.
+   - spokenSentence: Câu bằng ngôn ngữ ${lang} hoàn chỉnh chứa từ vựng để hệ thống phát âm thanh TTS chuẩn.
+   - sentenceWithBlank: Câu đó nhưng thay từ vựng mục tiêu bằng "_____".
+   - options: 4 từ vựng bằng ngôn ngữ ${lang} có cách phát âm hoặc ngữ cảnh gần nhau.
+
+DANH SÁCH TỪ VỰNG CHỦ ĐỀ (${lang}):
+"""
+${vocabSummary}
+"""`;
+
+  const response = await ai.models.generateContent({
+    model: modelName,
+    contents: prompt,
+    config: {
+      responseMimeType: "application/json",
+      responseSchema: TOPIC_VOCAB_PRACTICE_SCHEMA,
+      temperature: 0.4,
+      thinkingConfig: { thinkingBudget: 0 },
+    },
+  });
+
+  if (!response.text) {
+    throw new Error("Không thể tạo bộ câu hỏi ôn tập từ vựng chủ đề.");
+  }
+
+  const parsed = JSON.parse(response.text);
+
+  const matchingPairs = sampleVocab.slice(0, 16).map((v, idx) => ({
+    id: `match-${idx + 1}`,
+    word: v.word,
+    ipa: v.ipa,
+    vietnameseMeaning: v.vietnameseMeaning,
+    synonymOrAntonymHint:
+      v.synonyms && v.synonyms.length > 0
+        ? `≈ ${v.synonyms.slice(0, 2).join(", ")}`
+        : undefined,
+  }));
+
+  const wordFillExercises = sampleVocab.slice(0, 15).map((v, idx) => ({
+    id: `wfill-${idx + 1}`,
+    vietnamesePrompt: v.vietnameseMeaning,
+    ipaHint: v.ipa,
+    partOfSpeech: v.partOfSpeech,
+    synonymHint: (v.synonyms || []).slice(0, 2).join(", "),
+    antonymHint: (v.antonyms || []).slice(0, 2).join(", "),
+    answer: v.word,
+    exampleSentence: v.quoteFromBook,
+  }));
+
+  return {
+    matchingPairs,
+    sentenceFillExercises: Array.isArray(parsed.sentenceFillExercises)
+      ? parsed.sentenceFillExercises
+      : [],
+    listeningExercises: Array.isArray(parsed.listeningExercises)
+      ? parsed.listeningExercises
+      : [],
+    wordFillExercises,
+  };
 }
 

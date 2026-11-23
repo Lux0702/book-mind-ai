@@ -1,0 +1,11 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 64 64" fill="none">
+  <rect x="7" y="7" width="52" height="52" rx="14" fill="#F5EFE6" />
+  <rect x="4" y="4" width="52" height="52" rx="14" fill="#F3C969" stroke="#141413" stroke-width="4" />
+  <path d="M15 21C15 19.3431 16.3431 18 18 18H26C28.2091 18 30 19.7909 30 22V42C30 40.3431 28.6569 39 27 39H18C16.3431 39 15 37.6569 15 36V21Z" fill="#F5EFE6" stroke="#141413" stroke-width="3.2" stroke-linejoin="round" />
+  <path d="M45 21C45 19.3431 43.6569 18 42 18H34C31.7909 18 30 19.7909 30 22V42C30 40.3431 31.3431 39 33 39H42C43.6569 39 45 37.6569 45 36V21Z" fill="#C8B6FF" stroke="#141413" stroke-width="3.2" stroke-linejoin="round" />
+  <line x1="20" y1="25" x2="25" y2="25" stroke="#141413" stroke-width="2.5" stroke-linecap="round" />
+  <line x1="20" y1="31" x2="25" y2="31" stroke="#141413" stroke-width="2.5" stroke-linecap="round" />
+  <line x1="35" y1="25" x2="40" y2="25" stroke="#141413" stroke-width="2.5" stroke-linecap="round" />
+  <line x1="35" y1="31" x2="40" y2="31" stroke="#141413" stroke-width="2.5" stroke-linecap="round" />
+  <path d="M46 11L47.5 14.5L51 16L47.5 17.5L46 21L44.5 17.5L41 16L44.5 14.5L46 11Z" fill="#141413" />
+</svg>

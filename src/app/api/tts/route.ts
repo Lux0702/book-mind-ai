@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server";
 
 function normalizeTtsLang(rawLang: string): string {
   const lower = (rawLang || "en-US").toLowerCase();
+  if (lower === "zh-tw" || lower === "zh_tw") return "zh-TW";
   if (lower.startsWith("zh")) return "zh-CN";
   if (lower.startsWith("ja")) return "ja";
   if (lower.startsWith("ko")) return "ko";
@@ -9,6 +10,7 @@ function normalizeTtsLang(rawLang: string): string {
   if (lower.startsWith("fr")) return "fr";
   if (lower.startsWith("de")) return "de";
   if (lower.startsWith("es")) return "es";
+  if (lower === "en-gb" || lower === "en_gb") return "en-GB";
   return "en";
 }
 

@@ -15,9 +15,12 @@ import {
   Infinity as InfinityIcon,
   Library,
   GraduationCap,
+  Sparkles,
   Key,
   LogOut,
   CheckCircle2,
+  ArrowUp,
+  Loader2,
 } from "lucide-react";
 import { saveCourse } from "@/lib/storage";
 import { PLAN_CONFIG } from "@/lib/quotaManager";
@@ -62,6 +65,84 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   const [isUserMenuOpen, setIsUserMenuOpen] = useState(false);
   const [avatarImgError, setAvatarImgError] = useState(false);
+  const [isRouteNavigating, setIsRouteNavigating] = useState(false);
+  const [pendingPath, setPendingPath] = useState<string | null>(null);
+  const [navProgress, setNavProgress] = useState(0);
+  const [showProgressBar, setShowProgressBar] = useState(false);
+  const [showScrollTopBtn, setShowScrollTopBtn] = useState(false);
+  const [isHeaderScrolled, setIsHeaderScrolled] = useState(false);
+
+  useEffect(() => {
+    const handleWindowScroll = () => {
+      const y = window.scrollY || document.documentElement.scrollTop || 0;
+      setIsHeaderScrolled(y > 10);
+      setShowScrollTopBtn(y > 320);
+    };
+    handleWindowScroll();
+    window.addEventListener("scroll", handleWindowScroll, { passive: true });
+    return () => window.removeEventListener("scroll", handleWindowScroll);
+  }, []);
+
+  // Complete top progress bar smoothly when pathname changes
+  useEffect(() => {
+    setIsRouteNavigating(false);
+    setPendingPath(null);
+    if (showProgressBar) {
+      setNavProgress(100);
+      const t = setTimeout(() => {
+        setShowProgressBar(false);
+        setNavProgress(0);
+      }, 220);
+      return () => clearTimeout(t);
+    }
+  }, [pathname]);
+
+  // Trickle progress bar animation while route is loading (NProgress / Linear / YouTube style)
+  useEffect(() => {
+    if (!isRouteNavigating) return;
+    setShowProgressBar(true);
+    setNavProgress(28);
+    const t1 = setTimeout(() => setNavProgress(58), 120);
+    const t2 = setTimeout(() => setNavProgress(78), 320);
+    const t3 = setTimeout(() => setNavProgress(90), 700);
+    return () => {
+      clearTimeout(t1);
+      clearTimeout(t2);
+      clearTimeout(t3);
+    };
+  }, [isRouteNavigating]);
+
+  useEffect(() => {
+    const handleGlobalClick = (e: MouseEvent) => {
+      if (e.defaultPrevented || e.button !== 0 || e.metaKey || e.ctrlKey || e.shiftKey || e.altKey) {
+        return;
+      }
+      const target = e.target as HTMLElement | null;
+      const anchor = target?.closest("a[href]") as HTMLAnchorElement | null;
+      if (anchor) {
+        const href = anchor.getAttribute("href") || "";
+        const targetCleanPath = href.split("?")[0];
+        if (
+          href.startsWith("/") &&
+          !href.startsWith("//") &&
+          anchor.target !== "_blank" &&
+          targetCleanPath !== pathname
+        ) {
+          setPendingPath(targetCleanPath);
+          setIsRouteNavigating(true);
+        }
+      }
+    };
+    const handleCustomNavigate = () => {
+      setIsRouteNavigating(true);
+    };
+    document.addEventListener("click", handleGlobalClick, true);
+    window.addEventListener("bookmind:route-start", handleCustomNavigate);
+    return () => {
+      document.removeEventListener("click", handleGlobalClick, true);
+      window.removeEventListener("bookmind:route-start", handleCustomNavigate);
+    };
+  }, [pathname]);
 
   useEffect(() => {
     setAvatarImgError(false);
@@ -74,16 +155,38 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
     ? courses.find((c) => c.id === courseIdFromUrl) || null
     : null;
 
+  const effectivePathname = pendingPath || pathname;
+
   const isNavActive = (key: NavKey): boolean => {
     switch (key) {
       case "attendance":
-        return pathname === ROUTES.home;
+        return effectivePathname === ROUTES.home;
       case "dashboard":
-        return pathname === ROUTES.books;
+        return effectivePathname === ROUTES.books;
       case "library":
-        return pathname.startsWith(ROUTES.library);
+        return effectivePathname.startsWith(ROUTES.library);
       case "srs_global":
-        return pathname.startsWith(ROUTES.srs);
+        return (
+          effectivePathname.startsWith(ROUTES.srs) ||
+          effectivePathname.startsWith(ROUTES.topicVocab)
+        );
+    }
+  };
+
+  const isNavPending = (key: NavKey): boolean => {
+    if (!pendingPath) return false;
+    switch (key) {
+      case "attendance":
+        return pendingPath === ROUTES.home;
+      case "dashboard":
+        return pendingPath === ROUTES.books;
+      case "library":
+        return pendingPath.startsWith(ROUTES.library);
+      case "srs_global":
+        return (
+          pendingPath.startsWith(ROUTES.srs) ||
+          pendingPath.startsWith(ROUTES.topicVocab)
+        );
     }
   };
   // Handle click outside to close user dropdown
@@ -102,10 +205,30 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen flex flex-col bg-transparent pb-20 lg:pb-0">
-      {/* Top Navbar — Dark Soft Neo-Brutalism */}
-      <header className="sticky top-0 z-30 border-b-2 border-[#F5EFE6] bg-[#1D1C19]">
+      {/* Modern NProgress-style Slim Top Progress Bar (YouTube / GitHub / Linear style) */}
+      {showProgressBar && (
+        <div
+          aria-hidden="true"
+          className="fixed inset-x-0 top-0 z-[100] h-[3px] pointer-events-none overflow-hidden bg-transparent"
+        >
+          <div
+            className="h-full bg-gradient-to-r from-[#F3C969] via-[#C8B6FF] to-[#A7D7A9] shadow-[0_0_12px_rgba(243,201,105,0.9)] transition-all duration-200 ease-out"
+            style={{
+              width: `${navProgress}%`,
+              opacity: navProgress >= 100 ? 0 : 1,
+            }}
+          />
+        </div>
+      )}
+
+      {/* Top Navbar — Sticky Dark Soft Neo-Brutalism */}
+      <header
+        className={`sticky top-0 z-40 border-b-2 border-[#F5EFE6] bg-[#1D1C19]/95 backdrop-blur-md transition-shadow duration-150 ${
+          isHeaderScrolled ? "shadow-[0_4px_20px_rgba(0,0,0,0.65)]" : ""
+        }`}
+      >
         <div className="mx-auto flex h-14 sm:h-16 max-w-7xl items-center justify-between gap-2 px-3.5 sm:px-6">
-          {/* Left: Brand Logo & Optional Breadcrumb */}
+          {/* Left: Brand Logo */}
           <div className="flex items-center gap-2 sm:gap-3 min-w-0">
             <button
               type="button"
@@ -121,21 +244,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                 <span className="text-sm sm:text-base font-extrabold tracking-tight text-[#F5EFE6]">
                   BookMind
                 </span>
-                {/* <span className="rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2 py-0.5 text-[9px] sm:text-[10px] font-extrabold tracking-wider text-[#141413]">
-                  STUDIO
-                </span> */}
               </div>
             </button>
-
-            {/* Context breadcrumb when viewing a course */}
-            {activeCourse && (
-              <div className="hidden md:flex items-center gap-2 pl-3 ml-1 border-l-2 border-[#3A3832] text-xs min-w-0">
-                <span className="text-[#8F8A7E]">/</span>
-                <span className="max-w-[200px] lg:max-w-[260px] truncate text-[#F5EFE6] font-bold">
-                  {activeCourse.title}
-                </span>
-              </div>
-            )}
           </div>
 
           {/* Center: Dark Soft Neo-Brutalism Segmented Navigation Bar (Desktop) */}
@@ -143,13 +253,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* 1. Điểm danh */}
             <Link
               href={ROUTES.home}
-              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-all duration-150 active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("attendance")
                   ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
                   : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <Flame className="h-3.5 w-3.5 shrink-0" />
+              {isNavPending("attendance") ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <Flame className="h-3.5 w-3.5 shrink-0" />
+              )}
               <span>Điểm danh</span>
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
@@ -165,13 +279,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* 2. Tủ sách cá nhân */}
             <Link
               href={ROUTES.books}
-              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-all duration-150 active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("dashboard")
                   ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
                   : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <BookOpen className="h-3.5 w-3.5 shrink-0" />
+              {isNavPending("dashboard") ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <BookOpen className="h-3.5 w-3.5 shrink-0" />
+              )}
               <span>Tủ sách</span>
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
@@ -187,13 +305,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* 3. Thư viện sách cộng đồng */}
             <Link
               href={ROUTES.library}
-              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-all duration-150 active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("library")
                   ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
                   : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <Library className="h-3.5 w-3.5 shrink-0" />
+              {isNavPending("library") ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <Library className="h-3.5 w-3.5 shrink-0" />
+              )}
               <span>Thư viện</span>
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-extrabold ${
@@ -209,13 +331,17 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             {/* 4. Ôn tập & Thi */}
             <Link
               href={ROUTES.srs}
-              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
+              className={`flex items-center gap-1.5 rounded-xl border-2 px-3 py-1.5 text-xs font-bold whitespace-nowrap shrink-0 transition-all duration-150 active:translate-x-[2px] active:translate-y-[2px] cursor-pointer ${
                 isNavActive("srs_global")
                   ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] active:shadow-[1px_1px_0_0_#F5EFE6]"
                   : "border-[#3A3832] bg-[#141413] text-[#F5EFE6] hover:border-[#F5EFE6]"
               }`}
             >
-              <GraduationCap className="h-3.5 w-3.5 shrink-0" />
+              {isNavPending("srs_global") ? (
+                <Loader2 className="h-3.5 w-3.5 shrink-0 animate-spin" />
+              ) : (
+                <GraduationCap className="h-3.5 w-3.5 shrink-0" />
+              )}
               <span>Ôn tập &amp; Thi</span>
               {dueFlashcards.length > 0 && (
                 <span
@@ -231,58 +357,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
             </Link>
           </nav>
 
-          {/* Right: Unified Action Controls */}
+          {/* Right: Unified Action Controls (Clean & Minimal: Inbox, Settings, User Profile) */}
           <div className="flex items-center gap-1.5 sm:gap-2 min-w-0">
-            {/* Quota & Plan Upgrade Pill */}
-            <button
-              type="button"
-              onClick={() => setIsUpgradeModalOpen(true)}
-              className={`flex items-center gap-1 sm:gap-1.5 rounded-xl border-2 border-[#F5EFE6] px-2 sm:px-3 py-1.5 text-[11px] sm:text-xs font-extrabold shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer shrink-0 ${
-                quotaAccount &&
-                quotaAccount.plan !== "unlimited" &&
-                quotaAccount.maxCalls !== -1 &&
-                quotaAccount.usedCalls >= quotaAccount.maxCalls
-                  ? "bg-[#FF8A8A] text-[#141413]"
-                  : quotaAccount?.plan === "unlimited"
-                  ? "bg-[#C8B6FF] text-[#141413]"
-                  : quotaAccount?.plan === "pro"
-                  ? "bg-[#F3C969] text-[#141413]"
-                  : "bg-[#B8D8F8] text-[#141413]"
-              }`}
-              title="Xem số dư AI Credit hôm nay, bảng quy đổi 1-5 Credit & nâng cấp gói"
-            >
-              {quotaAccount?.plan === "unlimited" ? (
-                <>
-                  <InfinityIcon className="h-3.5 w-3.5 shrink-0" />
-                  <span className="sm:hidden">VIP</span>
-                  <span className="hidden sm:inline">
-                    VIP: {quotaAccount.usedCalls}/{quotaAccount.fupDailyLimit || 500} Credit
-                  </span>
-                </>
-              ) : quotaAccount &&
-                quotaAccount.maxCalls !== -1 &&
-                quotaAccount.usedCalls >= quotaAccount.maxCalls ? (
-                <>
-                  <Zap className="h-3.5 w-3.5 shrink-0" />
-                  <span className="sm:hidden">Hết Credit</span>
-                  <span className="hidden sm:inline">
-                    Hết Credit ({quotaAccount.usedCalls}/{quotaAccount.maxCalls}) • Nâng cấp
-                  </span>
-                </>
-              ) : (
-                <>
-                  <Zap className="h-3.5 w-3.5 shrink-0" />
-                  <span className="sm:hidden">
-                    {quotaAccount?.usedCalls ?? 0}/{quotaAccount?.maxCalls ?? 30}
-                  </span>
-                  <span className="hidden sm:inline">
-                    {PLAN_CONFIG[quotaAccount?.plan || "free"].shortBadge}:{" "}
-                    {quotaAccount?.usedCalls ?? 0}/{quotaAccount?.maxCalls ?? 30} Credit
-                  </span>
-                </>
-              )}
-            </button>
-
             {/* Email Inbox Icon Button */}
             <button
               type="button"
@@ -299,16 +375,6 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                   {unreadEmailCount}
                 </span>
               )}
-            </button>
-
-            {/* Create New Course Button */}
-            <button
-              type="button"
-              onClick={() => setIsCreateOpen(true)}
-              className="hidden sm:flex items-center gap-1.5 shrink-0 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform hover:bg-[#b8e2ba] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
-            >
-              <Plus className="h-3.5 w-3.5 shrink-0" />
-              <span>Nạp sách mới</span>
             </button>
 
             {/* Settings Icon Button (Hidden on tiny screens since it's in the User menu) */}
@@ -384,6 +450,45 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
                         ? "Học viên Offline / IndexedDB"
                         : "Đã liên kết Cloud"}
                     </div>
+
+                    {/* AI Credit & Plan Badge Card inside Profile */}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setIsUserMenuOpen(false);
+                        setIsUpgradeModalOpen(true);
+                      }}
+                      className={`mt-2.5 w-full flex items-center justify-between gap-2 rounded-xl border-2 border-[#F5EFE6] px-3 py-2 text-xs font-extrabold shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer ${
+                        quotaAccount &&
+                        quotaAccount.plan !== "unlimited" &&
+                        quotaAccount.maxCalls !== -1 &&
+                        quotaAccount.usedCalls >= quotaAccount.maxCalls
+                          ? "bg-[#FF8A8A] text-[#141413]"
+                          : quotaAccount?.plan === "unlimited"
+                          ? "bg-[#C8B6FF] text-[#141413]"
+                          : quotaAccount?.plan === "pro"
+                          ? "bg-[#F3C969] text-[#141413]"
+                          : "bg-[#B8D8F8] text-[#141413]"
+                      }`}
+                    >
+                      <span className="flex items-center gap-1.5">
+                        {quotaAccount?.plan === "unlimited" ? (
+                          <InfinityIcon className="h-3.5 w-3.5 shrink-0" />
+                        ) : (
+                          <Zap className="h-3.5 w-3.5 shrink-0" />
+                        )}
+                        <span>
+                          {quotaAccount?.plan === "unlimited"
+                            ? "Gói VIP Unlimited"
+                            : PLAN_CONFIG[quotaAccount?.plan || "free"].shortBadge}
+                        </span>
+                      </span>
+                      <span className="rounded-lg bg-[#141413] px-2 py-0.5 text-[11px] font-black text-[#F5EFE6]">
+                        {quotaAccount?.plan === "unlimited"
+                          ? `${quotaAccount.usedCalls}/${quotaAccount.fupDailyLimit || 500} Credit`
+                          : `${quotaAccount?.usedCalls ?? 0}/${quotaAccount?.maxCalls ?? 30} Credit`}
+                      </span>
+                    </button>
                   </div>
 
                   <div className="py-1 space-y-0.5">
@@ -466,7 +571,29 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
         </div>
       </header>
 
-      {children}
+      {/* Smooth Page Transition Container */}
+      <div
+        key={pathname}
+        className={`flex-1 flex flex-col transition-opacity duration-150 ease-out animate-in fade-in duration-150 ${
+          isRouteNavigating ? "opacity-65" : "opacity-100"
+        }`}
+      >
+        {children}
+      </div>
+
+      {/* Floating Scroll-to-Top Button when scrolling deep down */}
+      {showScrollTopBtn && (
+        <button
+          type="button"
+          onClick={() => window.scrollTo({ top: 0, behavior: "smooth" })}
+          aria-label="Lên đầu trang"
+          title="Cuộn nhanh về đầu trang"
+          className="fixed bottom-20 right-4 lg:bottom-6 lg:right-6 z-40 inline-flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3.5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-all hover:bg-[#f7d47e] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] animate-in fade-in slide-in-from-bottom-3 duration-150 cursor-pointer"
+        >
+          <ArrowUp className="h-4 w-4 shrink-0 stroke-[2.5]" />
+          <span className="hidden sm:inline">Đầu trang</span>
+        </button>
+      )}
 
       {/* Floating Account Confirmation Toast */}
       {newEmailToast && (

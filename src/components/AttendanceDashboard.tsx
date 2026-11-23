@@ -202,9 +202,8 @@ export default function AttendanceDashboard({
                 ) : (
                   <>
                     <Cloud
-                      className={`h-3 w-3 ${
-                        cloudSynced ? "text-[#A7D7A9]" : "text-[#B8B2A6]"
-                      }`}
+                      className={`h-3 w-3 ${cloudSynced ? "text-[#A7D7A9]" : "text-[#B8B2A6]"
+                        }`}
                     />
                     <span>
                       {cloudSynced
@@ -256,7 +255,7 @@ export default function AttendanceDashboard({
 
             <p className="max-w-lg text-xs sm:text-sm text-[#B8B2A6] leading-relaxed">
               {isCheckedInToday
-                ? "Bạn đã hoàn thành điểm danh hôm nay và lưu an toàn trên Supabase Cloud. Mọi thiết bị (Laptop & Điện thoại) đều được cập nhật tự động."
+                ? "Bạn đã hoàn thành điểm danh hôm nay."
                 : "Hôm nay bạn chưa điểm danh. Bấm nút điểm danh bên dưới hoặc hoàn thành một bài ôn tập để duy trì chuỗi ngày học!"}
             </p>
           </div>
@@ -266,11 +265,10 @@ export default function AttendanceDashboard({
               type="button"
               disabled={isCheckedInToday || isSyncingCloud}
               onClick={handleManualCheckIn}
-              className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] px-5 py-3 text-xs sm:text-sm font-extrabold transition-transform ${
-                isCheckedInToday
+              className={`flex min-h-[46px] items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] px-5 py-3 text-xs sm:text-sm font-extrabold transition-transform ${isCheckedInToday
                   ? "bg-[#A7D7A9] text-[#141413] cursor-default"
                   : "bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] hover:bg-[#f7d683] active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] cursor-pointer"
-              }`}
+                }`}
             >
               <CheckCircle2 className="h-4 w-4 sm:h-5 sm:w-5 shrink-0" />
               <span>
@@ -318,15 +316,14 @@ export default function AttendanceDashboard({
               return (
                 <div
                   key={i}
-                  className={`flex flex-col items-center justify-center rounded-xl border-2 py-2 px-1 sm:p-3 text-center ${
-                    isToday
+                  className={`flex flex-col items-center justify-center rounded-xl border-2 py-2 px-1 sm:p-3 text-center ${isToday
                       ? active
                         ? "border-[#F5EFE6] bg-[#F3C969] text-[#141413]"
                         : "border-[#F3C969] bg-[#141413] text-[#F3C969]"
                       : active
-                      ? "border-[#A7D7A9] bg-[#141413] text-[#A7D7A9]"
-                      : "border-[#3A3832] bg-[#141413] text-[#7A756A]"
-                  }`}
+                        ? "border-[#A7D7A9] bg-[#141413] text-[#A7D7A9]"
+                        : "border-[#3A3832] bg-[#141413] text-[#7A756A]"
+                    }`}
                 >
                   <span className="text-[10px] sm:text-[11px] font-extrabold uppercase tracking-tight">
                     {d.dayName}
@@ -337,9 +334,8 @@ export default function AttendanceDashboard({
                   <div className="mt-1 sm:mt-1.5">
                     {active ? (
                       <CheckCircle2
-                        className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${
-                          isToday ? "text-[#141413]" : "text-[#A7D7A9]"
-                        }`}
+                        className={`h-3.5 w-3.5 sm:h-4 sm:w-4 ${isToday ? "text-[#141413]" : "text-[#A7D7A9]"
+                          }`}
                       />
                     ) : (
                       <div className="h-3.5 w-3.5 sm:h-4 sm:w-4 rounded-full border-2 border-[#3A3832] bg-[#1D1C19]" />
@@ -511,13 +507,12 @@ export default function AttendanceDashboard({
                   className="flex items-start sm:items-center gap-3 rounded-xl border-2 border-[#3A3832] bg-[#141413] p-3 sm:p-3.5 text-xs"
                 >
                   <div
-                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-[#F5EFE6] text-[#141413] ${
-                      act.type === "vocab_review"
+                    className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-lg border-2 border-[#F5EFE6] text-[#141413] ${act.type === "vocab_review"
                         ? "bg-[#C8B6FF]"
                         : act.type === "check_in"
-                        ? "bg-[#F3C969]"
-                        : "bg-[#A7D7A9]"
-                    }`}
+                          ? "bg-[#F3C969]"
+                          : "bg-[#A7D7A9]"
+                      }`}
                   >
                     {act.type === "vocab_review" ? (
                       <Sparkles className="h-3.5 w-3.5" />

@@ -35,6 +35,68 @@ export interface VocabularyItem {
   quoteTranslation: string;
   collocations: string[];
   synonyms: string[];
+  antonyms?: string[];
+  topicTag?: string;
+}
+
+export interface TopicVocabGeneratedPractice {
+  matchingPairs: {
+    id: string;
+    word: string;
+    ipa: string;
+    vietnameseMeaning: string;
+    synonymOrAntonymHint?: string;
+  }[];
+  sentenceFillExercises: {
+    id: string;
+    sentenceWithBlank: string; // Use "_____" for blank
+    answer: string;
+    options: string[];
+    fullSentenceWithAnswer: string;
+    vietnameseTranslation: string;
+    explanation: string;
+  }[];
+  listeningExercises: {
+    id: string;
+    word: string;
+    ipa: string;
+    spokenSentence: string;
+    sentenceWithBlank: string;
+    vietnameseTranslation: string;
+    options: string[];
+  }[];
+  wordFillExercises: {
+    id: string;
+    vietnamesePrompt: string;
+    ipaHint: string;
+    partOfSpeech: string;
+    synonymHint: string;
+    antonymHint: string;
+    answer: string;
+    exampleSentence: string;
+  }[];
+}
+
+export type SupportedStudyLanguage =
+  | "English"
+  | "Chinese"
+  | "Japanese"
+  | "Korean";
+
+export interface TopicVocabDeck {
+  id: string;
+  userId?: string;
+  slug?: string;
+  language?: SupportedStudyLanguage;
+  title: string;
+  category: string;
+  description: string;
+  level: string;
+  sourceType: "forumflash_preset" | "imported_file" | "ai_generated";
+  items: VocabularyItem[];
+  aiPractice?: TopicVocabGeneratedPractice | null;
+  createdAt: string;
+  updatedAt: string;
 }
 
 export interface ClozeExercise {
@@ -131,6 +193,8 @@ export interface FlashcardSRS {
   quoteFromBook: string;
   quoteTranslation: string;
   collocations: string[];
+  synonyms?: string[];
+  antonyms?: string[];
   // SM-2 Spaced Repetition fields
   interval: number; // in days
   repetition: number;
