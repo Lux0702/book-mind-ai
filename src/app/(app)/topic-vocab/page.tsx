@@ -31,6 +31,7 @@ import {
   Play,
   Globe,
   MessageSquare,
+  FileUp,
 } from "lucide-react";
 import {
   VocabularyItem,
@@ -1913,27 +1914,39 @@ export default function TopicVocabStudioPage() {
 
   return (
     <div className="bm-view-enter mx-auto w-full max-w-6xl flex-1 px-3.5 py-5 sm:px-6 sm:py-6 space-y-5">
-      {/* Unified 2-Mode Switcher at the very top: 1. Theo Sách/Chương vs 2. Theo Chủ đề Từ vựng */}
+      {/* Unified 3-Mode Switcher at the very top: 1. Theo Sách vs 2. Từ Vựng Chủ Đề vs 3. Đề Thi Động Từ File */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-3.5 shadow-[4px_4px_0_0_#F5EFE6]">
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 flex-1">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-2 flex-1">
           <button
             type="button"
             onClick={() => {
               window.dispatchEvent(new CustomEvent("bookmind:route-start"));
               router.push(ROUTES.srs);
             }}
-            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-4 py-2.5 text-xs sm:text-sm font-extrabold text-[#F5EFE6] hover:border-[#F5EFE6] transition-colors cursor-pointer"
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-3.5 py-2.5 text-xs sm:text-sm font-extrabold text-[#F5EFE6] hover:border-[#F5EFE6] transition-colors cursor-pointer"
           >
             <BookOpen className="h-4 w-4 text-[#B8D8F8] shrink-0" />
-            <span>← 1. Ôn &amp; Thi Theo Sách / Giáo Trình</span>
+            <span className="truncate">1. Ôn &amp; Thi Theo Sách</span>
           </button>
 
           <button
             type="button"
-            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-4 py-2.5 text-xs sm:text-sm font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] cursor-pointer"
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-3.5 py-2.5 text-xs sm:text-sm font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] cursor-pointer"
           >
             <Sparkles className="h-4 w-4 shrink-0" />
-            <span>2. Học &amp; Thi Từ Vựng Chủ Đề (Đa Ngôn Ngữ • 5.000+ Từ)</span>
+            <span className="truncate">2. Từ Vựng Chủ Đề</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              window.dispatchEvent(new CustomEvent("bookmind:route-start"));
+              router.push(ROUTES.dynamicExam);
+            }}
+            className="flex items-center justify-center gap-2 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-3.5 py-2.5 text-xs sm:text-sm font-extrabold text-[#F5EFE6] hover:border-[#F5EFE6] transition-colors cursor-pointer"
+          >
+            <FileUp className="h-4 w-4 text-[#A7D7A9] shrink-0" />
+            <span className="truncate">3. Đề Thi Động Từ File (AI)</span>
           </button>
         </div>
 

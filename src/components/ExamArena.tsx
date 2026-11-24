@@ -24,6 +24,8 @@ import {
   Check,
   Layers,
   Clock,
+  SlidersHorizontal,
+  X,
 } from "lucide-react";
 import {
   Course,
@@ -72,6 +74,26 @@ interface TimedExamQuestion {
   correctTextAnswer?: string;
   explanation?: string;
   referenceTranslation?: string;
+}
+
+const AI_EXAM_PROMPT_PRESETS = [
+  "Tập trung vào Ngữ pháp",
+  "Tập trung vào Từ vựng",
+  "Chỉ Trắc nghiệm & Điền từ (không dịch)",
+  "Tăng độ khó nâng cao",
+  "Tập trung Collocation & cách dùng từ",
+];
+
+function shouldShowAudioForQuestion(q: TimedExamQuestion): boolean {
+  const textToCheck = `${q.categoryLabel || ""} ${q.promptText || ""}`;
+  const isListeningOrReadingRelated =
+    /(nghe|đọc hiểu|luyện đọc|phát âm|âm thanh|listen|listening|audio|pronunciation|speaking|reading)/i.test(
+      textToCheck
+    );
+  if (q.type === "quiz" || q.type === "cloze") {
+    return isListeningOrReadingRelated;
+  }
+  return true;
 }
 
 export default function ExamArena({
@@ -145,6 +167,11 @@ export default function ExamArena({
   } | null>(null);
   const [isGeneratingAiExam, setIsGeneratingAiExam] = useState(false);
   const [aiExamError, setAiExamError] = useState<string | null>(null);
+  const [customAiPrompt, setCustomAiPrompt] = useState("");
+  const [appliedAiPrompt, setAppliedAiPrompt] = useState("");
+  const [aiQuestionCount, setAiQuestionCount] = useState<string>("20");
+  const [showAiPromptComposer, setShowAiPromptComposer] = useState(false);
+  const lockedAtRef = React.useRef<number>(0);
 
   // User answers in the Timed Exam
   const [userQuizChoice, setUserQuizChoice] = useState<number | null>(null);
@@ -730,7 +757,29 @@ export default function ExamArena({
     setTimeLeft(secondsPerQuestion);
   };
 
-  const handleGenerateFreshAiExamForChapter = async () => {
+  // Track lock timestamp & allow pressing Enter to jump directly to next question without scrolling
+  useEffect(() => {
+    if (isQuestionLocked) {
+      lockedAtRef.current = Date.now();
+    }
+  }, [isQuestionLocked]);
+
+  useEffect(() => {
+    if (!examStarted || examFinished || !isQuestionLocked) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if (e.key !== "Enter") return;
+      if (Date.now() - lockedAtRef.current < 250) return;
+      const tag = (e.target as HTMLElement | null)?.tagName;
+      if (tag === "TEXTAREA" || tag === "INPUT") return;
+      e.preventDefault();
+      handleNextExamQuestion();
+    };
+    window.addEventListener("keydown", onKeyDown);
+    return () => window.removeEventListener("keydown", onKeyDown);
+  });
+
+  const handleGenerateFreshAiExamForChapter = async (overridePrompt?: string) => {
+    const promptToUse = (overridePrompt ?? customAiPrompt).trim();
     setIsGeneratingAiExam(true);
     setAiExamError(null);
     try {
@@ -753,6 +802,9 @@ export default function ExamArena({
         courseTitle: course.title,
         scopeTitle: targetChapter.title,
         scannedContentAndVocab: combinedPayload,
+        customPrompt: promptToUse || undefined,
+        targetQuestionCount:
+          aiQuestionCount === "all" ? "all" : Number(aiQuestionCount) || 20,
         apiKey: settings.geminiApiKey,
         model: settings.geminiModel,
       });
@@ -763,6 +815,8 @@ export default function ExamArena({
       }
 
       setAiGeneratedExam(data.exam);
+      setAppliedAiPrompt(promptToUse);
+      setShowAiPromptComposer(false);
       setExamStarted(false);
       setExamFinished(false);
     } catch (err: unknown) {
@@ -871,20 +925,26 @@ export default function ExamArena({
       {/* MODE 1: TIMED CHAPTER EXAM (Tự động tạo bài thi kiểm tra chương)      */}
       {/* ===================================================================== */}
       {mode === "timed_chapter_exam" && (
-        <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-6 shadow-[4px_4px_0_0_#F5EFE6]">
+        <div className="rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 sm:p-5 shadow-[4px_4px_0_0_#F5EFE6]">
           {!examStarted && !examFinished ? (
             /* Pre-Exam Setup Screen */
-            <div className="space-y-6 py-4 text-center">
-              <div className="mx-auto flex h-16 w-16 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]">
-                <Timer className="h-8 w-8" />
+            <div className="space-y-5 py-3 text-center">
+              <div className="mx-auto flex h-14 w-14 items-center justify-center rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] text-[#141413] shadow-[3px_3px_0_0_#F5EFE6]">
+                <Timer className="h-7 w-7" />
               </div>
               <div>
                 <h3 className="text-xl font-extrabold text-[#F5EFE6]">
-                  Bài Thi Kiểm Tra: {targetChapter.title}
+                  {aiGeneratedExam?.examTitle || `Bài Thi Kiểm Tra: ${targetChapter.title}`}
                 </h3>
                 <p className="mx-auto mt-1 max-w-xl text-xs leading-relaxed text-[#B8B2A6]">
-                  Bài thi kiểm tra toàn diện <strong className="text-[#F5EFE6]">Từ vựng & Ngữ pháp</strong> của chương này.
+                  Bài thi kiểm tra toàn diện <strong className="text-[#F5EFE6]">Từ vựng &amp; Ngữ pháp</strong> của chương này.
                 </p>
+                {appliedAiPrompt && aiGeneratedExam && (
+                  <div className="mt-2 inline-flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] bg-[#C8B6FF] px-3 py-1 text-[11px] font-extrabold text-[#141413]">
+                    <Sparkles className="h-3.5 w-3.5 shrink-0" />
+                    <span>Trọng tâm AI: {appliedAiPrompt}</span>
+                  </div>
+                )}
               </div>
 
               {/* Exam Stats & Time Setting */}
@@ -931,26 +991,132 @@ export default function ExamArena({
                   <ExamGeneratingLoader />
                 </div>
               ) : (
-                <div className="flex flex-wrap items-center justify-center gap-3">
-                  <button
-                    type="button"
-                    disabled={examQuestions.length === 0}
-                    onClick={startTimedExam}
-                    className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-3 text-sm font-extrabold text-[#141413] shadow-[4px_4px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-40 cursor-pointer"
-                  >
-                    <Play className="h-4 w-4" />
-                    Bắt Đầu Làm Bài Thi Ngay ({examQuestions.length} câu)
-                  </button>
+                <div className="space-y-4">
+                  <div className="flex flex-wrap items-center justify-center gap-3">
+                    <button
+                      type="button"
+                      disabled={examQuestions.length === 0}
+                      onClick={startTimedExam}
+                      className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-3 text-sm font-extrabold text-[#141413] shadow-[4px_4px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-40 cursor-pointer"
+                    >
+                      <Play className="h-4 w-4" />
+                      Bắt Đầu Làm Bài Thi Ngay ({examQuestions.length} câu)
+                    </button>
 
-                  <button
-                    type="button"
-                    disabled={isGeneratingAiExam}
-                    onClick={handleGenerateFreshAiExamForChapter}
-                    className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-5 py-3 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
-                  >
-                    <Sparkles className="h-4 w-4" />
-                    AI Tạo Bộ Đề Thi Mới Tinh Cho Chương Này
-                  </button>
+                    <button
+                      type="button"
+                      disabled={isGeneratingAiExam}
+                      onClick={() => setShowAiPromptComposer((v) => !v)}
+                      className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-5 py-3 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] active:shadow-[1px_1px_0_0_#F5EFE6] disabled:opacity-50 cursor-pointer"
+                    >
+                      <Sparkles className="h-4 w-4" />
+                      AI Tạo Đề Khác Cho Chương Này
+                      <SlidersHorizontal className="h-3.5 w-3.5 opacity-80" />
+                    </button>
+                  </div>
+
+                  {/* Custom AI Exam Prompt Composer */}
+                  {showAiPromptComposer && (
+                    <div className="mx-auto max-w-2xl rounded-xl border-2 border-[#F5EFE6] bg-[#141413] p-4 text-left space-y-3 shadow-[4px_4px_0_0_#F3C969]">
+                      <div className="flex items-center justify-between gap-2">
+                        <div className="flex items-center gap-2">
+                          <Sparkles className="h-4 w-4 text-[#F3C969]" />
+                          <span className="text-xs font-extrabold text-[#F5EFE6]">
+                            Nhắn yêu cầu tạo đề cho AI (Tùy chọn)
+                          </span>
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => setShowAiPromptComposer(false)}
+                          className="rounded-lg p-1 text-[#B8B2A6] hover:bg-[#262520] hover:text-[#F5EFE6] cursor-pointer"
+                          aria-label="Đóng khung nhập yêu cầu"
+                        >
+                          <X className="h-4 w-4" />
+                        </button>
+                      </div>
+
+                      <textarea
+                        rows={2}
+                        value={customAiPrompt}
+                        onChange={(e) => setCustomAiPrompt(e.target.value)}
+                        placeholder="VD: Tập trung vào ngữ pháp thì quá khứ và giới từ, nhiều câu từ vựng khó hơn, chỉ ra trắc nghiệm và điền từ..."
+                        className="w-full rounded-lg border-2 border-[#3A3832] bg-[#1D1C19] px-3 py-2 text-xs text-[#F5EFE6] placeholder:text-[#8E887D] focus:border-[#F3C969] focus:outline-none"
+                      />
+
+                      <div className="flex flex-wrap gap-1.5">
+                        {AI_EXAM_PROMPT_PRESETS.map((preset) => {
+                          const isSelected = customAiPrompt
+                            .toLowerCase()
+                            .includes(preset.toLowerCase());
+                          return (
+                            <button
+                              key={preset}
+                              type="button"
+                              onClick={() =>
+                                setCustomAiPrompt((prev) => {
+                                  const clean = prev.trim();
+                                  if (!clean) return preset;
+                                  if (clean.toLowerCase().includes(preset.toLowerCase()))
+                                    return clean;
+                                  return `${clean}, ${preset}`;
+                                })
+                              }
+                              className={`rounded-lg border px-2.5 py-1 text-[11px] font-bold transition-colors cursor-pointer ${
+                                isSelected
+                                  ? "border-[#F3C969] bg-[#F3C969] text-[#141413]"
+                                  : "border-[#3A3832] bg-[#1D1C19] text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6]"
+                              }`}
+                            >
+                              + {preset}
+                            </button>
+                          );
+                        })}
+                      </div>
+
+                      <div className="flex flex-wrap items-center justify-between gap-2 pt-1">
+                        <div className="flex items-center gap-2">
+                          <span className="text-[11px] font-bold text-[#B8B2A6]">
+                            Số câu:
+                          </span>
+                          <div className="w-48">
+                            <CustomSelect
+                              value={aiQuestionCount}
+                              onChange={(v) => setAiQuestionCount(String(v))}
+                              size="sm"
+                              accentColor="amber"
+                              options={[
+                                { value: "all", label: "Tất cả (Tối đa ~50 câu)" },
+                                { value: "10", label: "10 câu" },
+                                { value: "20", label: "20 câu" },
+                                { value: "30", label: "30 câu" },
+                                { value: "40", label: "40 câu" },
+                                { value: "50", label: "50 câu" },
+                              ]}
+                            />
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-2">
+                          {customAiPrompt.trim() && (
+                            <button
+                              type="button"
+                              onClick={() => setCustomAiPrompt("")}
+                              className="rounded-lg border border-[#3A3832] px-3 py-1.5 text-[11px] font-bold text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6] cursor-pointer"
+                            >
+                              Xóa chữ
+                            </button>
+                          )}
+                          <button
+                            type="button"
+                            onClick={() => handleGenerateFreshAiExamForChapter()}
+                            className="inline-flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] transition-transform active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
+                          >
+                            <Sparkles className="h-3.5 w-3.5" />
+                            Tạo Đề Ngay
+                          </button>
+                        </div>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
@@ -993,13 +1159,75 @@ export default function ExamArena({
                   <button
                     type="button"
                     disabled={isGeneratingAiExam}
-                    onClick={handleGenerateFreshAiExamForChapter}
+                    onClick={() => setShowAiPromptComposer((v) => !v)}
                     className="inline-flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer"
                   >
                     <Sparkles className="h-4 w-4" />
                     AI Tạo Đề Khác Cho Chương Này
+                    <SlidersHorizontal className="h-3.5 w-3.5 opacity-80" />
                   </button>
                 </div>
+
+                {isGeneratingAiExam && (
+                  <div className="pt-3">
+                    <ExamGeneratingLoader />
+                  </div>
+                )}
+
+                {showAiPromptComposer && !isGeneratingAiExam && (
+                  <div className="mx-auto mt-3 max-w-2xl rounded-xl border-2 border-[#F5EFE6] bg-[#1D1C19] p-4 text-left space-y-3 shadow-[4px_4px_0_0_#F3C969]">
+                    <div className="flex items-center justify-between gap-2">
+                      <span className="text-xs font-extrabold text-[#F5EFE6] flex items-center gap-1.5">
+                        <Sparkles className="h-3.5 w-3.5 text-[#F3C969]" />
+                        Nhắn yêu cầu cho đề thi mới (VD: tập trung ngữ pháp, từ vựng...)
+                      </span>
+                      <button
+                        type="button"
+                        onClick={() => setShowAiPromptComposer(false)}
+                        className="rounded-lg p-1 text-[#B8B2A6] hover:text-[#F5EFE6] cursor-pointer"
+                      >
+                        <X className="h-4 w-4" />
+                      </button>
+                    </div>
+                    <textarea
+                      rows={2}
+                      value={customAiPrompt}
+                      onChange={(e) => setCustomAiPrompt(e.target.value)}
+                      placeholder="VD: Tập trung ngữ pháp hoặc từ vựng hay sai, độ khó cao hơn..."
+                      className="w-full rounded-lg border-2 border-[#3A3832] bg-[#141413] px-3 py-2 text-xs text-[#F5EFE6] placeholder:text-[#8E887D] focus:border-[#F3C969] focus:outline-none"
+                    />
+                    <div className="flex flex-wrap gap-1.5">
+                      {AI_EXAM_PROMPT_PRESETS.map((preset) => (
+                        <button
+                          key={preset}
+                          type="button"
+                          onClick={() =>
+                            setCustomAiPrompt((prev) =>
+                              prev.trim()
+                                ? prev.toLowerCase().includes(preset.toLowerCase())
+                                  ? prev
+                                  : `${prev.trim()}, ${preset}`
+                                : preset
+                            )
+                          }
+                          className="rounded-lg border border-[#3A3832] bg-[#141413] px-2.5 py-1 text-[11px] font-bold text-[#B8B2A6] hover:border-[#F5EFE6] hover:text-[#F5EFE6] cursor-pointer"
+                        >
+                          + {preset}
+                        </button>
+                      ))}
+                    </div>
+                    <div className="flex justify-end">
+                      <button
+                        type="button"
+                        onClick={() => handleGenerateFreshAiExamForChapter()}
+                        className="inline-flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-4 py-2 text-xs font-extrabold text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] cursor-pointer"
+                      >
+                        <Sparkles className="h-3.5 w-3.5" />
+                        Tạo Đề Ngay
+                      </button>
+                    </div>
+                  </div>
+                )}
               </div>
 
               {/* Detailed Review of Each Question */}
@@ -1067,11 +1295,11 @@ export default function ExamArena({
               </div>
             </div>
           ) : currentExamQ ? (
-            /* Active Timed Question View */
-            <div className="space-y-5">
+            /* Active Timed Question View — Compact + Sticky Feedback Bar (Zero Scrolling) */
+            <div className="space-y-3.5">
               {/* Top Question Bar & Countdown Timer */}
-              <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-4 py-3">
-                <div className="flex items-center gap-2.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 rounded-xl border-2 border-[#3A3832] bg-[#141413] px-3.5 py-2.5">
+                <div className="flex items-center gap-2">
                   <span className="rounded-lg border-2 border-[#F5EFE6] bg-[#C8B6FF] px-2.5 py-0.5 text-xs font-extrabold text-[#141413]">
                     Câu {examStepIndex + 1} / {examQuestions.length}
                   </span>
@@ -1082,13 +1310,13 @@ export default function ExamArena({
 
                 {/* Timer Badge */}
                 {isCurrentQuestionUntimed ? (
-                  <div className="flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3.5 py-1 text-xs font-extrabold text-[#141413]">
-                    <InfinityIcon className="h-4 w-4" />
-                    <span>Câu Dịch Thuật — Không giới hạn thời gian</span>
+                  <div className="flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] bg-[#A7D7A9] px-3 py-0.5 text-xs font-extrabold text-[#141413]">
+                    <InfinityIcon className="h-3.5 w-3.5" />
+                    <span>Dịch thuật — Không giới hạn giờ</span>
                   </div>
                 ) : (
                   <div
-                    className={`flex items-center gap-2 rounded-full border-2 border-[#F5EFE6] px-3.5 py-1 text-xs font-extrabold text-[#141413] ${
+                    className={`flex items-center gap-1.5 rounded-full border-2 border-[#F5EFE6] px-3 py-0.5 text-xs font-extrabold text-[#141413] ${
                       timeLeft <= 5
                         ? "bg-[#FF8A8A] animate-pulse"
                         : timeLeft <= 10
@@ -1096,15 +1324,15 @@ export default function ExamArena({
                         : "bg-[#B8D8F8]"
                     }`}
                   >
-                    <Timer className="h-4 w-4" />
-                    <span>Thời gian còn lại: {timeLeft} giây</span>
+                    <Timer className="h-3.5 w-3.5" />
+                    <span>{timeLeft}s</span>
                   </div>
                 )}
               </div>
 
               {/* Visual Progress Bar for Timer */}
               {!isCurrentQuestionUntimed && (
-                <div className="h-2.5 w-full overflow-hidden rounded-full border-2 border-[#F5EFE6] bg-[#141413]">
+                <div className="h-2 w-full overflow-hidden rounded-full border border-[#F5EFE6] bg-[#141413]">
                   <div
                     className={`h-full transition-all duration-1000 ${
                       timeLeft <= 5
@@ -1124,16 +1352,18 @@ export default function ExamArena({
               )}
 
               {/* Question Prompt Box */}
-              <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-6 space-y-2">
+              <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4 space-y-1.5">
                 <div className="flex items-start justify-between gap-3">
-                  <h4 className="text-base font-extrabold leading-relaxed text-[#F5EFE6] md:text-lg">
+                  <h4 className="text-sm sm:text-base font-extrabold leading-relaxed text-[#F5EFE6]">
                     {currentExamQ.promptText}
                   </h4>
-                  <AudioSpeakButton
-                    text={currentExamQ.promptText}
-                    showLabel={false}
-                    className="shrink-0 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] p-2 text-[#141413]"
-                  />
+                  {shouldShowAudioForQuestion(currentExamQ) && (
+                    <AudioSpeakButton
+                      text={currentExamQ.promptText}
+                      showLabel={false}
+                      className="shrink-0 rounded-xl border-2 border-[#F5EFE6] bg-[#B8D8F8] p-2 text-[#141413]"
+                    />
+                  )}
                 </div>
                 {currentExamQ.subHint && (
                   <p className="flex items-center gap-1.5 text-xs text-[#F3C969]">
@@ -1145,7 +1375,7 @@ export default function ExamArena({
 
               {/* Render Input by Question Type */}
               {currentExamQ.type === "quiz" && currentExamQ.options && (
-                <div className="grid grid-cols-1 gap-3 md:grid-cols-2">
+                <div className="grid grid-cols-1 gap-2.5 md:grid-cols-2">
                   {currentExamQ.options.map((opt, oIdx) => {
                     const isPicked = userQuizChoice === oIdx;
                     const isRight = currentExamQ.correctIndex === oIdx;
@@ -1184,7 +1414,7 @@ export default function ExamArena({
                             },
                           ]);
                         }}
-                        className={`rounded-xl border-2 p-4 text-left text-sm transition-colors cursor-pointer ${cls}`}
+                        className={`rounded-xl border-2 px-3.5 py-3 text-left text-sm transition-colors cursor-pointer ${cls}`}
                       >
                         <span className="mr-2 font-black">
                           {String.fromCharCode(65 + oIdx)}.
@@ -1197,7 +1427,7 @@ export default function ExamArena({
               )}
 
               {currentExamQ.type === "cloze" && (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <input
                     type="text"
                     disabled={isQuestionLocked}
@@ -1210,25 +1440,25 @@ export default function ExamArena({
                       }
                     }}
                     placeholder="Nhập từ vựng / cấu trúc ngữ pháp còn thiếu vào đây (Nhấn Enter để chốt)..."
-                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-3 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] px-4 py-2.5 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
               )}
 
               {currentExamQ.type === "translation" && (
-                <div className="space-y-3">
+                <div className="space-y-2.5">
                   <textarea
                     rows={3}
                     disabled={isQuestionLocked || isEvaluatingTranslation}
                     value={userTranslationInput}
                     onChange={(e) => setUserTranslationInput(e.target.value)}
                     placeholder="Nhập bản dịch tiếng Việt của bạn (Không giới hạn thời gian)..."
-                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] p-3.5 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
+                    className="w-full rounded-lg border-2 border-[#F5EFE6] bg-[#141413] p-3 text-sm text-[#F5EFE6] focus:border-[#F3C969] focus:shadow-[2px_2px_0_0_#F3C969] focus:outline-none"
                   />
                 </div>
               )}
 
-              {/* Action Buttons & Instant Feedback */}
+              {/* Action Buttons & Sticky Instant Feedback Bar (No Scrolling Required) */}
               {!isQuestionLocked ? (
                 currentExamQ.type !== "quiz" && (
                   <div className="flex justify-end">
@@ -1239,7 +1469,7 @@ export default function ExamArena({
                           isEvaluatingTranslation || !userTranslationInput.trim()
                         }
                         onClick={handleEvaluateUntimedTranslation}
-                        className="flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
+                        className="flex items-center gap-2 rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
                       >
                         {isEvaluatingTranslation ? (
                           <>
@@ -1249,7 +1479,7 @@ export default function ExamArena({
                         ) : (
                           <>
                             <Sparkles className="h-4 w-4" />
-                            Nộp Câu Dịch & Chấm Điểm AI
+                            Nộp Câu Dịch &amp; Chấm Điểm AI
                           </>
                         )}
                       </button>
@@ -1258,7 +1488,7 @@ export default function ExamArena({
                         type="button"
                         disabled={!userClozeInput.trim()}
                         onClick={handleConfirmTimedAnswer}
-                        className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-6 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
+                        className="rounded-xl border-2 border-[#F5EFE6] bg-[#A7D7A9] px-5 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] disabled:opacity-40 cursor-pointer"
                       >
                         Chốt Đáp Án (Enter)
                       </button>
@@ -1266,61 +1496,71 @@ export default function ExamArena({
                   </div>
                 )
               ) : (
-                <div className="space-y-4 rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4">
-                  {timeLeft <= 0 && !isCurrentQuestionUntimed && (
-                    <div className="flex items-center gap-2 text-xs font-extrabold text-[#FF8A8A]">
-                      <XCircle className="h-4 w-4" />
-                      <span>Hết thời gian trả lời cho câu hỏi này!</span>
-                    </div>
-                  )}
+                <div className="sticky bottom-2 sm:bottom-3 z-30 rounded-xl border-2 border-[#F5EFE6] bg-[#141413]/95 backdrop-blur-md p-3.5 shadow-[4px_4px_0_0_#F5EFE6] animate-in fade-in slide-in-from-bottom-2 duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                    <div className="min-w-0 flex-1 space-y-1">
+                      <div className="flex flex-wrap items-center gap-2">
+                        {timeLeft <= 0 && !isCurrentQuestionUntimed ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#FF8A8A] px-2 py-0.5 text-[11px] font-black text-[#141413]">
+                            <XCircle className="h-3.5 w-3.5" />
+                            Hết giờ
+                          </span>
+                        ) : examResults[examResults.length - 1]?.isCorrect ? (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#A7D7A9] px-2 py-0.5 text-[11px] font-black text-[#141413]">
+                            <CheckCircle2 className="h-3.5 w-3.5" />
+                            Chính xác!
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 rounded-md bg-[#FF8A8A] px-2 py-0.5 text-[11px] font-black text-[#141413]">
+                            <XCircle className="h-3.5 w-3.5" />
+                            Chưa đúng
+                          </span>
+                        )}
 
-                  {currentExamQ.type === "cloze" && (
-                    <div className="text-xs text-[#A7D7A9]">
-                      Đáp án đúng:{" "}
-                      <strong>{currentExamQ.correctTextAnswer}</strong>
-                    </div>
-                  )}
-
-                  {currentExamQ.explanation && (
-                    <p className="flex items-start gap-1.5 text-xs text-[#F5EFE6]">
-                      <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#F3C969]" />
-                      <span>
-                        <strong>Giải thích:</strong> {currentExamQ.explanation}
-                      </span>
-                    </p>
-                  )}
-
-                  {currentTranslationEval && (
-                    <div className="space-y-2 text-xs">
-                      <div className="text-sm font-extrabold text-[#B8D8F8]">
-                        Điểm độ gần đúng AI chấm:{" "}
-                        <span className="text-[#A7D7A9]">
-                          {currentTranslationEval.overallScore}%
-                        </span>{" "}
-                        (Độ sát nghĩa: {currentTranslationEval.semanticAccuracy}
-                        % • Ngữ pháp:{" "}
-                        {currentTranslationEval.grammarAndStructure}%)
+                        {currentExamQ.type === "cloze" && (
+                          <span className="text-xs text-[#A7D7A9]">
+                            Đáp án đúng:{" "}
+                            <strong className="text-[#F5EFE6] underline decoration-[#A7D7A9]">
+                              {currentExamQ.correctTextAnswer}
+                            </strong>
+                          </span>
+                        )}
                       </div>
-                      <p className="flex items-start gap-1.5 text-[#A7D7A9]">
-                        <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#A7D7A9]" />
-                        <span>
-                          Bản dịch gợi ý:{" "}
-                          {currentTranslationEval.suggestedTranslation}
-                        </span>
-                      </p>
-                    </div>
-                  )}
 
-                  <div className="flex justify-end">
+                      {currentExamQ.explanation && (
+                        <p className="flex items-start gap-1.5 text-xs leading-snug text-[#F5EFE6]">
+                          <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#F3C969]" />
+                          <span>{currentExamQ.explanation}</span>
+                        </p>
+                      )}
+
+                      {currentTranslationEval && (
+                        <div className="space-y-1 text-xs">
+                          <div className="font-extrabold text-[#B8D8F8]">
+                            Điểm AI:{" "}
+                            <span className="text-[#A7D7A9]">
+                              {currentTranslationEval.overallScore}%
+                            </span>{" "}
+                            (Sát nghĩa: {currentTranslationEval.semanticAccuracy}% • Ngữ pháp:{" "}
+                            {currentTranslationEval.grammarAndStructure}%)
+                          </div>
+                          <p className="flex items-start gap-1.5 text-[#A7D7A9]">
+                            <Sparkles className="h-3.5 w-3.5 shrink-0 mt-0.5" />
+                            <span>Gợi ý: {currentTranslationEval.suggestedTranslation}</span>
+                          </p>
+                        </div>
+                      )}
+                    </div>
+
                     <button
                       type="button"
                       onClick={handleNextExamQuestion}
-                      className="flex items-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-5 py-2 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer"
+                      className="shrink-0 flex items-center justify-center gap-1.5 rounded-xl border-2 border-[#F5EFE6] bg-[#F3C969] px-4 py-2.5 text-xs font-extrabold text-[#141413] shadow-[3px_3px_0_0_#F5EFE6] transition-transform active:translate-x-[2px] active:translate-y-[2px] cursor-pointer"
                     >
                       <span>
                         {examStepIndex + 1 >= examQuestions.length
-                          ? "Xem Tổng Kết Điểm Thi"
-                          : "Sang Câu Tiếp Theo"}
+                          ? "Xem Tổng Kết"
+                          : "Câu Tiếp Theo (Enter)"}
                       </span>
                       <ArrowRight className="h-4 w-4" />
                     </button>

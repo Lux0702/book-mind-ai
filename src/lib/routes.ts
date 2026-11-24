@@ -23,6 +23,7 @@ export const ROUTES = {
   library: "/library",
   srs: "/srs",
   topicVocab: "/topic-vocab",
+  dynamicExam: "/dynamic-exam",
   book: (courseId: string) => `/books/${encodeURIComponent(courseId)}`,
   chapter: (courseId: string, chapterId: string, tab?: string | null) =>
     `/books/${encodeURIComponent(courseId)}/${encodeURIComponent(chapterId)}/${

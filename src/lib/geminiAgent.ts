@@ -2212,6 +2212,8 @@ export async function generateCustomExamWithAI(params: {
   courseTitle: string;
   scopeTitle: string;
   scannedContentAndVocab: string;
+  customPrompt?: string;
+  targetQuestionCount?: number | "all";
   apiKey?: string;
   masterApiKey?: string;
   model?: string;
@@ -2219,19 +2221,43 @@ export async function generateCustomExamWithAI(params: {
   const ai = getClient(params.apiKey, params.masterApiKey);
   const modelName = params.model || "gemini-2.5-flash";
 
-  const prompt = `Bạn là Giám khảo Ra Đề Thi Ngôn Ngữ (AI Exam Generator).
-Dựa trên dữ liệu văn bản đã quét (scanned data), từ vựng và ngữ pháp của "${params.scopeTitle}" trong khóa học "${params.courseTitle}", hãy sinh ra một ĐỀ THI KIỂM TRA CHƯƠNG MỚI TINH để người học làm bài kiểm tra.
+  let countInstruction: string;
+  if (params.targetQuestionCount === "all") {
+    countInstruction = `🎯 CHẾ ĐỘ KHAI THÁC TỐI ĐA (TẤT CẢ CÂU HỎI TRONG TÀI LIỆU):
+- Hãy trích xuất và chuyển hóa TOÀN BỘ các câu hỏi, bài tập, điểm từ vựng và cấu trúc ngữ pháp quan trọng có trong tài liệu (mục tiêu từ 35 đến 55 câu tổng cộng, tùy dung lượng tài liệu — KHÔNG bỏ sót câu hỏi có sẵn trong file nếu câu hỏi đó độc lập).
+- Phân bổ linh hoạt:
+  1. quizQuestions (20–35 câu trắc nghiệm): Trích xuất tối đa câu hỏi trắc nghiệm từ file + tạo thêm câu hỏi Từ vựng & Ngữ pháp bao phủ toàn bộ tài liệu.
+  2. clozeQuestions (10–15 câu điền từ): Các câu điền từ độc lập (dùng _____ cho chỗ trống).
+  3. translationChallenges (4–8 câu dịch thuật): Các câu hoàn chỉnh tiêu biểu trong tài liệu để người học dịch.`;
+  } else {
+    const total = Math.max(
+      5,
+      Math.min(60, Number(params.targetQuestionCount) || 20)
+    );
+    const quizCount = Math.max(3, Math.round(total * 0.55));
+    const clozeCount = Math.max(1, Math.round(total * 0.3));
+    const transCount = Math.max(0, total - quizCount - clozeCount);
+    countInstruction = `🎯 SỐ LƯỢNG CÂU HỎI MỤC TIÊU: ĐÚNG ${total} CÂU TỔNG CỘNG (trừ khi yêu cầu tùy chỉnh bên dưới chỉ định phân bổ khác):
+  1. quizQuestions (${quizCount} câu trắc nghiệm): KIỂM TRA TỪ VỰNG (nghĩa, phiên âm, collocation, cách dùng từ, từ loại), NGỮ PHÁP (cấu trúc câu, sắp xếp từ, điền từ đúng ngữ pháp) hoặc kiến thức trọng tâm trong tài liệu.
+  2. clozeQuestions (${clozeCount} câu điền từ): Tạo các câu ứng dụng độc lập (dùng _____ cho chỗ trống) yêu cầu điền đúng từ vựng hoặc điểm ngữ pháp.
+  3. translationChallenges (${transCount} câu dịch thuật): Các câu hoàn chỉnh vận dụng từ vựng và ngữ pháp để người học dịch và được AI chấm điểm độ gần đúng.`;
+  }
 
+  const customFocusBlock = params.customPrompt?.trim()
+    ? `\n🎯 YÊU CẦU TÙY CHỈNH TỪ NGƯỜI HỌC (ƯU TIÊN TUYỆT ĐỐI):\n"${params.customPrompt.trim()}"\n-> Hãy điều chỉnh trọng tâm nội dung, mức độ khó, phân bổ số lượng câu hỏi (trắc nghiệm / điền từ / dịch thuật) bám sát tối đa yêu cầu này. Nếu người học chỉ muốn một loại câu hỏi cụ thể (ví dụ chỉ ngữ pháp, chỉ từ vựng, hoặc không muốn dịch thuật), hãy ưu tiên điều chỉnh nội dung các mảng cho phù hợp (có thể để mảng không cần thiết là mảng rỗng []).\n`
+    : "";
+
+  const prompt = `Bạn là Giám khảo Ra Đề Thi Ngôn Ngữ (AI Exam Generator).
+Dựa trên dữ liệu văn bản đã quét (scanned data), từ vựng và ngữ pháp của "${params.scopeTitle}" trong khóa học "${params.courseTitle}", hãy sinh ra một ĐỀ THI KIỂM TRA MỚI TINH để người học làm bài kiểm tra.
+${customFocusBlock}
 QUY TẮC BẮT BUỘC:
-- KHAI THÁC & HỌC HỎI TỪ BÀI TẬP THẬT TRONG SÁCH: Ưu tiên trích xuất và biến tấu từ các bài tập Từ vựng / Collocation / Ngữ pháp độc lập có sẵn trong văn bản sách để giữ đúng văn phong và trình độ giáo trình.
-- 🚫 CẤM TUYỆT ĐỐI CÂU HỎI PHỤ THUỘC ĐOẠN TRÍCH / BÀI ĐỌC / BÀI NGHE / HÌNH ẢNH: Mọi câu hỏi PHẢI ĐỘC LẬP 100% (self-contained), tuyệt đối KHÔNG hỏi "Theo đoạn văn...", "According to the passage...", "Trong đoạn hội thoại...", "Look at the diagram/picture/table...", "Listen to the audio..." vì người thi không có đoạn văn gốc trên màn hình!
-1. quizQuestions (10 câu trắc nghiệm): CHỈ KIỂM TRA TỪ VỰNG (nghĩa, phiên âm, collocation, cách dùng từ, từ loại) VÀ NGỮ PHÁP (cấu trúc câu, sắp xếp từ, điền từ đúng ngữ pháp).
-2. clozeQuestions (6 câu điền từ): Tạo các câu ứng dụng độc lập (dùng _____ cho chỗ trống) yêu cầu điền đúng từ vựng hoặc điểm ngữ pháp của chương.
-3. translationChallenges (4 câu dịch thuật): Các câu hoàn chỉnh vận dụng từ vựng và ngữ pháp của chương để người học dịch và được AI chấm điểm độ gần đúng.
+- KHAI THÁC & HỌC HỎI TỪ TÀI LIỆU THẬT: Ưu tiên trích xuất và biến tấu từ các bài tập Từ vựng / Collocation / Ngữ pháp / kiến thức cốt lõi có sẵn trong văn bản để giữ đúng văn phong và trình độ tài liệu.
+- 🚫 CẤM TUYỆT ĐỐI CÂU HỎI PHỤ THUỘC ĐOẠN TRÍCH / BÀI ĐỌC / BÀI NGHE / HÌNH ẢNH MÀ KHÔNG ĐÍNH KÈM: Mọi câu hỏi PHẢI ĐỘC LẬP 100% (self-contained), tuyệt đối KHÔNG hỏi "Theo đoạn văn...", "According to the passage...", "Trong đoạn hội thoại...", "Look at the diagram/picture/table...", "Listen to the audio..." vì người thi không có đoạn văn gốc trên màn hình!
+${countInstruction}
 
 DỮ LIỆU ĐÃ QUÉT & TỪ VỰNG:
 """
-${params.scannedContentAndVocab.slice(0, 30000)}
+${params.scannedContentAndVocab.slice(0, 70000)}
 """`;
 
   const response = await ai.models.generateContent({

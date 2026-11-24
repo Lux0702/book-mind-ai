@@ -168,7 +168,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       case "srs_global":
         return (
           effectivePathname.startsWith(ROUTES.srs) ||
-          effectivePathname.startsWith(ROUTES.topicVocab)
+          effectivePathname.startsWith(ROUTES.topicVocab) ||
+          effectivePathname.startsWith(ROUTES.dynamicExam)
         );
     }
   };
@@ -185,7 +186,8 @@ export default function AppShell({ children }: { children: React.ReactNode }) {
       case "srs_global":
         return (
           pendingPath.startsWith(ROUTES.srs) ||
-          pendingPath.startsWith(ROUTES.topicVocab)
+          pendingPath.startsWith(ROUTES.topicVocab) ||
+          pendingPath.startsWith(ROUTES.dynamicExam)
         );
     }
   };
