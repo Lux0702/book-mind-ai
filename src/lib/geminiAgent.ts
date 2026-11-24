@@ -836,7 +836,11 @@ const CHAPTER_LESSON_SCHEMA: Schema = {
           },
           hint: { type: Type.STRING },
           fullSentenceTranslation: { type: Type.STRING },
-          explanation: { type: Type.STRING },
+          explanation: {
+            type: Type.STRING,
+            description:
+              "Giải thích chi tiết, rõ ràng bằng TIẾNG VIỆT: nêu rõ nghĩa từ/cấu trúc cần điền, quy tắc ngữ pháp/ngữ cảnh sử dụng, và dịch nghĩa trọn vẹn câu hoàn chỉnh sang tiếng Việt.",
+          },
         },
         required: [
           "id",
@@ -1677,7 +1681,11 @@ const SUPPLEMENT_EXERCISES_SCHEMA: Schema = {
           answer: { type: Type.STRING },
           hint: { type: Type.STRING },
           fullSentenceTranslation: { type: Type.STRING },
-          explanation: { type: Type.STRING },
+          explanation: {
+            type: Type.STRING,
+            description:
+              "Giải thích chi tiết, rõ ràng bằng TIẾNG VIỆT: nêu rõ nghĩa từ/cấu trúc cần điền, quy tắc ngữ pháp/ngữ cảnh sử dụng, và dịch nghĩa trọn vẹn câu hoàn chỉnh sang tiếng Việt.",
+          },
         },
         required: [
           "id",
@@ -2146,7 +2154,11 @@ const CUSTOM_EXAM_SCHEMA: Schema = {
           category: { type: Type.STRING },
           options: { type: Type.ARRAY, items: { type: Type.STRING } },
           correctIndex: { type: Type.INTEGER },
-          explanation: { type: Type.STRING },
+          explanation: {
+            type: Type.STRING,
+            description:
+              "Giải thích chi tiết, rõ ràng bằng TIẾNG VIỆT: nêu rõ nghĩa tiếng Việt của đáp án đúng, công thức/quy tắc ngữ pháp áp dụng, dịch nghĩa cả câu hoàn chỉnh sang tiếng Việt và giải thích ngắn gọn vì sao các phương án còn lại chưa phù hợp.",
+          },
         },
         required: [
           "id",
@@ -2169,7 +2181,11 @@ const CUSTOM_EXAM_SCHEMA: Schema = {
           answer: { type: Type.STRING },
           hint: { type: Type.STRING },
           fullSentenceTranslation: { type: Type.STRING },
-          explanation: { type: Type.STRING },
+          explanation: {
+            type: Type.STRING,
+            description:
+              "Giải thích chi tiết, rõ ràng bằng TIẾNG VIỆT: nêu rõ nghĩa từ/cấu trúc cần điền, quy tắc ngữ pháp/ngữ cảnh sử dụng, và dịch nghĩa trọn vẹn câu hoàn chỉnh sang tiếng Việt.",
+          },
         },
         required: [
           "id",
@@ -2253,6 +2269,13 @@ ${customFocusBlock}
 QUY TẮC BẮT BUỘC:
 - KHAI THÁC & HỌC HỎI TỪ TÀI LIỆU THẬT: Ưu tiên trích xuất và biến tấu từ các bài tập Từ vựng / Collocation / Ngữ pháp / kiến thức cốt lõi có sẵn trong văn bản để giữ đúng văn phong và trình độ tài liệu.
 - 🚫 CẤM TUYỆT ĐỐI CÂU HỎI PHỤ THUỘC ĐOẠN TRÍCH / BÀI ĐỌC / BÀI NGHE / HÌNH ẢNH MÀ KHÔNG ĐÍNH KÈM: Mọi câu hỏi PHẢI ĐỘC LẬP 100% (self-contained), tuyệt đối KHÔNG hỏi "Theo đoạn văn...", "According to the passage...", "Trong đoạn hội thoại...", "Look at the diagram/picture/table...", "Listen to the audio..." vì người thi không có đoạn văn gốc trên màn hình!
+- ✅ KIỂM DUYỆT ĐỘ CHÍNH XÁC TUYỆT ĐỐI — CHỈ ĐÚNG DUY NHẤT 1 ĐÁP ÁN (CỰC KỲ QUAN TRỌNG):
+  + Trước khi xuất JSON, hãy TỰ KIỂM TRA LẠI TỪNG CÂU TRẮC NGHIỆM: phải có **4 phương án khác nhau hoàn toàn**, **CHỈ CÓ DUY NHẤT 1 PHƯƠNG ÁN ĐÚNG**, và **CẢ 3 PHƯƠNG ÁN CÒN LẠI PHẢI SAI RÕ RÀNG 100%**.
+  + CẤM TUYỆT ĐỐI lỗi có 2–3 đáp án cùng đúng (ví dụ: hỏi "chọn động từ trạng thái (state verb)" mà trong 4 lựa chọn lại có cả "know", "believe", "love" đều là state verb!). Nếu hỏi loại từ/đặc điểm nào, 3 phương án nhiễu BẮT BUỘC phải thuộc loại đối lập.
+  + Ưu tiên đặt câu hỏi trong **ngữ cảnh câu hoàn chỉnh có chỗ trống** (ví dụ: "I _____ him since 2015." -> A. know / B. am knowing / C. have known / D. was knowing) thay vì hỏi định nghĩa rời rạc dễ gây nhầm lẫn nhiều đáp án đúng.
+  + Phân bổ đều vị trí đáp án đúng \`correctIndex\` ngẫu nhiên giữa 0, 1, 2, 3 (không để dồn vào đáp án A).
+  + Đảm bảo \`correctIndex\` khớp chính xác 100% với nội dung giải thích trong \`explanation\`.
+- 🇻🇳 GIẢI THÍCH ĐÁP ÁN CHI TIẾT BẰNG TIẾNG VIỆT (BẮT BUỘC): Mỗi mục "explanation" PHẢI viết hoàn toàn bằng tiếng Việt rõ ràng, chính xác tuyệt đối, gồm đủ 3 ý ngắn gọn: (1) Vì sao đáp án đúng (nghĩa tiếng Việt / công thức ngữ pháp / collocation), (2) Dịch nghĩa chính xác câu hỏi trong đề sang tiếng Việt (CHỈ dịch đúng câu trong đề, không bịa thêm câu không có trong đề), (3) Với câu trắc nghiệm, chỉ ra chính xác vì sao từng phương án nhiễu còn lại sai.
 ${countInstruction}
 
 DỮ LIỆU ĐÃ QUÉT & TỪ VỰNG:
@@ -2266,8 +2289,8 @@ ${params.scannedContentAndVocab.slice(0, 70000)}
     config: {
       responseMimeType: "application/json",
       responseSchema: CUSTOM_EXAM_SCHEMA,
-      temperature: 0.5,
-      thinkingConfig: { thinkingBudget: 0 },
+      temperature: 0.25,
+      thinkingConfig: { thinkingBudget: 2048 },
     },
   });
 
@@ -2277,13 +2300,23 @@ ${params.scannedContentAndVocab.slice(0, 70000)}
 
   const parsedExam = JSON.parse(response.text);
   if (Array.isArray(parsedExam?.quizQuestions)) {
-    parsedExam.quizQuestions = parsedExam.quizQuestions.filter(
-      (q: any) => !isPassageDependentQuestion(String(q?.question || ""))
-    );
+    parsedExam.quizQuestions = parsedExam.quizQuestions.filter((q: any) => {
+      if (isPassageDependentQuestion(String(q?.question || ""))) return false;
+      if (!Array.isArray(q?.options) || q.options.length < 2) return false;
+      const idx = Number(q?.correctIndex);
+      if (!Number.isInteger(idx) || idx < 0 || idx >= q.options.length) return false;
+      // Ensure options are distinct non-empty strings
+      const normalized = q.options.map((o: any) => String(o ?? "").trim().toLowerCase());
+      if (normalized.some((o: string) => !o)) return false;
+      if (new Set(normalized).size !== normalized.length) return false;
+      return true;
+    });
   }
   if (Array.isArray(parsedExam?.clozeQuestions)) {
     parsedExam.clozeQuestions = parsedExam.clozeQuestions.filter(
-      (c: any) => !isPassageDependentQuestion(String(c?.sentenceWithBlank || ""))
+      (c: any) =>
+        !isPassageDependentQuestion(String(c?.sentenceWithBlank || "")) &&
+        String(c?.answer || "").trim().length > 0
     );
   }
   return parsedExam;

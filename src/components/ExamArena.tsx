@@ -46,6 +46,7 @@ import {
 import AudioSpeakButton from "./AudioSpeakButton";
 import ExamGeneratingLoader from "./loadings/ExamGeneratingLoader";
 import CustomSelect from "./ui/CustomSelect";
+import SelectionAiPopover from "./SelectionAiPopover";
 import { getAppSettings } from "@/lib/storage";
 import { fetchAiAgent } from "@/lib/quotaManager";
 import { triggerChibiCelebrate } from "@/lib/chibiEvents";
@@ -171,7 +172,9 @@ export default function ExamArena({
   const [appliedAiPrompt, setAppliedAiPrompt] = useState("");
   const [aiQuestionCount, setAiQuestionCount] = useState<string>("20");
   const [showAiPromptComposer, setShowAiPromptComposer] = useState(false);
+  const [showExamHint, setShowExamHint] = useState(false);
   const lockedAtRef = React.useRef<number>(0);
+  const arenaContainerRef = React.useRef<HTMLDivElement | null>(null);
 
   // User answers in the Timed Exam
   const [userQuizChoice, setUserQuizChoice] = useState<number | null>(null);
@@ -651,6 +654,7 @@ export default function ExamArena({
     setUserTranslationInput("");
     setCurrentTranslationEval(null);
     setIsQuestionLocked(false);
+    setShowExamHint(false);
     setTimeLeft(secondsPerQuestion);
     setExamFinished(false);
     setExamStarted(true);
@@ -754,6 +758,7 @@ export default function ExamArena({
     setUserTranslationInput("");
     setCurrentTranslationEval(null);
     setIsQuestionLocked(false);
+    setShowExamHint(false);
     setTimeLeft(secondsPerQuestion);
   };
 
@@ -920,7 +925,14 @@ export default function ExamArena({
     activeCards.length > 0 ? activeCards[typingIdx % activeCards.length] : null;
 
   return (
-    <div className="space-y-6">
+    <div ref={arenaContainerRef} className="space-y-6">
+      <SelectionAiPopover
+        containerRef={arenaContainerRef}
+        courseTitle={course.title}
+        chapterTitle={targetChapter.title}
+        chapterText={targetChapter.rawText.slice(0, 6000)}
+        selectedAiModel={getAppSettings().geminiModel}
+      />
       {/* ===================================================================== */}
       {/* MODE 1: TIMED CHAPTER EXAM (Tự động tạo bài thi kiểm tra chương)      */}
       {/* ===================================================================== */}
@@ -1352,7 +1364,7 @@ export default function ExamArena({
               )}
 
               {/* Question Prompt Box */}
-              <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4 space-y-1.5">
+              <div className="rounded-xl border-2 border-[#3A3832] bg-[#141413] p-4 space-y-2">
                 <div className="flex items-start justify-between gap-3">
                   <h4 className="text-sm sm:text-base font-extrabold leading-relaxed text-[#F5EFE6]">
                     {currentExamQ.promptText}
@@ -1366,10 +1378,32 @@ export default function ExamArena({
                   )}
                 </div>
                 {currentExamQ.subHint && (
-                  <p className="flex items-center gap-1.5 text-xs text-[#F3C969]">
-                    <Lightbulb className="h-3.5 w-3.5 shrink-0 text-[#F3C969]" />
-                    <span>{currentExamQ.subHint}</span>
-                  </p>
+                  <div className="pt-0.5">
+                    {!showExamHint ? (
+                      <button
+                        type="button"
+                        onClick={() => setShowExamHint(true)}
+                        className="inline-flex items-center gap-1.5 rounded-lg border border-[#F3C969]/60 bg-[#1D1C19] px-2.5 py-1 text-[11px] font-bold text-[#F3C969] hover:border-[#F3C969] hover:bg-[#262520] transition-colors cursor-pointer"
+                      >
+                        <Lightbulb className="h-3.5 w-3.5 shrink-0" />
+                        <span>Xem gợi ý</span>
+                      </button>
+                    ) : (
+                      <div className="flex items-start justify-between gap-2 rounded-lg border border-[#F3C969]/50 bg-[#1D1C19] px-3 py-2 text-xs text-[#F3C969]">
+                        <p className="flex items-start gap-1.5 leading-relaxed">
+                          <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#F3C969]" />
+                          <span>{currentExamQ.subHint}</span>
+                        </p>
+                        <button
+                          type="button"
+                          onClick={() => setShowExamHint(false)}
+                          className="shrink-0 text-[11px] font-bold text-[#B8B2A6] hover:text-[#F5EFE6] cursor-pointer"
+                        >
+                          Ẩn
+                        </button>
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
 
@@ -1498,7 +1532,7 @@ export default function ExamArena({
               ) : (
                 <div className="sticky bottom-2 sm:bottom-3 z-30 rounded-xl border-2 border-[#F5EFE6] bg-[#141413]/95 backdrop-blur-md p-3.5 shadow-[4px_4px_0_0_#F5EFE6] animate-in fade-in slide-in-from-bottom-2 duration-150">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-                    <div className="min-w-0 flex-1 space-y-1">
+                    <div className="min-w-0 flex-1 space-y-1.5 max-h-44 overflow-y-auto pr-1">
                       <div className="flex flex-wrap items-center gap-2">
                         {timeLeft <= 0 && !isCurrentQuestionUntimed ? (
                           <span className="inline-flex items-center gap-1 rounded-md bg-[#FF8A8A] px-2 py-0.5 text-[11px] font-black text-[#141413]">
@@ -1517,6 +1551,18 @@ export default function ExamArena({
                           </span>
                         )}
 
+                        {currentExamQ.type === "quiz" &&
+                          currentExamQ.options &&
+                          currentExamQ.correctIndex !== undefined && (
+                            <span className="text-xs text-[#A7D7A9]">
+                              Đáp án đúng:{" "}
+                              <strong className="text-[#F5EFE6] underline decoration-[#A7D7A9]">
+                                {String.fromCharCode(65 + currentExamQ.correctIndex)}.{" "}
+                                {currentExamQ.options[currentExamQ.correctIndex]}
+                              </strong>
+                            </span>
+                          )}
+
                         {currentExamQ.type === "cloze" && (
                           <span className="text-xs text-[#A7D7A9]">
                             Đáp án đúng:{" "}
@@ -1528,10 +1574,13 @@ export default function ExamArena({
                       </div>
 
                       {currentExamQ.explanation && (
-                        <p className="flex items-start gap-1.5 text-xs leading-snug text-[#F5EFE6]">
+                        <div className="flex items-start gap-1.5 rounded-lg border border-[#3A3832] bg-[#1D1C19] px-2.5 py-2 text-xs leading-relaxed text-[#F5EFE6]">
                           <Lightbulb className="h-3.5 w-3.5 shrink-0 mt-0.5 text-[#F3C969]" />
-                          <span>{currentExamQ.explanation}</span>
-                        </p>
+                          <div>
+                            <strong className="text-[#F3C969]">Giải thích chi tiết: </strong>
+                            <span>{currentExamQ.explanation}</span>
+                          </div>
+                        </div>
                       )}
 
                       {currentTranslationEval && (
