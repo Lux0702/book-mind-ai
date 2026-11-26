@@ -947,6 +947,25 @@ export default function TopicVocabStudioPage() {
   const [testAudioPlayCountMap, setTestAudioPlayCountMap] = useState<
     Record<string, number>
   >({});
+  const [isTestAudioPlaying, setIsTestAudioPlaying] = useState<boolean>(false);
+
+  const targetTtsLang =
+    selectedLanguage === "Chinese"
+      ? chineseAccent
+      : selectedLanguage === "Japanese"
+      ? "ja-JP"
+      : selectedLanguage === "Korean"
+      ? "ko-KR"
+      : voiceAccent;
+
+  useEffect(() => {
+    const handleTtsStatus = (e: Event) => {
+      const customEvent = e as CustomEvent<{ isPlaying: boolean; text: string }>;
+      setIsTestAudioPlaying(Boolean(customEvent.detail?.isPlaying));
+    };
+    window.addEventListener("bookmind-tts-status", handleTtsStatus);
+    return () => window.removeEventListener("bookmind-tts-status", handleTtsStatus);
+  }, []);
 
   // Load presets & custom decks
   useEffect(() => {
@@ -1235,25 +1254,26 @@ export default function TopicVocabStudioPage() {
           });
         });
 
-      // 3. Các câu nghe giọng đọc chuẩn do AI tạo
+      // 3. Các câu nghe giọng đọc chuẩn do AI tạo (ẩn phiên âm trước khi trả lời, cấp nút nghe tối đa 2 lần)
       (cachedPractice.listeningExercises || [])
         .slice(0, 4)
         .forEach((ls, idx) => {
+          const spoken = ls.spokenSentence || ls.word;
           questions.push({
             id: `u-listen-${idx + 1}`,
             skillType: "listening",
             skillLabel: "Nghe Giọng Chuẩn & Chọn Từ",
-            promptTitle: `Bấm nghe câu và chọn từ vựng còn thiếu: "${ls.sentenceWithBlank}"`,
-            subHint: `Nghĩa từ cần nghe: ${ls.vietnameseTranslation}`,
-            ipaHint: ls.ipa,
-            audioTextToSpeak: ls.spokenSentence,
-            fullSentenceAudio: ls.spokenSentence,
+            promptTitle: `Nghe phát âm chuẩn và chọn từ xuất hiện ở chỗ trống: "${ls.sentenceWithBlank}"`,
+            subHint:
+              "🎧 Bấm nút Nghe bên dưới (tối đa 2 lần) để nghe giọng chuẩn và chọn từ còn thiếu.",
+            audioTextToSpeak: spoken,
+            fullSentenceAudio: spoken,
             options:
               ls.options && ls.options.length >= 2
                 ? ls.options
                 : pickWordOptions(ls.word),
             correctAnswer: ls.word,
-            explanation: `Từ được phát âm trong câu là "${ls.word}" (${ls.ipa}) — Câu đầy đủ: "${ls.spokenSentence}"`,
+            explanation: `Từ được phát âm trong câu là "${ls.word}" (${ls.ipa}: ${ls.vietnameseTranslation}) — Câu đầy đủ: "${spoken}"`,
           });
         });
 
@@ -1309,15 +1329,17 @@ export default function TopicVocabStudioPage() {
           explanation: `"${v.word}" (${v.ipa}) nghĩa là "${v.vietnameseMeaning}". Ví dụ: "${fullSent}"`,
         });
       } else if (mod === 1) {
-        // Dạng 2: Điền từ vào câu đúng nghĩa
+        // Dạng 2: Điền từ vào câu đúng nghĩa (không hiện phiên âm của đáp án trước khi chọn)
+        const safeQuoteHint =
+          v.quoteTranslation && !reg.test(v.quoteTranslation)
+            ? ` — ${v.quoteTranslation}`
+            : "";
         questions.push({
           id: `q-sfill-${idx + 1}`,
           skillType: "sentence_fill",
           skillLabel: "Điền Từ Trong Câu Đúng Nghĩa",
           promptTitle: blanked,
-          subHint: `Nghĩa ngữ cảnh: ${v.vietnameseMeaning} (${v.partOfSpeech}) — ${v.quoteTranslation || ""
-            }`,
-          ipaHint: v.ipa,
+          subHint: `Nghĩa ngữ cảnh: ${v.vietnameseMeaning} (${v.partOfSpeech})${safeQuoteHint}`,
           audioTextToSpeak: fullSent,
           fullSentenceAudio: fullSent,
           options: pickWordOptions(v.word),
@@ -1325,19 +1347,23 @@ export default function TopicVocabStudioPage() {
           explanation: `Từ phù hợp nhất với ngữ cảnh câu là "${v.word}" (${v.ipa}: ${v.vietnameseMeaning}). Câu đầy đủ: "${fullSent}"`,
         });
       } else if (mod === 2) {
-        // Dạng 3: Nghe giọng đọc chuẩn & chọn/điền từ
+        // Dạng 3: Nghe giọng đọc chuẩn & chọn/điền từ (ẩn phiên âm, phát voice tối đa 2 lần)
+        const hasExactBlank = reg.test(fullSent);
+        const listenSpokenText = hasExactBlank ? fullSent : v.word;
         questions.push({
           id: `q-listen-${idx + 1}`,
           skillType: "listening",
           skillLabel: "Nghe Giọng Chuẩn & Chọn Từ",
-          promptTitle: `Nghe phát âm chuẩn và chọn từ xuất hiện ở chỗ trống: "${blanked}"`,
-          subHint: `Gợi ý nghĩa: ${v.vietnameseMeaning}`,
-          ipaHint: v.ipa,
-          audioTextToSpeak: fullSent,
+          promptTitle: hasExactBlank
+            ? `Nghe phát âm chuẩn và chọn từ xuất hiện ở chỗ trống: "${blanked}"`
+            : "Nghe phát âm chuẩn và chọn đúng từ/cụm từ bạn nghe được:",
+          subHint:
+            "🎧 Bấm nút Nghe bên dưới (tối đa 2 lần) để nghe giọng chuẩn và chọn từ chính xác.",
+          audioTextToSpeak: listenSpokenText,
           fullSentenceAudio: fullSent,
           options: pickWordOptions(v.word),
           correctAnswer: v.word,
-          explanation: `Từ bạn vừa nghe là "${v.word}" (${v.ipa}: ${v.vietnameseMeaning}).`,
+          explanation: `Từ bạn vừa nghe là "${v.word}" (${v.ipa}: ${v.vietnameseMeaning}). Câu đầy đủ: "${fullSent}"`,
         });
       } else {
         // Dạng 4: Tự gõ từ vựng theo nghĩa + đồng nghĩa/trái nghĩa
@@ -2832,8 +2858,9 @@ export default function TopicVocabStudioPage() {
                             </span>
                           </div>
 
-                          {/* CHỈ CÂU TỰ ĐIỀN TỪ VỰNG (word_fill) MỚI CÓ NÚT ĐỌC (VÀ USER TỰ NHẤN TỐI ĐA 2 LẦN) */}
-                          {currentQuestion.skillType === "word_fill" &&
+                          {/* NÚT NGHE TỐI ĐA 2 LẦN CHO CÂU NGHE ĐIỀN TỪ (listening) VÀ TỰ GÕ TỪ (word_fill) */}
+                          {(currentQuestion.skillType === "word_fill" ||
+                            currentQuestion.skillType === "listening") &&
                             (() => {
                               const playCount =
                                 testAudioPlayCountMap[currentQuestion.id] || 0;
@@ -2842,30 +2869,53 @@ export default function TopicVocabStudioPage() {
                                 0,
                                 maxPlays - playCount
                               );
+                              const isListeningType =
+                                currentQuestion.skillType === "listening";
+                              const isQuestionLocked = Boolean(
+                                testCheckedMap[currentQuestion.id] ||
+                                  isTestSubmitted
+                              );
+                              const isDisabled =
+                                remaining === 0 ||
+                                isTestAudioPlaying ||
+                                isQuestionLocked;
+
                               return (
                                 <button
                                   type="button"
-                                  disabled={remaining === 0}
+                                  disabled={isDisabled}
                                   onClick={() => {
-                                    if (remaining <= 0) return;
+                                    if (isDisabled) return;
                                     setTestAudioPlayCountMap((prev) => ({
                                       ...prev,
                                       [currentQuestion.id]: playCount + 1,
                                     }));
                                     speakSmart(
-                                      currentQuestion.audioTextToSpeak
+                                      currentQuestion.audioTextToSpeak,
+                                      undefined,
+                                      targetTtsLang
                                     );
                                   }}
-                                  className={`inline-flex items-center gap-1.5 rounded-xl border-2 px-3.5 py-1.5 text-xs font-extrabold transition-all cursor-pointer ${remaining > 0
-                                      ? "border-[#F5EFE6] bg-[#B8D8F8] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6]"
-                                      : "border-[#3A3832] bg-[#141413] text-[#8F8A7E] opacity-60 cursor-not-allowed"
+                                  className={`inline-flex min-h-[44px] items-center gap-2 rounded-xl border-2 px-4 py-2 text-xs sm:text-sm font-extrabold transition-all ${!isDisabled
+                                      ? "border-[#F5EFE6] bg-[#B8D8F8] text-[#141413] shadow-[2px_2px_0_0_#F5EFE6] hover:brightness-105 active:translate-x-[1px] active:translate-y-[1px] cursor-pointer"
+                                      : isTestAudioPlaying
+                                        ? "border-[#F3C969] bg-[#F3C969]/20 text-[#F3C969] cursor-wait"
+                                        : "border-[#3A3832] bg-[#141413] text-[#8F8A7E] opacity-65 cursor-not-allowed"
                                     }`}
                                 >
-                                  <Volume2 className="h-4 w-4" />
+                                  {isTestAudioPlaying ? (
+                                    <Headphones className="h-4 w-4 animate-bounce shrink-0" />
+                                  ) : (
+                                    <Volume2 className="h-4 w-4 shrink-0" />
+                                  )}
                                   <span>
-                                    {remaining > 0
-                                      ? `Nhấn để nghe từ (${remaining}/${maxPlays} lần)`
-                                      : "Đã hết lượt nghe (2/2)"}
+                                    {isTestAudioPlaying
+                                      ? `Đang phát giọng chuẩn... (Còn ${remaining}/${maxPlays} lần)`
+                                      : remaining > 0
+                                        ? isListeningType
+                                          ? `Nghe giọng chuẩn (${remaining}/${maxPlays} lần)`
+                                          : `Nhấn để nghe từ (${remaining}/${maxPlays} lần)`
+                                        : "Đã hết lượt nghe (2/2)"}
                                   </span>
                                 </button>
                               );
@@ -2877,11 +2927,13 @@ export default function TopicVocabStudioPage() {
                             {currentQuestion.promptTitle}
                           </h3>
 
-                          {currentQuestion.ipaHint && (
-                            <p className="font-mono text-xs sm:text-sm font-bold text-[#F3C969]">
-                              Phiên âm: {currentQuestion.ipaHint}
-                            </p>
-                          )}
+                          {currentQuestion.ipaHint &&
+                            currentQuestion.skillType !== "listening" &&
+                            currentQuestion.skillType !== "sentence_fill" && (
+                              <p className="font-mono text-xs sm:text-sm font-bold text-[#F3C969]">
+                                Phiên âm: {currentQuestion.ipaHint}
+                              </p>
+                            )}
 
                           {currentQuestion.subHint && (
                             <p className="text-xs sm:text-sm text-[#B8B2A6]">
@@ -3037,18 +3089,28 @@ export default function TopicVocabStudioPage() {
                                 : "border-[#FF8A8A] bg-[#141413] text-[#FF8A8A]"
                               }`}
                           >
-                            <div className="font-extrabold">
-                              {(testUserAnswers[currentQuestion.id] || "")
-                                .trim()
-                                .toLowerCase() ===
-                                currentQuestion.correctAnswer.trim().toLowerCase()
-                                ? "✓ Chính xác!"
-                                : testTimedOutMap[currentQuestion.id] &&
-                                  !(
-                                    testUserAnswers[currentQuestion.id] || ""
-                                  ).trim()
-                                  ? `⏰ Hết giờ cho câu này! Đáp án đúng là: "${currentQuestion.correctAnswer}"`
-                                  : `✗ Đáp án đúng là: "${currentQuestion.correctAnswer}"`}
+                            <div className="flex flex-wrap items-center justify-between gap-2">
+                              <div className="font-extrabold">
+                                {(testUserAnswers[currentQuestion.id] || "")
+                                  .trim()
+                                  .toLowerCase() ===
+                                  currentQuestion.correctAnswer.trim().toLowerCase()
+                                  ? "✓ Chính xác!"
+                                  : testTimedOutMap[currentQuestion.id] &&
+                                    !(
+                                      testUserAnswers[currentQuestion.id] || ""
+                                    ).trim()
+                                    ? `⏰ Hết giờ cho câu này! Đáp án đúng là: "${currentQuestion.correctAnswer}"`
+                                    : `✗ Đáp án đúng là: "${currentQuestion.correctAnswer}"`}
+                              </div>
+                              <AudioSpeakButton
+                                text={
+                                  currentQuestion.fullSentenceAudio ||
+                                  currentQuestion.audioTextToSpeak
+                                }
+                                label="Nghe lại đáp án"
+                                className="rounded-lg border border-[#F5EFE6] bg-[#B8D8F8] px-2.5 py-1 text-xs font-extrabold text-[#141413]"
+                              />
                             </div>
                             <p className="text-[#F5EFE6]">
                               {currentQuestion.explanation}
